@@ -14,6 +14,7 @@ app.layout = html.Div([
                 {'name': '값 (Value)', 'id': 'value'},
                 {'name': '단위 (분자)', 'id': 'unit_num'},
                 {'name': '단위 (분모)', 'id': 'unit_denom'},
+                {'name': '변수 타입', 'id': 'var_type', 'presentation': 'dropdown'},
             ],
 
             data=[
@@ -22,6 +23,17 @@ app.layout = html.Div([
 
             editable=True,
             row_deletable=True
+            dropdown={ # DROPDOWN DEFINITION
+        'var_type': {
+            'options': [
+                {'label': '연속형 (Continuous)', 'value': 'Continuous'},
+                {'label': '정수형 (Integer)', 'value': 'Integer'},
+                {'label': '이진형 (Binary)', 'value': 'Binary'}
+            ]
+        }
+    }
+),
+            
         ),
 
         html.Button('새로운 변수 추가 (+)', id='add-row-btn', n_clicks=0, 
