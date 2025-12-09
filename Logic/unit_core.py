@@ -6,7 +6,7 @@ class UnitVariable:
 
 
   def __reper__(self):
-    if self.unit_denom = "1":
+    if self.unit_denom == "1":
       return f"{self.value} [{self.unit_num}]"
 
     else:
