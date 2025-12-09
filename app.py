@@ -1,6 +1,6 @@
 import dash
 from dash import html, dash_table, dcc, Input, Output, State
-
+app = dash.Dash(__name__)
 @app.callback(
     Output('validation-output', 'children'), 
     [Input('input-table', 'data')]          
@@ -13,7 +13,7 @@ def validate_input_data(rows):
     
     return "✅ 입력 데이터 유효성 검사 완료. 이제 최적화 준비를 할 수 있습니다."
 
-app = dash.Dash(__name__)
+
 app.layout = html.Div([
     html.H1("🧙‍♂️ OptiMystic Solver", style={'textAlign': 'center'}),
     
@@ -67,6 +67,22 @@ def add_row(n_clicks, rows, columns):
         rows.append({c['id']: '' for c in columns})
     
     return rows
+app.layout = html.Div([
+    html.H1("🧙‍♂️ OptiMystic Solver", style={'textAlign': 'center'}),
+    
+    html.Div([
+        dash_table.DataTable(
+            # ... (DataTable 정의 유지) ...
+        ),
+        
+        html.Div(id='validation-output', 
+                 style={'color': 'red', 'marginTop': '10px', 'fontWeight': 'bold'}), 
+
+        html.Button('새로운 변수 추가 (+)', id='add-row-btn', n_clicks=0, 
+                    style={'width': '100%', 'marginTop': '10px'})
+
+    ], style={'width': '80%', 'margin': 'auto'}),
+])
 
 if __name__ == '__main__':
     app.run_server(debug=True)
