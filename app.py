@@ -1,6 +1,18 @@
 import dash
 from dash import html, dash_table, dcc, Input, Output, State
 
+@app.callback(
+    Output('validation-output', 'children'), 
+    [Input('input-table', 'data')]          
+)
+def validate_input_data(rows):
+    variables, error_report = parse_table_to_objects(rows)
+    
+    if error_report:
+        return html.Div([html.P(msg) for msg in error_report]) 
+    
+    return "✅ 입력 데이터 유효성 검사 완료. 이제 최적화 준비를 할 수 있습니다."
+
 app = dash.Dash(__name__)
 app.layout = html.Div([
     html.H1("🧙‍♂️ OptiMystic Solver", style={'textAlign': 'center'}),
