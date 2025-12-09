@@ -1,5 +1,5 @@
 class UnitVariable:
-  def __init__(self,value,unit_num,unit_denom="1"):
+  def __init__(self,value,unit_num,unit_denom="1",var_type):
     self.value = float(value)
     self.unit_num = unit_num
     self.unit_denom = unit_denom
@@ -26,14 +26,13 @@ def parse_table_to_objects(rows):
         
         try:
     
-            val = float(raw.get('value', 0))
+            val = float(row.get('value', 0))
             
-            # TODO 3: 나머지 속성 추출 (row.get(key, default) 패턴을 사용하십시오)
             u_num = row.get('unit_num', '1')
             u_denom = row.get('unit_denom', '1')
-            v_type = row.get('uvar_type', 'Continuous')
+            v_type = row.get('var_type', 'Continuous')
           
-            new_var = UnitVariable(val, u_num, udenom, v_type)
+            new_var = UnitVariable(val, u_num, u_denom, v_type)
             variables[var_name] = new_var
             
         except ValueError:
