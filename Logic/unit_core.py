@@ -15,7 +15,7 @@ class UnitVariable:
   
 #TEST CODE
 if __name__ == "__main__":
-    print("🔮 OptiMystic Unit Core Test...")
+    print(" OptiMystic Unit Core Test...")
     v1 = UnitVariable(80, "시간") 
     v2 = UnitVariable(1000, "원", "시간")
     
