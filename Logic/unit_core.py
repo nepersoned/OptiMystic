@@ -1,8 +1,8 @@
 class UnitVariable:
   def __init__(self,value,unit_num,unit_denom="1"):
-  self.value = float(value)
-  self.unit_num = unit_num
-  self.unit_denom = unit_denom
+    self.value = float(value)
+    self.unit_num = unit_num
+    self.unit_denom = unit_denom
 
 
   def __reper__(self):
