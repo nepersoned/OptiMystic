@@ -1,12 +1,12 @@
 class UnitVariable:
-  def __inint__(self,value,unit,num,unit_denom="1")
+  def __innt__(self,value,unit_num,unit_denom="1")
   self.value = float(value)
   self.unit_num = unit_num
   self.unit_denom = unit_denom
 
 
-  def __reper(self):
-    if self.unit_denom = 1:
+  def __reper__(self):
+    if self.unit_denom = "1":
       return f"{self.value} [{self.unit_num}]"
 
     else:
