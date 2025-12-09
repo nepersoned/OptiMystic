@@ -1,5 +1,5 @@
 class UnitVariable:
-  def __init__(self,value,unit_num,unit_denom="1",var_type):
+  def __init__(self,value,unit_num,unit_denom="1",var_type="Continuous"):
     self.value = float(value)
     self.unit_num = unit_num
     self.unit_denom = unit_denom
