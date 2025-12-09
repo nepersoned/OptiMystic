@@ -1,3 +1,5 @@
+import re
+
 class UnitVariable:
   def __init__(self,value,unit_num,unit_denom="1",var_type="Continuous"):
     self.value = float(value)
@@ -9,11 +11,22 @@ class UnitVariable:
   def __repr__(self):
     if self.unit_denom == "1":
       base_str = f"{self.value} [{self.unit_num}]"
-
     else:
-      base_str = f"{self.value} [{self.unit_num}/{self.unit_denom}]"
-      
+      base_str = f"{self.value} [{self.unit_num}/{self.unit_denom}]"    
     return f"{base_str} ({self.var_type})"
+
+def parse_variable_name(name_str):
+    pattern = r'([A-Za-z0-9_]+)\[(.*?)\]'
+    match = re.fullmatch(pattern, name_str.strip())
+    
+    if match:
+        name = match.group(1)
+        indices_str = match.group(2)
+        indices = [i.strip() for i in indices_str.split(',') if i.strip()]
+    else:
+        name = name_str.strip()
+        indices = []
+    return name, indices
       
 def parse_table_to_objects(rows):
     variables = {}
