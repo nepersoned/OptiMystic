@@ -22,7 +22,7 @@ app.layout = html.Div([
             ],
 
             editable=True,
-            row_deletable=True
+            row_deletable=True,
             dropdown={ # DROPDOWN DEFINITION
         'var_type': {
             'options': [
