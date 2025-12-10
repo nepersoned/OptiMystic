@@ -88,7 +88,6 @@ def parse_table_to_objects(rows):
             variables[name] = new_var
             
         except ValueError:
-            # 사실 app.py의 유효성 검사(Validator)가 있어서 여기까지 올 확률은 낮지만, 안전장치로 둠
             error_report.append(f"❌ {i+1}행 ('{raw_name}') 처리 중 내부 오류 발생")
             continue
 
