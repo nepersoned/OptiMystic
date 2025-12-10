@@ -54,3 +54,60 @@ OptiMystic Solver는 Python 기반의 강력한 스택으로 구성되어 있습
 -----
 
 *이 README는 프로젝트의 현재 진행 상태를 기반으로 작성되었으며, 지속적인 업데이트가 이루어질 예정입니다.*
+
+# 🚀 OptiMystic Solver: Web-Based Optimization Modeling & Simulation Platform
+
+## 💡 Project Overview and Value Proposition
+
+> Mathematical optimization is a powerful decision-making tool, but often requires difficult coding. **OptiMystic Solver** transforms the complex process of defining optimization models (LP/MIP) into an **intuitive web UI**, providing users with a **code-free modeling environment**. 
+
+**Ultimate Goal:** To fully convert user-input data into PuLP objects, allowing for the construction and execution of **industry and research-grade decision models** directly on the web.
+
+---
+
+## 🧱 System Architecture and Technology Stack
+
+OptiMystic Solver is built on a robust Python-based stack. 
+
+* **Frontend/App**: Uses `Python Dash` to manage the interactive web interface and callbacks.
+* **Styling**: Plans to implement `Dash Bootstrap Components (planned)` for a modern and responsive UI/UX.
+* **Parser/Validator**: Uses `Python` and `Pandas` to parse input data, instantiate unit variables, and perform data validation.
+* **Solver Core**: Employs `PuLP` to model optimization problems (LP/MIP) and interface with the actual solver.
+
+---
+
+## ✅ Core Features (Key Features)
+
+### 1. Model Element Definition and Unit Management
+
+* **Dynamic Interface:** Allows easy definition of various variable types (Continuous, Integer, Binary, Parameter) directly in a web table.
+* **Unit Variable Objectification:** Manages the variable value, numerator unit (`unit_num`), and denominator unit (`unit_denom`) within a structured class (`UnitVariable`).
+
+### 2. Advanced Data Validation (Validator Pipeline)
+
+* **Basic Check:** Performs real-time validation for missing values and numerical validity.
+* **Binary Value Check (Completed):** Implemented logic to ensure `Binary` variables are set to $0$ or $1$.
+* **Advanced Check (Planned):** Will include logic for validating unique variable names, checking for missing unit fields, and verifying index range consistency.
+
+### 3. Formula-Based Modeling (Constraint Wizard)
+
+* The objective function and constraints can be entered as formulas (e.g., `SUM(X[i] * Cost[i])`) which will be converted by a dedicated parsing engine into PuLP model objects.
+
+---
+
+## 🧭 Project Development Status
+
+The project has completed **Phase 1: Foundation** and is about to begin **Phase 2: Core Logic Implementation**.
+
+### Phase 1. Foundation (Baseline Completed)
+
+* **Q 2-3 (Validation):** **Completed**. Basic numerical and binary ($0$/$1$) value validation logic is implemented.
+* **Q 3-1 (Data Collector):** **Completed**. Logic for table parsing and index extraction (`parse_variable_name`) is implemented.
+
+### Phase 2. Core Logic and UI (Next Steps)
+
+* **Q 3-2 (Error Shield):** **Next Goal**. Implementation of **advanced validation** (duplicate variable names, unit field checks, etc.) is planned.
+* **Q 3-3 (Dynamic Data UI):** **Next Goal**. Implementation of a **dynamic matrix UI** to input values for indexed parameters ($C_{i,j}$) is planned.
+
+---
+*This README is based on the current development status of the project and will be updated continuously.*
