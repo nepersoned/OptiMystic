@@ -1,6 +1,6 @@
 import dash
 from dash import html, dash_table, dcc, Input, Output, State
-from unit_core import VariableDefinition, parse_table_to_objects, parse_variable_name 
+from Logic.unit_core import VariableDefinition, parse_table_to_objects, parse_variable_name 
 
 app = dash.Dash(__name__)
 
