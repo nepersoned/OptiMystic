@@ -4,6 +4,7 @@ from dash import html, dash_table, dcc, Input, Output, State, ALL
 external_stylesheets = ['https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap']
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets, title='OptiMystic Solver')
+server = app.server
 
 app_style = {
     'fontFamily': 'Inter, sans-serif',
