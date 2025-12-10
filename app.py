@@ -11,6 +11,8 @@ def validate_input_data(rows):
     
     for i, row in enumerate(rows):
         value = row.get('value')
+        var_type = row.get('var_type') 
+        var_name = row.get('var_name', 'N/A')
 
         if value is None or str(value).strip() == '':
             error_messages.append(f"❌ 오류: {i+1}번째 행의 '값 (Value)'이 비어 있습니다. (변수명: {row.get('var_name', 'N/A')})")
@@ -20,7 +22,10 @@ def validate_input_data(rows):
             float(value) 
         except ValueError:
             error_messages.append(f"❌ 오류: {i+1}번째 행의 '값 (Value)' ({value})는 유효한 숫자가 아닙니다. (변수명: {row.get('var_name', 'N/A')})")
-
+            
+        if var_type == 'Binary':
+            if numerical_value != 0.0 and numerical_value != 1.0:
+                error_messages.append(f"❌ 오류: {i+1}번째 행의 변수 타입이 '이진형'이므로, '값 (Value)'은 0 또는 1만 가능합니다. (현재 값: {value}, 변수명: {var_name})")
     if error_messages:
         return html.Div([html.P("❗ 유효성 검사 실패: 다음 오류를 수정하십시오:", style={'color': 'red', 'fontWeight': 'bold'}),
                          html.Ul([html.Li(msg) for msg in error_messages])])
