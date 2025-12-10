@@ -41,10 +41,10 @@ app.layout = html.Div([
                         'column_id': 'value',
                         'filter_query': '{var_type} != "Parameter"'
                     },
-                    'backgroundColor': '#f9f9f9',  # 배경을 아주 연하게 처리
-                    'color': 'transparent',        # 👻 글자를 투명하게 (안 보이게 함)
-                    'pointer-events': 'none',      # 클릭/선택 불가
-                    'user-select': 'none'          # 드래그 불가
+                    'backgroundColor': '#f9f9f9',  
+                    'color': 'transparent',        
+                    'pointer-events': 'none',      
+                    'user-select': 'none'          
                 },
                 {
                     'if': {
