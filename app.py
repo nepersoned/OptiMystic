@@ -32,7 +32,12 @@ app.layout = html.Div([
                 {'name': '값 (Value)', 'id': 'value'},         
                 {'name': '분자 단위', 'id': 'unit_num'},     
                 {'name': '분모 단위', 'id': 'unit_denom'},    
-                {'name': '변수 타입', 'id': 'var_type', 'presentation': 'dropdown'},
+                {'name': '변수 타입', 'id': 'var_type', 'presentation': 'dropdown', 
+                 'options': [
+                     {'label': '연속형 (Continuous)', 'value': 'Continuous'},
+                     {'label': '정수형 (Integer)', 'value': 'Integer'},
+                     {'label': '이진형 (Binary)', 'value': 'Binary'}
+                ]},
             ],
             data=[{'var_name': 'Example', 'value': 100, 'unit_num': 'kg', 'unit_denom': '1', 'var_type': 'Continuous'}],
             editable=True,
