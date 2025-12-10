@@ -102,19 +102,24 @@ OptiMystic Solver is built on a robust Python-based stack.
 
 ---
 
-## 🧭 Project Development Status
+## 🗺️ OptiMystic Solver: Updated Final Master Plan
 
-The project has completed **Phase 1: Foundation** and is about to begin **Phase 2: Core Logic Implementation**.
-
-### Phase 1. Foundation (Baseline Completed)
-
-* **Q 2-3 (Validation):** **Completed**. Basic numerical and binary ($0$/$1$) value validation logic is implemented.
-* **Q 3-1 (Data Collector):** **Completed**. Logic for table parsing and index extraction (`parse_variable_name`) is implemented.
-
-### Phase 2. Core Logic and UI (Next Steps)
-
-* **Q 3-2 (Error Shield):** **Next Goal**. Implementation of **advanced validation** (duplicate variable names, unit field checks, etc.) is planned.
-* **Q 3-3 (Dynamic Data UI):** **Next Goal**. Implementation of a **dynamic matrix UI** to input values for indexed parameters ($C_{i,j}$) is planned.
-
+| Phase | Quest No. | Quest Name | Status | Detailed Implementation (Specs) |
+| :---: | :---: | :---: | :---: | :--- |
+| **Phase 1** | Q 1-1 | Development Environment Setup | ✅ Completed | Python environment and Dash/PuLP library installation. |
+| (Foundation) | Q 1-2 | Core Engine Design | ⚠️ Partially Complete | `UnitVariable` class implemented. (Missing explicit index structure) |
+| | Q 2-1 | Lab Desk (UI) Placement | ✅ Completed | Dash app.layout definition and setup for objective/constraint input areas. |
+| | Q 2-2 | Dynamic Input Table | ✅ Completed | DataTable includes index columns. Row add/delete functionality implemented. |
+| | **Q 2-3** | **Basic Validation Logic** | **✅ Completed** | **Basic numerical validation and Binary variable ($0$/$1$) value check implemented.** |
+| | Q 3-1 | Data Collector (Parser) | ✅ Completed | Logic for table parsing and index information extraction in `unit_core.py` implemented. |
+| **Phase 2** | **Q 3-2** | **Error Shield (Validator)** | ⬜ Pending | **[P1, Top Priority]** Connect `unit_core` to implement 1) Duplicate variable name check 2) Missing unit field check 3) Index range-count consistency check. |
+| (Neural Net Connect) | **Q 3-3** | **[Advanced] Dynamic Data Input UI** | ⬜ Pending | **[P2]** Dynamically generate and display a matrix-style DataTable to input actual values for indexed parameters ($C_{i,j}$) based on parsing info. |
+| **Phase 3** | Q 4-1 | Objective Function Setup | ⬜ Pending | Implement logic to pass MAX / MIN state from the objective-type Dropdown to the solver. |
+| (Solver Integration) | **Q 4-2** | **Constraint Wizard** | ⬜ Pending | **[P3]** Implement the core parsing engine to convert formula logic (SUM(X[i] * Cost[i])) into PuLP expression objects. |
+| | **Q 4-3** | **Solver Run (Solve)** | ⬜ Pending | **[P3]** On solve-btn click, efficiently construct index-based constraints using a **Loop** and execute the PuLP model. |
+| **Phase 4** | **Q 5-1** | **Results Dashboard** | ⬜ Pending | **[P4]** Parse the PuLP solution to cleanly display the Optimal Solution and variable statuses in a DataTable. |
+| (Visualization & Analysis) | Q 5-2 | Sensitivity Analysis | ⬜ Pending | Extract and visualize analytical results like Shadow Price and Reduced Cost to verify solution stability. |
+| **Phase 6** | **Q 6-1~6-2** | **Design & Layout Improvement** | ⬜ Pending | **[P1, Top Priority]** Introduce Dash Bootstrap Components to significantly enhance UI readability and professionalism. |
+| (Design Enhancement) | Q 7 | Documentation (README) | ✅ Completed | GitHub README file written. |
 ---
 *This README is based on the current development status of the project and will be updated continuously.*
