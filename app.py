@@ -31,9 +31,9 @@ app.layout = html.Div([
             id='input-table',
             columns=[
                 {'name': '변수명', 'id': 'var_name'},
-                {'name': '값 (Value)', 'id': 'value'},         # <- 핵심 컬럼 1: 값
-                {'name': '분자 단위', 'id': 'unit_num'},       # <- 핵심 컬럼 2: 분자 단위
-                {'name': '분모 단위', 'id': 'unit_denom'},     # <- 핵심 컬럼 3: 분모 단위
+                {'name': '값 (Value)', 'id': 'value'},         
+                {'name': '분자 단위', 'id': 'unit_num'},     
+                {'name': '분모 단위', 'id': 'unit_denom'},    
                 {'name': '변수 타입', 'id': 'var_type', 'presentation': 'dropdown'},
             ],
             data=[{'var_name': 'Example', 'value': 100, 'unit_num': 'kg', 'unit_denom': '1', 'var_type': 'Continuous'}],
