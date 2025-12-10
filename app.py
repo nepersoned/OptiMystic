@@ -97,35 +97,34 @@ def validate_input_data(rows):
     for i, row in enumerate(rows):
         value = row.get('value')
         var_name = row.get('var_name', 'N/A')
-        var_type = row.get('var_type', 'Continuous') # 기본값
+        var_type = row.get('var_type', 'Continuous')
         num_indices = row.get('num_indices', 0)
+        unit_num = row.get('unit_num')
         
         if not var_name or str(var_name).strip() == '':
              error_messages.append(f"❌ {i+1}행 오류: '변수명'이 비어 있습니다.")
              continue
 
+        if not unit_num or str(unit_num).strip() == '':
+            error_messages.append(f"⚠️ {i+1}행 경고: 변수 '{var_name}'의 '분자 단위'가 비어 있습니다. (예: kg, m, ea)")
+
         if var_type == 'Parameter':
-            if num_indices == 0:
+            if num_indices == 0: 
                 if value is None or str(value).strip() == '':
-                    error_messages.append(f"❌ {i+1}행 오류: '{var_name}'은 단일 파라미터이므로 '값 (Value)'을 입력해야 합니다.")
+                    error_messages.append(f"❌ {i+1}행 오류: '{var_name}'은 단일 파라미터이므로 '값 (Value)'이 필수입니다.")
                 else:
                     try:
                         float(value)
                     except ValueError:
                         error_messages.append(f"❌ {i+1}행 오류: '{var_name}'의 값 '{value}'은 유효한 숫자가 아닙니다.")
 
-            else:
-                pass
-                
-        else:
-            pass 
     if error_messages:
         return html.Div([
             html.P("❗ 입력 데이터 확인 필요:", style={'color': 'red', 'fontWeight': 'bold'}),
             html.Ul([html.Li(msg) for msg in error_messages])
         ])
     else:
-        return html.Div("✅ 데이터 설정 완료. (변수 타입 및 파라미터 값이 올바릅니다)", style={'color': 'green', 'fontWeight': 'bold'})
+        return html.Div("✅ 데이터 설정 완료. (모든 유효성 검사 통과)", style={'color': 'green', 'fontWeight': 'bold'})
 
 @app.callback(
     Output('input-table', 'data'),
