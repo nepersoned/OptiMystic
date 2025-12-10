@@ -1,125 +1,122 @@
-# 🚀 OptiMystic Solver: 웹 기반 최적화 모델링 & 시뮬레이션 플랫폼
-## 💡 프로젝트 소개 및 목표 (Value Proposition)
+# 🧙‍♂️ OptiMystic Solver: 웹 기반 최적화 모델링 & 시뮬레이션 플랫폼
 
-> 수학적 최적화 모델링은 강력한 의사결정 도구이지만, 코드를 직접 작성해야 하는 어려움이 있습니다. **OptiMystic Solver**는 복잡한 최적화(LP/MIP) 모델 정의 과정을 **직관적인 웹 UI**로 변환하여, 사용자에게 **코드 없는 모델링 환경**을 제공합니다.
+## 💡 프로젝트 소개 (Value Proposition)
 
-**최종 목표:** 사용자가 입력한 데이터를 PuLP 객체로 완벽하게 변환하고, **산업 및 연구 수준의 의사결정 모델**을 웹에서 구축 및 실행할 수 있도록 하는 것입니다.
+> 수학적 최적화 모델링은 강력한 의사결정 도구이지만, 코드를 직접 작성해야 하는 진입 장벽이 존재합니다.
+> **OptiMystic Solver**는 복잡한 최적화(LP/MIP) 모델 정의 과정을 **질문형 마법사(Wizard) UI**로 변환하여, 사용자에게 **직관적인 노코드(No-Code) 모델링 환경**을 제공합니다.
 
------
+**최종 목표:** 사용자가 마법사를 통해 정의한 데이터를 `PuLP` 객체로 완벽하게 변환하고, **산업 및 연구 수준의 의사결정 모델**을 웹에서 즉시 구축 및 실행할 수 있도록 지원하는 것입니다.
+
+---
 
 ## 🧱 시스템 아키텍처 및 기술 스택
 
-OptiMystic Solver는 Python 기반의 강력한 스택으로 구성되어 있습니다.
+OptiMystic Solver는 Python 생태계의 강력한 라이브러리들로 구성되어 있습니다.
 
-  * **Frontend/App**: `Python Dash`를 사용하여 대화형 웹 인터페이스 및 콜백을 관리합니다.
-  * **Styling**: `Dash Bootstrap Components (계획)`를 도입하여 현대적이고 반응형 UI/UX를 구축할 예정입니다.
-  * **Parser/Validator**: `Python`과 `Pandas`를 사용하여 입력 데이터를 파싱하고 단위 변수를 객체화하며 유효성을 검사합니다.
-  * **Solver Core**: `PuLP`를 사용하여 최적화 문제(LP/MIP)를 모델링하고 솔버와 연동합니다.
+* **Frontend/App**: `Python Dash`를 사용하여 반응형 웹 인터페이스 및 복잡한 콜백 로직을 관리합니다.
+* **UX/UI Engine**: `Dash Core Components`와 `Pattern Matching Callbacks`를 활용한 **동적 마법사(Wizard) 폼**을 구현했습니다.
+* **Data Structure**: 입력 데이터를 **변수(Variable)**와 **파라미터(Parameter)**로 명확히 분리하여 관리하며, `Pandas`를 통해 구조화합니다.
+* **Solver Core**: `PuLP`를 사용하여 최적화 문제(LP/MIP)를 수식적으로 모델링하고, 오픈소스 솔버(CBC 등)와 연동합니다.
 
------
+---
 
 ## ✅ 핵심 기능 상세 (Key Features)
 
-### 1\. 모델 요소 정의 및 단위 관리
+### 1. 스마트 데이터 정의 마법사 (Data Definition Wizard)
+* **질문형 인터페이스:** 엑셀처럼 막막한 그리드 대신, "어떤 데이터인가요?", "인덱스가 있나요?"와 같은 질문을 통해 데이터를 정의합니다.
+* **자동 분류 시스템:** 사용자의 응답에 따라 데이터를 **'결정 변수(Variables)'** 탭과 **'파라미터(Parameters)'** 탭으로 자동 분류하여 저장합니다.
+* **동적 입력 폼:** 인덱스 사용 여부($x$ vs $x_i$)에 따라 범위 입력창이 자동으로 생성되거나 숨겨집니다.
 
-  * **동적 인터페이스:** 연속형, 정수형, 이진형, 상수(Parameter) 등 다양한 변수 타입을 웹에서 쉽게 정의할 수 있습니다.
-  * **단위 변수 객체화:** 변수 값, 분자 단위 (`unit_num`), 분모 단위 (`unit_denom`)를 구조화된 클래스 (`UnitVariable`)로 관리합니다.
+### 2. 지능형 유효성 검사 (Smart Input Guards)
+* **문맥 인식 입력 제어:**
+    * **변수(Variable)** 정의 시: 초기값 입력창을 숨겨 혼란을 방지합니다.
+    * **파라미터(Parameter)** 정의 시: 변수 타입(Binary 등) 선택창을 숨깁니다.
+* **실시간 방어:** 이름 누락, 단위 누락 등 필수 정보가 없을 경우 테이블 추가를 원천적으로 방지합니다.
 
-### 2\. 고급 유효성 검사 (Validator Pipeline)
+### 3. 단계별 모델링 워크플로우 (Step-by-Step Modeling)
+* **STEP 1 (Data):** 마법사를 통해 재료(변수/파라미터)를 준비합니다.
+* **STEP 2 (Model):** 준비된 재료를 사용하여 목적 함수와 제약 조건을 수립하고 솔버를 가동합니다.
 
-  * **기초 검사:** 빈 값 및 숫자 유효성 검사를 실시간으로 수행합니다.
-  * **이진형 값 검사 (완료):** `Binary` 타입 변수에 대해 값이 $0$ 또는 $1$인지 확인하는 로직을 구현했습니다.
-  * **심화 검사 (계획):** 중복 변수명, 단위 필드 누락, 인덱스 범위-개수 일치 등 모델 무결성 확보 로직을 추가할 예정입니다.
+---
 
-### 3\. 수식 기반 모델링 (Constraint Wizard)
+## 🗺️ OptiMystic Solver: 개발 로드맵 (Development Roadmap)
 
-  * 목적 함수 및 제약 조건을 수식(예: `SUM(X[i] * Cost[i])`) 형태로 입력하고, 이를 PuLP 모델 객체로 자동 변환하는 파싱 엔진을 구축할 예정입니다.
-
------
-
-## 🗺️ OptiMystic Solver: 최종 마스터 플랜 (Updated Final Master Plan)
-
-| Phase | 퀘스트 번호 | 퀘스트 이름 | 진행 상태 | 세부 구현 내용 (Specs) |
+| Phase | 퀘스트 | 퀘스트 이름 | 상태 | 세부 구현 내용 |
 | :---: | :---: | :---: | :---: | :--- |
-| **Phase 1** | Q 1-1 | 개발 환경 세팅 | ✅ 완료 | Python 환경 및 Dash/PuLP 라이브러리 설치. |
-| (기반 구축) | Q 1-2 | 핵심 엔진 설계 | ⚠️ 부분 완료 | `UnitVariable` 클래스 구현 완료. (인덱스 정보 구조화 미흡) |
-| | Q 2-1 | 연구실 책상(UI) 배치 | ✅ 완료 | Dash app.layout 정의 및 목적 함수/제약 조건 입력 영역 마련. |
-| | Q 2-2 | 동적 입력 테이블 구현 | ✅ 완료 | DataTable에 인덱스 컬럼 포함. 행 추가/제거 기능 구현. |
-| | **Q 2-3** | **유효성 검사 기본 로직** | **✅ 완료** | **기본 숫자 유효성 검사 및 이진형 변수 ($0$/$1$) 값 검사 로직 구현 완료.** |
-| | Q 3-1 | 데이터 수집가 (Parser) | ✅ 완료 | `unit_core.py`에 테이블 파싱 및 인덱스 정보 추출 로직 구현 완료. |
-| **Phase 2** | **Q 3-2** | **에러 방어막 (Validator)** | ⬜ 대기 | **[P1, 최우선]** `unit_core`를 연결하여 1) 중복 변수명 2) 단위 필드 누락 3) 인덱스 범위-개수 일치 검증 구현. |
-| (신경망 연결) | **Q 3-3** | **[심화] 동적 데이터 입력 UI** | ⬜ 대기 | **[P2]** 파싱 정보를 바탕으로, 인덱스 파라미터($C_{i,j}$)의 실제 값을 입력받을 행렬 형태의 DataTable을 동적으로 생성 및 표시. |
-| **Phase 3** | Q 4-1 | 목적 함수 설정 (Objective) | ⬜ 대기 | objective-type Dropdown을 활용하여 MAX / MIN 상태를 솔버에 전달하는 로직 구현. |
-| (솔버 탑재) | **Q 4-2** | **제약식 마법사 (Constraint Wizard)** | ⬜ 대기 | **[P3]** 수식 파싱(SUM(X[i] * Cost[i])) 로직을 활용하여 PuLP 수식 객체로 변환하는 핵심 파싱 엔진 구현. |
-| | **Q 4-3** | **솔버 가동 (Solve)** | ⬜ 대기 | **[P3]** solve-btn 클릭 시, 반복문(Loop)을 사용하여 인덱스별 제약 조건을 효율적으로 구축하고 PuLP 모델 실행. |
-| **Phase 4** | **Q 5-1** | **결과 대시보드** | ⬜ 대기 | **[P4]** PuLP 해답을 파싱하여 최적 해(Optimal Solution)와 변수 상태를 깔끔한 DataTable로 출력. |
-| (시각화 및 분석) | Q 5-2 | 민감도 분석 (Sensitivity) | ⬜ 대기 | Shadow Price 및 Reduced Cost를 추출하여 결과의 안정성을 검증하는 분석 결과 시각화. |
-| **Phase 6** | **Q 6-1~6-2** | **디자인 및 레이아웃 개선** | ⬜ 대기 | **[P1, 최우선]** Dash Bootstrap Components를 도입하여 UI의 가독성 및 전문성을 대폭 향상. |
-| (디자인 강화) | Q 7 | 설명서(README) 작성 | ✅ 완료 | GitHub용 README 파일 작성. |
-
----
------
-
-*이 README는 프로젝트의 현재 진행 상태를 기반으로 작성되었으며, 지속적인 업데이트가 이루어질 예정입니다.*
-
-# 🚀 OptiMystic Solver: Web-Based Optimization Modeling & Simulation Platform
-
-## 💡 Project Overview and Value Proposition
-
-> Mathematical optimization is a powerful decision-making tool, but often requires difficult coding. **OptiMystic Solver** transforms the complex process of defining optimization models (LP/MIP) into an **intuitive web UI**, providing users with a **code-free modeling environment**. 
-
-**Ultimate Goal:** To fully convert user-input data into PuLP objects, allowing for the construction and execution of **industry and research-grade decision models** directly on the web.
+| **Phase 1** | Q 1-1 | 개발 환경 세팅 | ✅ 완료 | Python, Dash, PuLP 라이브러리 설치 및 환경 구성. |
+| (기반 구축) | Q 1-2 | 핵심 엔진 설계 | ✅ 완료 | `UnitVariable` 객체 구조화 및 인덱스 처리 로직 설계. |
+| **Phase 2** | Q 2-1 | 연구실(UI) 배치 | ✅ 완료 | 탭(Tabs) 구조 도입 (Step 1: 데이터 / Step 2: 모델링) 및 레이아웃 분리. |
+| (UI/UX) | Q 2-2 | **마법사(Wizard) 구현** | ✅ 완료 | 라디오 버튼과 질문 형태의 동적 입력 폼(Pattern Matching Callback) 완성. |
+| | Q 2-3 | **스마트 유효성 검사** | ✅ 완료 | 변수/파라미터 자동 분류 및 상황에 따른 입력창 동적 제어(Input Guard) 구축. |
+| **Phase 3** | Q 3-1 | **데이터 구조화** | ✅ 완료 | 마법사를 통해 입력된 데이터를 `DataTable`에 구조적으로 수집 및 저장. |
+| (데이터 연결) | **Q 3-2** | **상세 데이터 입력** | 🚧 진행중 | **[Matrix Input]** 인덱스 파라미터($C_{i,j}$)의 구체적인 값을 입력받을 수 있는 팝업/행렬 테이블 구현. |
+| | Q 3-3 | 엔진 동기화 | ⬜ 대기 | UI에 입력된 상세 데이터를 `unit_core` 엔진과 실시간 동기화. |
+| **Phase 4** | Q 4-1 | 수식 마법사 | ⬜ 대기 | 목적 함수 및 제약식을 텍스트 파싱하여 PuLP 객체로 변환하는 로직 구현. |
+| (솔버 가동) | **Q 4-2** | **솔버 연결 (Solve)** | ⬜ 대기 | `Run` 버튼 클릭 시 실제 최적화 엔진 구동 및 결과 도출. |
+| **Phase 5** | Q 5-1 | 결과 대시보드 | ⬜ 대기 | 최적 해(Optimal Solution)와 변수 상태를 시각화된 테이블로 출력. |
+| (분석/배포) | Q 6 | 디자인 고도화 | ⬜ 대기 | CSS 커스텀 및 반응형 레이아웃 적용 (Inter 폰트 적용 완료). |
 
 ---
 
-## 🧱 System Architecture and Technology Stack
+<br>
 
-OptiMystic Solver is built on a robust Python-based stack. 
+***
 
-* **Frontend/App**: Uses `Python Dash` to manage the interactive web interface and callbacks.
-* **Styling**: Plans to implement `Dash Bootstrap Components (planned)` for a modern and responsive UI/UX.
-* **Parser/Validator**: Uses `Python` and `Pandas` to parse input data, instantiate unit variables, and perform data validation.
-* **Solver Core**: Employs `PuLP` to model optimization problems (LP/MIP) and interface with the actual solver.
+# 🧙‍♂️ OptiMystic Solver: Web-Based Optimization Modeling Platform
 
----
+## 💡 Project Overview
 
-## ✅ Core Features (Key Features)
+> Mathematical optimization is a powerful tool, but coding it from scratch is a barrier for many.
+> **OptiMystic Solver** replaces complex coding with an **intuitive Wizard UI**, providing a **No-Code environment** for defining Linear Programming (LP) and Mixed-Integer Programming (MIP) models.
 
-### 1. Model Element Definition and Unit Management
-
-* **Dynamic Interface:** Allows easy definition of various variable types (Continuous, Integer, Binary, Parameter) directly in a web table.
-* **Unit Variable Objectification:** Manages the variable value, numerator unit (`unit_num`), and denominator unit (`unit_denom`) within a structured class (`UnitVariable`).
-
-### 2. Advanced Data Validation (Validator Pipeline)
-
-* **Basic Check:** Performs real-time validation for missing values and numerical validity.
-* **Binary Value Check (Completed):** Implemented logic to ensure `Binary` variables are set to $0$ or $1$.
-* **Advanced Check (Planned):** Will include logic for validating unique variable names, checking for missing unit fields, and verifying index range consistency.
-
-### 3. Formula-Based Modeling (Constraint Wizard)
-
-* The objective function and constraints can be entered as formulas (e.g., `SUM(X[i] * Cost[i])`) which will be converted by a dedicated parsing engine into PuLP model objects.
+**Goal:** To seamlessly convert user-defined data from the Wizard into `PuLP` objects, enabling the construction and execution of **decision-making models** directly on the web.
 
 ---
 
-## 🗺️ OptiMystic Solver: Updated Final Master Plan
+## 🧱 Tech Stack & Architecture
 
-| Phase | Quest No. | Quest Name | Status | Detailed Implementation (Specs) |
+* **Frontend:** `Python Dash` for reactive web interfaces.
+* **UX Engine:** Utilizes `Dash Pattern Matching Callbacks` to build a **Dynamic Wizard Form**.
+* **Data Logic:** Structurally separates **Variables** and **Parameters** using `Pandas`.
+* **Solver Core:** `PuLP` for mathematical modeling, interfacing with open-source solvers (e.g., CBC).
+
+---
+
+## ✅ Key Features
+
+### 1. Smart Data Definition Wizard
+* **Question-Driven Interface:** Instead of complex grids, users answer simple questions (e.g., "Is this a variable?", "Does it have indices?").
+* **Auto-Classification:** Automatically routes data to the **'Variables'** or **'Parameters'** tab based on user input.
+* **Dynamic Forms:** Input fields for index ranges appear or disappear dynamically based on the dimension settings.
+
+### 2. Intelligent Input Guards
+* **Context-Aware:**
+    * For **Variables**: Hides initial value inputs (preventing confusion).
+    * For **Parameters**: Hides variable type selectors (e.g., Binary/Integer).
+* **Real-time Protection:** Prevents submission if essential fields (Name, Unit) are missing.
+
+### 3. Step-by-Step Workflow
+* **STEP 1 (Define Data):** Prepare ingredients (Variables/Parameters) using the Wizard.
+* **STEP 2 (Model & Solve):** Build objective functions/constraints and run the solver.
+
+---
+
+## 🗺️ Development Roadmap
+
+| Phase | Quest | Quest Name | Status | Details |
 | :---: | :---: | :---: | :---: | :--- |
-| **Phase 1** | Q 1-1 | Development Environment Setup | ✅ Completed | Python environment and Dash/PuLP library installation. |
-| (Foundation) | Q 1-2 | Core Engine Design | ⚠️ Partially Complete | `UnitVariable` class implemented. (Missing explicit index structure) |
-| | Q 2-1 | Lab Desk (UI) Placement | ✅ Completed | Dash app.layout definition and setup for objective/constraint input areas. |
-| | Q 2-2 | Dynamic Input Table | ✅ Completed | DataTable includes index columns. Row add/delete functionality implemented. |
-| | **Q 2-3** | **Basic Validation Logic** | **✅ Completed** | **Basic numerical validation and Binary variable ($0$/$1$) value check implemented.** |
-| | Q 3-1 | Data Collector (Parser) | ✅ Completed | Logic for table parsing and index information extraction in `unit_core.py` implemented. |
-| **Phase 2** | **Q 3-2** | **Error Shield (Validator)** | ⬜ Pending | **[P1, Top Priority]** Connect `unit_core` to implement 1) Duplicate variable name check 2) Missing unit field check 3) Index range-count consistency check. |
-| (Neural Net Connect) | **Q 3-3** | **[Advanced] Dynamic Data Input UI** | ⬜ Pending | **[P2]** Dynamically generate and display a matrix-style DataTable to input actual values for indexed parameters ($C_{i,j}$) based on parsing info. |
-| **Phase 3** | Q 4-1 | Objective Function Setup | ⬜ Pending | Implement logic to pass MAX / MIN state from the objective-type Dropdown to the solver. |
-| (Solver Integration) | **Q 4-2** | **Constraint Wizard** | ⬜ Pending | **[P3]** Implement the core parsing engine to convert formula logic (SUM(X[i] * Cost[i])) into PuLP expression objects. |
-| | **Q 4-3** | **Solver Run (Solve)** | ⬜ Pending | **[P3]** On solve-btn click, efficiently construct index-based constraints using a **Loop** and execute the PuLP model. |
-| **Phase 4** | **Q 5-1** | **Results Dashboard** | ⬜ Pending | **[P4]** Parse the PuLP solution to cleanly display the Optimal Solution and variable statuses in a DataTable. |
-| (Visualization & Analysis) | Q 5-2 | Sensitivity Analysis | ⬜ Pending | Extract and visualize analytical results like Shadow Price and Reduced Cost to verify solution stability. |
-| **Phase 6** | **Q 6-1~6-2** | **Design & Layout Improvement** | ⬜ Pending | **[P1, Top Priority]** Introduce Dash Bootstrap Components to significantly enhance UI readability and professionalism. |
-| (Design Enhancement) | Q 7 | Documentation (README) | ✅ Completed | GitHub README file written. |
+| **Phase 1** | Q 1-1 | Env Setup | ✅ Done | Python, Dash, PuLP installation. |
+| (Foundation) | Q 1-2 | Engine Design | ✅ Done | `UnitVariable` class structure & index logic. |
+| **Phase 2** | Q 2-1 | Layout Setup | ✅ Done | Implemented Step-by-Step Tabs (Data vs. Model). |
+| (UI/UX) | Q 2-2 | **Wizard UI** | ✅ Done | Dynamic form with Radio buttons & Question flow. |
+| | Q 2-3 | **Smart Validation** | ✅ Done | Auto-classification & Dynamic Input Guards. |
+| **Phase 3** | Q 3-1 | **Data Structuring** | ✅ Done | Collecting Wizard inputs into structured DataTables. |
+| (Data) | **Q 3-2** | **Matrix Input** | 🚧 In Progress | UI for inputting specific values for indexed parameters ($C_{i,j}$). |
+| | Q 3-3 | Engine Sync | ⬜ Pending | Syncing UI data with `unit_core` engine. |
+| **Phase 4** | Q 4-1 | Formula Wizard | ⬜ Pending | Parsing text formulas into PuLP objects. |
+| (Solver) | **Q 4-2** | **Solve** | ⬜ Pending | Triggering the actual optimization engine. |
+| **Phase 5** | Q 5-1 | Dashboard | ⬜ Pending | Visualizing Optimal Solutions. |
+| (Polish) | Q 6 | Design | ⬜ Pending | Advanced CSS & Responsive Layout (Inter font applied). |
+
 ---
-*This README is based on the current development status of the project and will be updated continuously.*
+*This README reflects the "Wizard Edition" update.*
