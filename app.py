@@ -7,7 +7,25 @@ app = dash.Dash(__name__)
     [Input('input-table', 'data')]          
 )
 def validate_input_data(rows): 
-    return "✅ 입력 데이터 유효성 검사 완료. 이제 최적화 준비를 할 수 있습니다."
+    error_messages = []
+    
+    for i, row in enumerate(rows):
+        value = row.get('value')
+
+        if value is None or str(value).strip() == '':
+            error_messages.append(f"❌ 오류: {i+1}번째 행의 '값 (Value)'이 비어 있습니다. (변수명: {row.get('var_name', 'N/A')})")
+            continue 
+
+        try:
+            float(value) 
+        except ValueError:
+            error_messages.append(f"❌ 오류: {i+1}번째 행의 '값 (Value)' ({value})는 유효한 숫자가 아닙니다. (변수명: {row.get('var_name', 'N/A')})")
+
+    if error_messages:
+        return html.Div([html.P("❗ 유효성 검사 실패: 다음 오류를 수정하십시오:", style={'color': 'red', 'fontWeight': 'bold'}),
+                         html.Ul([html.Li(msg) for msg in error_messages])])
+    else:
+        return "✅ 입력 데이터 유효성 검사 완료. 이제 최적화 준비를 할 수 있습니다."
 
 @app.callback(
     Output('input-table', 'data'),
