@@ -20,10 +20,8 @@ def add_row(n_clicks, rows, columns):
     return rows
     
 
-app.layout = html.Div([
-    html.H1("🧙‍♂️ OptiMystic Solver", style={'textAlign': 'center'}),
     
-   app.layout = html.Div([
+app.layout = html.Div([
     html.H1("🧙‍♂️ OptiMystic Solver", style={'textAlign': 'center'}),
     
     html.Div([
