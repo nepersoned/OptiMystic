@@ -3,11 +3,7 @@ from dash import html, dash_table, dcc, Input, Output, State, ALL
 
 external_stylesheets = ['https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap']
 
-app = dash.Dash(
-    __name__, 
-    external_stylesheets=external_stylesheets,
-    title='OptiMystic Solver'
-)
+app = dash.Dash(__name__, external_stylesheets=external_stylesheets, title='OptiMystic Solver')
 
 app_style = {
     'fontFamily': 'Inter, sans-serif',
@@ -54,7 +50,8 @@ var_columns = [
     {'name': 'Type', 'id': 'var_type', 'presentation': 'dropdown'},
     {'name': 'Indices', 'id': 'num_indices', 'type': 'numeric'},
     {'name': 'Index Range', 'id': 'index_range', 'type': 'text'},
-    {'name': 'Unit', 'id': 'unit_num'},
+    {'name': 'Unit(Num)', 'id': 'unit_num', 'type': 'text'},
+    {'name': 'Unit(Denom)', 'id': 'unit_denom', 'type': 'text'},
 ]
 
 variable_table = dash_table.DataTable(
@@ -74,7 +71,8 @@ param_columns = [
     {'name': 'Value', 'id': 'value', 'type': 'numeric'},
     {'name': 'Indices', 'id': 'num_indices', 'type': 'numeric'},
     {'name': 'Index Range', 'id': 'index_range', 'type': 'text'},
-    {'name': 'Unit', 'id': 'unit_num'},
+    {'name': 'Unit(Num)', 'id': 'unit_num', 'type': 'text'},
+    {'name': 'Unit(Denom)', 'id': 'unit_denom', 'type': 'text'},
 ]
 
 parameter_table = dash_table.DataTable(
@@ -119,9 +117,25 @@ app.layout = html.Div([
                             html.Label("Name", style={'fontWeight': 'bold', 'display': 'block', 'marginBottom': '8px'}),
                             dcc.Input(id='input-name', type='text', placeholder='e.g., Production', style=input_style),
                         ], style={'width': '48%', 'display': 'inline-block', 'marginRight': '4%'}),
+                        
                         html.Div([
-                            html.Label("Unit", style={'fontWeight': 'bold', 'display': 'block', 'marginBottom': '8px'}),
-                            dcc.Input(id='input-unit', type='text', placeholder='e.g., kg, EA', style=input_style),
+                            html.Label("Unit (Num / Denom)", style={'fontWeight': 'bold', 'display': 'block', 'marginBottom': '8px'}),
+                            html.Div([
+                                dcc.Input(
+                                    id='input-unit-num', 
+                                    type='text', 
+                                    placeholder='(e.g., kg)', 
+                                    style={'width': '45%', 'padding': '8px', 'borderRadius': '4px', 'border': '1px solid #ccc', 'display': 'inline-block'}
+                                ),
+                                html.Span(" / ", style={'width': '10%', 'display': 'inline-block', 'textAlign': 'center', 'fontWeight': 'bold', 'fontSize': '18px'}),
+                                dcc.Input(
+                                    id='input-unit-denom', 
+                                    type='text', 
+                                    placeholder='(e.g., hr)', 
+                                    value='1',
+                                    style={'width': '45%', 'padding': '8px', 'borderRadius': '4px', 'border': '1px solid #ccc', 'display': 'inline-block'}
+                                ),
+                            ], style={'display': 'flex', 'alignItems': 'center'})
                         ], style={'width': '48%', 'display': 'inline-block'}),
                     ]),
 
@@ -249,7 +263,8 @@ def render_index_inputs(num):
     Input('submit-btn', 'n_clicks'),
     [State('input-category', 'value'),
      State('input-name', 'value'),
-     State('input-unit', 'value'),
+     State('input-unit-num', 'value'),
+     State('input-unit-denom', 'value'),
      State('input-is-indexed', 'value'),
      State('input-num-indices', 'value'),
      State({'type': 'idx-range-input', 'index': ALL}, 'value'),
@@ -258,9 +273,12 @@ def render_index_inputs(num):
      State('var-table', 'data'),
      State('param-table', 'data')]
 )
-def add_row(n_clicks, category, name, unit, is_indexed, num_indices, idx_ranges_list, val, var_type, var_rows, param_rows):
+def add_row(n_clicks, category, name, u_num, u_denom, is_indexed, num_indices, idx_ranges_list, val, var_type, var_rows, param_rows):
     if n_clicks == 0: return dash.no_update
     if not name: return dash.no_update, dash.no_update, html.Span("❌ Please enter a name!", style={'color': '#dc3545'}), dash.no_update
+
+    final_u_num = u_num if u_num else "-"
+    final_u_denom = u_denom if u_denom else "1"
 
     if is_indexed == 'yes':
         final_num_indices = num_indices
@@ -270,7 +288,13 @@ def add_row(n_clicks, category, name, unit, is_indexed, num_indices, idx_ranges_
         final_num_indices = 0
         final_range_str = ""
         
-    new_row = {'var_name': name, 'unit_num': unit, 'num_indices': final_num_indices, 'index_range': final_range_str}
+    new_row = {
+        'var_name': name, 
+        'unit_num': final_u_num, 
+        'unit_denom': final_u_denom,
+        'num_indices': final_num_indices, 
+        'index_range': final_range_str
+    }
 
     if category == 'param':
         new_row['value'] = val if is_indexed == 'no' else ""
@@ -297,4 +321,4 @@ def run_solver(n_clicks, obj, const):
     ])
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run_server(debug=True, dev_tools_ui=False)
