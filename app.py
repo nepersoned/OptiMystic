@@ -23,20 +23,21 @@ def add_row(n_clicks, rows, columns):
 app.layout = html.Div([
     html.H1("🧙‍♂️ OptiMystic Solver", style={'textAlign': 'center'}),
     
+   app.layout = html.Div([
+    html.H1("🧙‍♂️ OptiMystic Solver", style={'textAlign': 'center'}),
+    
     html.Div([
         dash_table.DataTable(
             id='input-table',
             columns=[
                 {'name': '변수명', 'id': 'var_name'},
-                # ... (나머지 컬럼 및 dropdown 정의 생략)
+                {'name': '값 (Value)', 'id': 'value'},         # <- 핵심 컬럼 1: 값
+                {'name': '분자 단위', 'id': 'unit_num'},       # <- 핵심 컬럼 2: 분자 단위
+                {'name': '분모 단위', 'id': 'unit_denom'},     # <- 핵심 컬럼 3: 분모 단위
                 {'name': '변수 타입', 'id': 'var_type', 'presentation': 'dropdown'},
             ],
-            data=[{'var_name': 'Example', 'value': 100, 'unit_num': 'kg', 'unit_denom': '1'}],
+            data=[{'var_name': 'Example', 'value': 100, 'unit_num': 'kg', 'unit_denom': '1', 'var_type': 'Continuous'}],
             editable=True,
-            row_deletable=True,
-            dropdown={ 'var_type': { 'options': [ {'label': '연속형 (Continuous)', 'value': 'Continuous'}, {'label': '정수형 (Integer)', 'value': 'Integer'}, {'label': '이진형 (Binary)', 'value': 'Binary'} ] } }
-        ),
-        
         html.Div(id='validation-output', 
                  style={'color': 'red', 'marginTop': '10px', 'fontWeight': 'bold'}), 
 
