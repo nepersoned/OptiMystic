@@ -51,7 +51,7 @@ parameter_table = dash_table.DataTable(
 )
 
 app.layout = html.Div([
-    html.H1("OptiMystic: 마법사 모드", style={'textAlign': 'center'}),
+    html.H1("OptiMystic", style={'textAlign': 'center'}),
 
     html.Div([
         html.H3("Q. 새로운 데이터를 추가해볼까요?"),
