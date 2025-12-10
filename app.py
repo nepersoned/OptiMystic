@@ -36,7 +36,7 @@ def validate_input_data(rows):
         return html.Div([html.P("❗ 유효성 검사 실패: 다음 오류를 수정하십시오:", style={'color': 'red', 'fontWeight': 'bold'}),
                          html.Ul([html.Li(msg) for msg in error_messages])])
     else:
-        return "✅ 입력 데이터 유효성 검사 완료. 이제 최적화 준비를 할 수 있습니다.
+        return "✅ 입력 데이터 유효성 검사 완료. 이제 최적화 준비를 할 수 있습니다."
         
 @app.callback(
     Output('input-table', 'data'),
