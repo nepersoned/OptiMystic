@@ -44,6 +44,67 @@ def add_row(n_clicks, rows, columns):
     if n_clicks > 0:
         rows.append({c['id']: '' for c in columns})
     return rows
+@app.callback(
+    Output('indexed-data-container', 'children'),
+    [Input('input-table', 'data')]
+)
+def generate_indexed_tables(rows):
+    indexed_tables = []
+    
+    for i, row in enumerate(rows):
+        var_name = row.get('var_name', f'Unnamed_{i+1}')
+        num_indices = row.get('num_indices', 0)
+        index_range_str = row.get('index_range', '')
+        var_type = row.get('var_type')
+        if num_indices >= 1 and var_type not in ['Continuous', 'Integer', 'Binary']:
+            
+            try:
+                ranges = [r.strip() for r in index_range_str.split(',') if r.strip()]
+                
+                # 각 범위에서 숫자 부분 추출 (예: 'i=1..3' -> 3)
+                sizes = []
+                for r in ranges:
+                    if '..' in r:
+                        end = int(r.split('..')[-1].strip())
+                        start = int(r.split('=')[-1].split('..')[0].strip())
+                        sizes.append(end - start + 1)
+                    else:
+                        sizes.append(1) 
+            except Exception:
+                continue 
+            if len(sizes) == 1:
+                columns = [{'name': f'{var_name}[{ranges[0].split("=")[0].strip()}]', 'id': 'value'}]
+                initial_data = [{'value': ''} for _ in range(sizes[0])]
+            
+            elif len(sizes) >= 2:
+                cols_j = sizes[1] 
+                col_ids = [f'col_{j}' for j in range(cols_j)]
+                columns = [{'name': ranges[0].split('=')[0].strip(), 'id': 'row_label', 'editable': False}]
+                columns += [{'name': f'{ranges[1].split("=")[0].strip()}={j+1}', 'id': col_id, 'type': 'numeric'} for j, col_id in enumerate(col_ids)]
+                rows_i = sizes[0]
+                initial_data = [{'row_label': f'{ranges[0].split("=")[0].strip()}={i+1}', **{col_id: '' for col_id in col_ids}} for i in range(rows_i)]
+            
+            else:
+                continue
+            indexed_tables.append(
+                html.Div([
+                    html.H4(f"데이터 입력: {var_name} ({index_range_str})", 
+                            style={'marginTop': '15px', 'marginBottom': '5px'}),
+                    dash_table.DataTable(
+                        id=f'data-table-{var_name}-{i}', # 고유 ID 부여
+                        columns=columns,
+                        data=initial_data,
+                        editable=True,
+                        row_deletable=False,
+                        style_header={'backgroundColor': 'lightgrey', 'fontWeight': 'bold'},
+                        style_data_conditional=[
+                            {'if': {'column_id': 'row_label'}, 'backgroundColor': 'whitesmoke'}
+                        ]
+                    )
+                ], style={'marginBottom': '20px', 'border': '1px solid #ccc', 'padding': '10px'})
+            )
+
+    return indexed_tables
     
 app.layout = html.Div([
     html.H1("🧙‍♂️ OptiMystic Solver", style={'textAlign': 'center'}),
