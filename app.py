@@ -21,7 +21,7 @@ app.layout = html.Div([
             ],
             data=[
                 {'var_name': 'Budget', 'value': 10000, 'unit_num': 'KRW', 'unit_denom': '1', 'var_type': 'Parameter', 'num_indices': 0, 'index_range': ''},
-                {'var_name': 'Production', 'value': '', 'unit_num': 'EA', 'unit_denom': '1', 'var_type': 'Continuous', 'num_indices': 0, 'index_range': ''}
+                {'var_name': 'Production', 'value': '', 'unit_num': 'EA', 'unit_denom': '1', 'var_type': 'Continuous', 'num_indices': 1, 'index_range': '1..5'}
             ],
             editable=True,
             row_deletable=True,
@@ -35,26 +35,26 @@ app.layout = html.Div([
                     ]
                 }
             },
-            # 🎨 [Quest 2-3 핵심] 조건부 스타일링: 값을 입력하면 안 되는 상황에서 셀 비활성화
             style_data_conditional=[
                 {
                     'if': {
                         'column_id': 'value',
                         'filter_query': '{var_type} != "Parameter"'
                     },
-                    'backgroundColor': '#e9ecef',  
-                    'color': '#adb5bd',            
-                    'pointer-events': 'none'       
+                    'backgroundColor': '#f9f9f9',  # 배경을 아주 연하게 처리
+                    'color': 'transparent',        # 👻 글자를 투명하게 (안 보이게 함)
+                    'pointer-events': 'none',      # 클릭/선택 불가
+                    'user-select': 'none'          # 드래그 불가
                 },
-                # 조건 2: 'Parameter'지만 인덱스 수(num_indices)가 0보다 큰 경우 -> 값 입력 금지 (상세 테이블 사용 예정)
                 {
                     'if': {
                         'column_id': 'value',
                         'filter_query': '{var_type} = "Parameter" && {num_indices} > 0'
                     },
-                    'backgroundColor': '#e9ecef', 
-                    'color': '#adb5bd',
-                    'pointer-events': 'none'       
+                    'backgroundColor': '#f9f9f9',
+                    'color': 'transparent',
+                    'pointer-events': 'none',
+                    'user-select': 'none'
                 }
             ]
         ), 
@@ -66,10 +66,6 @@ app.layout = html.Div([
                     style={'width': '100%', 'marginTop': '10px'}),
         
         html.Hr(style={'marginTop': '30px'}), 
-        
-        html.H3("🔢 인덱싱된 파라미터 값 입력 (현재 비활성화)", style={'marginTop': '20px', 'color': '#aaa'}),
-        html.Div("-> 인덱스가 있는 파라미터(예: Cost[i])는 추후 상세 테이블에서 입력합니다.", 
-                 style={'marginBottom': '10px', 'color': '#555'}),
 
         html.H3("🎯 목적 함수 (Objective Function)", style={'marginTop': '20px'}),
         dcc.Dropdown(id='objective-type', options=[{'label': '최소화 (MIN)', 'value': 'MIN'}, {'label': '최대화 (MAX)', 'value': 'MAX'}], value='MIN', style={'width': '50%'}),
@@ -98,25 +94,38 @@ def validate_input_data(rows):
         value = row.get('value')
         var_name = row.get('var_name', 'N/A')
         var_type = row.get('var_type', 'Continuous')
-        num_indices = row.get('num_indices', 0)
-        unit_num = row.get('unit_num')
         
+        num_indices = row.get('num_indices')
+        if num_indices is None or str(num_indices).strip() == '':
+            num_indices = 0
+        else:
+            num_indices = int(num_indices)
+            
+        index_range = row.get('index_range', '')
+        unit_num = row.get('unit_num')
+
         if not var_name or str(var_name).strip() == '':
              error_messages.append(f"❌ {i+1}행 오류: '변수명'이 비어 있습니다.")
              continue
 
         if not unit_num or str(unit_num).strip() == '':
-            error_messages.append(f"⚠️ {i+1}행 경고: 변수 '{var_name}'의 '분자 단위'가 비어 있습니다. (예: kg, m, ea)")
+            error_messages.append(f"⚠️ {i+1}행 경고: 변수 '{var_name}'의 '분자 단위'가 비어 있습니다.")
 
-        if var_type == 'Parameter':
-            if num_indices == 0: 
-                if value is None or str(value).strip() == '':
-                    error_messages.append(f"❌ {i+1}행 오류: '{var_name}'은 단일 파라미터이므로 '값 (Value)'이 필수입니다.")
-                else:
-                    try:
-                        float(value)
-                    except ValueError:
-                        error_messages.append(f"❌ {i+1}행 오류: '{var_name}'의 값 '{value}'은 유효한 숫자가 아닙니다.")
+        if num_indices < 0:
+            error_messages.append(f"❌ {i+1}행 오류: 인덱스 수는 0 이상이어야 합니다.")
+        
+        if num_indices > 0:
+            if not index_range or str(index_range).strip() == '':
+                error_messages.append(f"❌ {i+1}행 오류: 변수 '{var_name}'의 인덱스 수가 {num_indices}개로 설정되었으나, '인덱스 범위'가 비어 있습니다.")
+        
+        if var_type == 'Parameter' and num_indices == 0:
+            if value is None or str(value).strip() == '':
+                error_messages.append(f"❌ {i+1}행 오류: 단일 파라미터 '{var_name}'의 값이 비어 있습니다.")
+            else:
+                try:
+                    float(value)
+                except ValueError:
+                    error_messages.append(f"❌ {i+1}행 오류: '{var_name}'의 값 '{value}'은 유효한 숫자가 아닙니다.")
 
     if error_messages:
         return html.Div([
@@ -142,5 +151,4 @@ def add_row(n_clicks, rows, columns):
     return rows
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
     app.run_server(debug=True)
