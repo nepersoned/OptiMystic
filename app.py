@@ -13,7 +13,9 @@ def validate_input_data(rows):
         value = row.get('value')
         var_type = row.get('var_type') 
         var_name = row.get('var_name', 'N/A')
-
+        
+        numerical_value = None
+        
         if value is None or str(value).strip() == '':
             error_messages.append(f"❌ 오류: {i+1}번째 행의 '값 (Value)'이 비어 있습니다. (변수명: {row.get('var_name', 'N/A')})")
             continue 
