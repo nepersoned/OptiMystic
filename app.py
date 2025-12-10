@@ -60,6 +60,7 @@ app.layout = html.Div([
             ],
             data=[{'var_name': 'Example', 'value': 100, 'unit_num': 'kg', 'unit_denom': '1', 'var_type': 'Continuous'}],
             editable=True,
+            row_deletable=True,
             dropdown={
                 'var_type': {
                     'options': [
