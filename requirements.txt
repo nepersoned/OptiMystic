@@ -1,3 +1,4 @@
 dash == 2.18.1
 pandas
 pulp == 2.9.0
+gunicorn
