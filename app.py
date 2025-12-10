@@ -36,7 +36,7 @@ app.layout = html.Div([
             ],
             data=[{'var_name': 'Example', 'value': 100, 'unit_num': 'kg', 'unit_denom': '1', 'var_type': 'Continuous'}],
             editable=True,
-        )
+        ),
         html.Div(id='validation-output', 
                  style={'color': 'red', 'marginTop': '10px', 'fontWeight': 'bold'}), 
 
