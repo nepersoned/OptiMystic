@@ -98,7 +98,7 @@ app.layout = html.Div([
                 html.H3("Data Definition Wizard", style={'marginTop': '30px', 'marginBottom': '20px'}),
                 
                 html.Div([
-                    html.Label("Q1. Data Type", style={'fontWeight': 'bold', 'display': 'block', 'marginBottom': '8px'}),
+                    html.Label("Data Type", style={'fontWeight': 'bold', 'display': 'block', 'marginBottom': '8px'}),
                     dcc.RadioItems(
                         id='input-category',
                         options=[
@@ -112,16 +112,16 @@ app.layout = html.Div([
 
                     html.Div([
                         html.Div([
-                            html.Label("Q2. Name", style={'fontWeight': 'bold', 'display': 'block', 'marginBottom': '8px'}),
+                            html.Label("Name", style={'fontWeight': 'bold', 'display': 'block', 'marginBottom': '8px'}),
                             dcc.Input(id='input-name', type='text', placeholder='e.g., Production', style=input_style),
                         ], style={'width': '48%', 'display': 'inline-block', 'marginRight': '4%'}),
                         html.Div([
-                            html.Label("Q3. Unit", style={'fontWeight': 'bold', 'display': 'block', 'marginBottom': '8px'}),
+                            html.Label("Unit", style={'fontWeight': 'bold', 'display': 'block', 'marginBottom': '8px'}),
                             dcc.Input(id='input-unit', type='text', placeholder='e.g., kg, EA', style=input_style),
                         ], style={'width': '48%', 'display': 'inline-block'}),
                     ]),
 
-                    html.Label("Q4. Index Settings", style={'fontWeight': 'bold', 'display': 'block', 'marginTop': '15px', 'marginBottom': '8px'}),
+                    html.Label("Index Settings", style={'fontWeight': 'bold', 'display': 'block', 'marginTop': '15px', 'marginBottom': '8px'}),
                     dcc.RadioItems(
                         id='input-is-indexed',
                         options=[{'label': ' No (Scalar)', 'value': 'no'}, {'label': ' Yes (Array)', 'value': 'yes'}],
@@ -137,12 +137,12 @@ app.layout = html.Div([
                     ], style={'display': 'none', 'marginBottom': '20px'}),
 
                     html.Div(id='value-input-container', children=[
-                        html.Label("Q5. Value (Constant)", style={'fontWeight': 'bold', 'display': 'block', 'marginBottom': '8px'}),
+                        html.Label("Value (Constant)", style={'fontWeight': 'bold', 'display': 'block', 'marginBottom': '8px'}),
                         dcc.Input(id='input-value', type='number', placeholder='Enter number', style=input_style)
                     ], style={'display': 'none'}),
 
                     html.Div(id='type-input-container', children=[
-                        html.Label("Q5. Variable Type", style={'fontWeight': 'bold', 'display': 'block', 'marginBottom': '8px'}),
+                        html.Label("Variable Type", style={'fontWeight': 'bold', 'display': 'block', 'marginBottom': '8px'}),
                         dcc.Dropdown(
                             id='input-var-type',
                             options=[{'label': i, 'value': i} for i in ['Continuous', 'Integer', 'Binary']],
