@@ -1,6 +1,9 @@
 import dash
-from dash import html, dash_table, dcc, Input, Output, State, ALL
+from dash import html, dash_table, dcc, Input, Output, State, ALL, callback_context
 
+# ------------------------------------------------------------------------------
+# 1. Styles & Assets
+# ------------------------------------------------------------------------------
 external_stylesheets = ['https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap']
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets, title='OptiMystic Solver')
@@ -12,6 +15,13 @@ app_style = {
     'margin': 'auto',
     'padding': '40px 20px',
     'color': '#333'
+}
+
+card_style = {
+    'border': '1px solid #e0e0e0', 'borderRadius': '12px', 'padding': '20px',
+    'textAlign': 'center', 'cursor': 'pointer', 'backgroundColor': 'white',
+    'boxShadow': '0 4px 6px rgba(0,0,0,0.05)', 'transition': 'transform 0.2s',
+    'height': '100%', 'display': 'flex', 'flexDirection': 'column', 'justifyContent': 'center'
 }
 
 question_style = {
@@ -46,185 +56,223 @@ table_cell_style = {
     'fontFamily': 'Inter, sans-serif'
 }
 
-var_columns = [
-    {'name': 'Name', 'id': 'var_name', 'type': 'text'},
-    {'name': 'Type', 'id': 'var_type', 'presentation': 'dropdown'},
-    {'name': 'Indices', 'id': 'num_indices', 'type': 'numeric'},
-    {'name': 'Index Range', 'id': 'index_range', 'type': 'text'},
-    {'name': 'Unit(Num)', 'id': 'unit_num', 'type': 'text'},
-    {'name': 'Unit(Denom)', 'id': 'unit_denom', 'type': 'text'},
+# ------------------------------------------------------------------------------
+# 2. Data & Templates (English)
+# ------------------------------------------------------------------------------
+TEMPLATE_GALLERY = [
+    {"id": "cutting", "icon": "✂️", "title": "Cutting Stock", "desc": "Minimize material waste (1D packing) for pipes, wood, or coils."},
+    {"id": "packing", "icon": "📦", "title": "Bin Packing", "desc": "Maximize truck or container loading efficiency (Knapsack Problem)."},
+    {"id": "blending", "icon": "🧪", "title": "Blending Optimization", "desc": "Find the optimal recipe/mix to minimize cost while meeting quality."},
+    {"id": "prod_mix", "icon": "🏭", "title": "Production Mix", "desc": "Maximize profit by determining optimal production quantities."},
+    {"id": "schedule", "icon": "📅", "title": "Shift Scheduling", "desc": "Automate workforce rostering respecting legal constraints."},
+    {"id": "transport", "icon": "🚚", "title": "Transportation", "desc": "Minimize logistics costs from sources to destinations."},
+    {"id": "custom", "icon": "🔮", "title": "Custom Mode", "desc": "Build your own model from scratch using the Wizard."}
 ]
 
-variable_table = dash_table.DataTable(
-    id='var-table',
-    columns=var_columns,
-    data=[],
-    editable=True,
-    row_deletable=True,
-    style_table={'overflowX': 'auto', 'marginBottom': '20px'},
-    style_header=table_header_style,
-    style_cell=table_cell_style,
-    dropdown={'var_type': {'options': [{'label': i, 'value': i} for i in ['Continuous', 'Integer', 'Binary']]}}
-)
+# ------------------------------------------------------------------------------
+# 3. UI Components (Wizard Parts)
+# ------------------------------------------------------------------------------
 
-param_columns = [
-    {'name': 'Name', 'id': 'var_name', 'type': 'text'},
-    {'name': 'Value', 'id': 'value', 'type': 'numeric'},
-    {'name': 'Indices', 'id': 'num_indices', 'type': 'numeric'},
-    {'name': 'Index Range', 'id': 'index_range', 'type': 'text'},
-    {'name': 'Unit(Num)', 'id': 'unit_num', 'type': 'text'},
-    {'name': 'Unit(Denom)', 'id': 'unit_denom', 'type': 'text'},
-]
+# 3-1. Input Section (Wizard Form)
+wizard_input_section = html.Div([
+    html.H4("1. Data Definition Wizard", style={'marginBottom': '20px'}),
+    
+    # Category Selection
+    html.Label("What type of data is this?", style={'fontWeight': 'bold'}),
+    dcc.RadioItems(
+        id='input-category',
+        options=[
+            {'label': ' Decision Variable (Unknown to solve)', 'value': 'var'},
+            {'label': ' Parameter (Known constant)', 'value': 'param'}
+        ],
+        value='var',
+        labelStyle={'display': 'block', 'marginBottom': '10px'}
+    ),
+    html.Br(),
 
-parameter_table = dash_table.DataTable(
-    id='param-table',
-    columns=param_columns,
-    data=[],
-    editable=True,
-    row_deletable=True,
-    style_table={'overflowX': 'auto', 'marginBottom': '20px'},
-    style_header=table_header_style,
-    style_cell=table_cell_style,
-    style_data_conditional=[{
-        'if': {'column_id': 'value', 'filter_query': '{num_indices} > 0'},
-        'backgroundColor': '#f8f9fa', 'color': 'transparent', 'pointer-events': 'none'
-    }]
-)
+    # Name Input
+    html.Label("Name (e.g., Production_Qty, Cost):", style={'fontWeight': 'bold'}),
+    dcc.Input(id='input-name', type='text', placeholder="Enter name...", style=input_style),
 
-app.layout = html.Div([
-    html.H1("🧙‍♂️ OptiMystic Solver", style={'textAlign': 'center', 'marginBottom': '40px', 'fontWeight': '600'}),
+    # Unit Input
+    html.Label("Unit (Optional):", style={'fontWeight': 'bold', 'marginTop': '10px'}),
+    html.Div([
+        dcc.Input(id='input-unit-num', type='text', placeholder="Numerator (e.g. km)", style={'width': '48%', 'marginRight': '4%'}),
+        dcc.Input(id='input-unit-denom', type='text', placeholder="Denominator (e.g. hour)", style={'width': '48%'})
+    ], style={'display': 'flex', 'marginBottom': '15px'}),
 
-    dcc.Tabs(id='main-view-tabs', value='view-data', children=[
-        
-        dcc.Tab(label='STEP 1: Define Data', value='view-data', style={'padding': '10px', 'fontWeight': 'bold'}, selected_style={'padding': '10px', 'fontWeight': 'bold', 'borderTop': '3px solid #007bff'}, children=[
-            html.Div([
-                html.H3("Data Definition Wizard", style={'marginTop': '30px', 'marginBottom': '20px'}),
-                
+    # Index Configuration
+    html.Label("Is this data indexed (Sets)?", style={'fontWeight': 'bold'}),
+    dcc.RadioItems(
+        id='input-is-indexed',
+        options=[{'label': ' No (Scalar)', 'value': 'no'}, {'label': ' Yes (Matrix/Vector)', 'value': 'yes'}],
+        value='no',
+        labelStyle={'display': 'inline-block', 'marginRight': '20px'}
+    ),
+    
+    # Dynamic Index Inputs (Hidden by default)
+    html.Div(id='index-config-area', children=[
+        html.Label("Number of Indices:", style={'marginTop': '10px'}),
+        dcc.Input(id='input-num-indices', type='number', min=1, max=5, step=1, value=1, style=input_style),
+        html.Div(id='dynamic-index-inputs')
+    ], style={'display': 'none'}),
+
+    # Value Input (Only for Parameters)
+    html.Div(id='value-input-container', children=[
+        html.Label("Value (Numeric):", style={'fontWeight': 'bold', 'marginTop': '10px'}),
+        dcc.Input(id='input-value', type='number', placeholder="Enter constant value", style=input_style)
+    ], style={'display': 'none'}),
+
+    # Type Input (Only for Variables)
+    html.Div(id='type-input-container', children=[
+        html.Label("Variable Type:", style={'fontWeight': 'bold', 'marginTop': '10px'}),
+        dcc.Dropdown(
+            id='input-var-type',
+            options=[
+                {'label': 'Continuous (Real Number)', 'value': 'Continuous'},
+                {'label': 'Integer (Whole Number)', 'value': 'Integer'},
+                {'label': 'Binary (0 or 1)', 'value': 'Binary'}
+            ],
+            value='Continuous',
+            style={'marginBottom': '10px'}
+        )
+    ], style={'display': 'block'})
+
+], style=question_style)
+
+# 3-2. Modeling Section (Step 2)
+modeling_section = html.Div([
+    html.H4("Define Optimization Model", style={'marginBottom': '20px'}),
+    
+    html.Label("Objective Function (Minimize/Maximize):", style={'fontWeight': 'bold'}),
+    dcc.Textarea(id='objective-formula', placeholder="e.g., maximize 3*x + 5*y", style={'width': '100%', 'height': '80px', 'marginBottom': '20px'}),
+    
+    html.Label("Constraints:", style={'fontWeight': 'bold'}),
+    dcc.Textarea(id='constraints-formula', placeholder="e.g.,\nx + y <= 10\nx >= 0", style={'width': '100%', 'height': '150px', 'marginBottom': '20px'}),
+
+    html.Button("Run Solver 🚀", id='solve-btn', n_clicks=0, 
+                style={'width': '100%', 'padding': '15px', 'backgroundColor': '#28a745', 'color': 'white', 'border': 'none', 'borderRadius': '8px', 'fontSize': '18px', 'cursor': 'pointer'}),
+    
+    html.Div(id='solver-output', style={'marginTop': '30px', 'padding': '20px', 'backgroundColor': '#f8f9fa', 'borderRadius': '8px', 'border': '1px solid #ddd'})
+])
+
+# ------------------------------------------------------------------------------
+# 4. Page Rendering Functions
+# ------------------------------------------------------------------------------
+def render_landing_page():
+    cards = []
+    for t in TEMPLATE_GALLERY:
+        card = html.Div([
+            html.Div(t['icon'], style={'fontSize': '40px', 'marginBottom': '10px'}),
+            html.H3(t['title'], style={'fontSize': '18px', 'marginBottom': '8px', 'color': '#333'}),
+            html.P(t['desc'], style={'fontSize': '14px', 'color': '#666', 'lineHeight': '1.4'}),
+            html.Button("Select", id={'type': 'tmpl-btn', 'index': t['id']}, 
+                        style={'marginTop': '15px', 'padding': '8px 16px', 'backgroundColor': '#4a4e69', 'color': 'white', 'border': 'none', 'borderRadius': '6px', 'cursor': 'pointer'})
+        ], style=card_style)
+        cards.append(card)
+    
+    return html.Div([
+        html.H1("Which optimization problem do you want to solve?", style={'textAlign': 'center', 'marginBottom': '40px', 'color': '#222'}),
+        html.Div(cards, style={
+            'display': 'grid', 
+            'gridTemplateColumns': 'repeat(auto-fit, minmax(280px, 1fr))', 
+            'gap': '20px'
+        })
+    ])
+
+def render_workspace(mode):
+    mode_info = next((item for item in TEMPLATE_GALLERY if item["id"] == mode), None)
+    title = mode_info['title'] if mode_info else "Custom Mode"
+    
+    return html.Div([
+        html.Div([
+            html.Span(f"Selected Mode: {title}", style={'backgroundColor': '#e2e6ea', 'padding': '5px 10px', 'borderRadius': '15px', 'fontSize': '14px', 'fontWeight': '600'})
+        ], style={'marginBottom': '20px'}),
+
+        dcc.Tabs([
+            dcc.Tab(label='STEP 1: Data Definition', children=[
                 html.Div([
-                    html.Label("Data Type", style={'fontWeight': 'bold', 'display': 'block', 'marginBottom': '8px'}),
-                    dcc.RadioItems(
-                        id='input-category',
-                        options=[
-                            {'label': ' Variable (Decision Variable)', 'value': 'var'},
-                            {'label': ' Parameter (Constant)', 'value': 'param'}
-                        ],
-                        value='var',
-                        inline=True,
-                        style={'marginBottom': '20px'}
-                    ),
-
-                    html.Div([
-                        html.Div([
-                            html.Label("Name", style={'fontWeight': 'bold', 'display': 'block', 'marginBottom': '8px'}),
-                            dcc.Input(id='input-name', type='text', placeholder='e.g., Production', style=input_style),
-                        ], style={'width': '48%', 'display': 'inline-block', 'marginRight': '4%'}),
-                        
-                        html.Div([
-                            html.Label("Unit (Num / Denom)", style={'fontWeight': 'bold', 'display': 'block', 'marginBottom': '8px'}),
-                            html.Div([
-                                dcc.Input(
-                                    id='input-unit-num', 
-                                    type='text', 
-                                    placeholder='(e.g., kg)', 
-                                    style={'width': '45%', 'padding': '8px', 'borderRadius': '4px', 'border': '1px solid #ccc', 'display': 'inline-block'}
-                                ),
-                                html.Span(" / ", style={'width': '10%', 'display': 'inline-block', 'textAlign': 'center', 'fontWeight': 'bold', 'fontSize': '18px'}),
-                                dcc.Input(
-                                    id='input-unit-denom', 
-                                    type='text', 
-                                    placeholder='(e.g., hr)', 
-                                    value='1',
-                                    style={'width': '45%', 'padding': '8px', 'borderRadius': '4px', 'border': '1px solid #ccc', 'display': 'inline-block'}
-                                ),
-                            ], style={'display': 'flex', 'alignItems': 'center'})
-                        ], style={'width': '48%', 'display': 'inline-block'}),
-                    ]),
-
-                    html.Label("Index Settings", style={'fontWeight': 'bold', 'display': 'block', 'marginTop': '15px', 'marginBottom': '8px'}),
-                    dcc.RadioItems(
-                        id='input-is-indexed',
-                        options=[{'label': ' No (Scalar)', 'value': 'no'}, {'label': ' Yes (Array)', 'value': 'yes'}],
-                        value='no',
-                        inline=True,
-                        style={'marginBottom': '15px'}
+                    wizard_input_section,  
+                    html.Div(id='add-msg', style={'marginBottom': '10px'}),
+                    html.Button('Add to Table', id='add-btn', n_clicks=0, style={'width': '100%', 'padding': '12px', 'backgroundColor': '#4a4e69', 'color': 'white', 'border': 'none', 'borderRadius': '8px', 'cursor': 'pointer', 'fontSize': '16px'}),
+                    
+                    html.H4("📊 Defined Data List", style={'marginTop': '30px'}),
+                    
+                    # Variables Table
+                    html.H5("Decision Variables", style={'color': '#007bff'}),
+                    dash_table.DataTable(
+                        id='var-table', 
+                        columns=[{'name': i, 'id': i} for i in ['var_name', 'var_type', 'unit_num', 'index_range']], 
+                        data=[], 
+                        style_header=table_header_style, 
+                        style_cell=table_cell_style
                     ),
                     
-                    html.Div(id='index-config-area', children=[
-                        html.Label("↳ Number of Dimensions (1~5)", style={'fontSize': '14px', 'marginBottom': '5px', 'display': 'block'}),
-                        dcc.Input(id='input-num-indices', type='number', value=1, min=1, max=5, style={'width': '80px', 'padding': '5px', 'borderRadius': '4px', 'border': '1px solid #ccc'}),
-                        html.Div(id='dynamic-index-inputs', style={'marginTop': '10px', 'padding': '15px', 'backgroundColor': '#fff', 'borderRadius': '8px', 'border': '1px solid #eee'})
-                    ], style={'display': 'none', 'marginBottom': '20px'}),
-
-                    html.Div(id='value-input-container', children=[
-                        html.Label("Value (Constant)", style={'fontWeight': 'bold', 'display': 'block', 'marginBottom': '8px'}),
-                        dcc.Input(id='input-value', type='number', placeholder='Enter number', style=input_style)
-                    ], style={'display': 'none'}),
-
-                    html.Div(id='type-input-container', children=[
-                        html.Label("Variable Type", style={'fontWeight': 'bold', 'display': 'block', 'marginBottom': '8px'}),
-                        dcc.Dropdown(
-                            id='input-var-type',
-                            options=[{'label': i, 'value': i} for i in ['Continuous', 'Integer', 'Binary']],
-                            value='Continuous',
-                            style={'marginBottom': '20px'}
-                        )
-                    ], style={'display': 'block'}),
-
-                    html.Button("⬇️ Add to Table", id='submit-btn', n_clicks=0, 
-                                style={'width': '100%', 'backgroundColor': '#007bff', 'color': 'white', 'padding': '12px', 'border': 'none', 'borderRadius': '6px', 'marginTop': '15px', 'fontWeight': '600', 'fontSize': '16px', 'cursor': 'pointer'})
-
-                ], style=question_style),
-                
-                html.Div(id='msg-output', style={'marginBottom': '20px', 'textAlign': 'center', 'fontWeight': 'bold', 'minHeight': '24px'}),
-
-                dcc.Tabs(id='sub-tabs', value='tab-var', children=[
-                    dcc.Tab(label='📋 Variables List', value='tab-var', style={'fontWeight': '600'}, selected_style={'fontWeight': '600', 'borderTop': '3px solid #28a745'}, children=[html.Div([variable_table], style={'padding': '20px', 'border': '1px solid #dee2e6', 'borderTop': 'none'})]),
-                    dcc.Tab(label='🔢 Parameters List', value='tab-param', style={'fontWeight': '600'}, selected_style={'fontWeight': '600', 'borderTop': '3px solid #ffc107'}, children=[html.Div([parameter_table], style={'padding': '20px', 'border': '1px solid #dee2e6', 'borderTop': 'none'})])
-                ])
-
-            ])
-        ]),
-
-        dcc.Tab(label='STEP 2: Model & Solve', value='view-model', style={'padding': '10px', 'fontWeight': 'bold'}, selected_style={'padding': '10px', 'fontWeight': 'bold', 'borderTop': '3px solid #007bff'}, children=[
-            html.Div([
-                html.H3("Optimization Modeling", style={'marginTop': '30px', 'marginBottom': '20px'}),
-                
-                html.Label("🎯 Objective Function", style={'fontWeight': 'bold', 'fontSize': '18px', 'marginBottom': '10px', 'display': 'block'}),
-                
-                html.Div([
-                    dcc.Dropdown(
-                        id='objective-type', 
-                        options=[{'label': 'Minimize (MIN)', 'value': 'MIN'}, {'label': 'Maximize (MAX)', 'value': 'MAX'}], 
-                        value='MIN', 
-                        clearable=False,
-                        style={'width': '160px'} 
+                    # Parameters Table
+                    html.H5("Parameters", style={'color': '#28a745', 'marginTop': '20px'}),
+                    dash_table.DataTable(
+                        id='param-table', 
+                        columns=[{'name': i, 'id': i} for i in ['var_name', 'value', 'unit_num', 'index_range']], 
+                        data=[], 
+                        style_header=table_header_style, 
+                        style_cell=table_cell_style
                     ),
-                    dcc.Input(
-                        id='objective-formula', 
-                        type='text', 
-                        placeholder='e.g., SUM(Production[i] * Cost[i])', 
-                        style={'flex': '1', 'marginLeft': '10px', 'padding': '8px', 'borderRadius': '4px', 'border': '1px solid #ccc'}
-                    )
-                ], style={'display': 'flex', 'alignItems': 'center', 'marginBottom': '30px'}),
-
-                html.Label("🔒 Constraints", style={'fontWeight': 'bold', 'fontSize': '18px', 'marginBottom': '10px', 'display': 'block'}),
-                dcc.Textarea(
-                    id='constraints-formula',
-                    placeholder='Enter one constraint per line.\ne.g., SUM(Production) <= Budget\nProduction[i] >= 10',
-                    style={'width': '100%', 'height': 200, 'padding': '15px', 'fontFamily': 'monospace', 'borderRadius': '8px', 'border': '1px solid #ccc', 'lineHeight': '1.5'}
-                ),
-                
-                html.Button("🚀 Run Solver", id='solve-btn', n_clicks=0, 
-                            style={'width': '100%', 'marginTop': '30px', 'backgroundColor': '#28a745', 'color': 'white', 'padding': '15px', 'fontSize': '18px', 'fontWeight': 'bold', 'border': 'none', 'borderRadius': '8px', 'cursor': 'pointer', 'boxShadow': '0 4px 6px rgba(0,0,0,0.1)'}),
-                
-                html.Div(id='solver-output', style={'marginTop': '30px', 'padding': '25px', 'border': '1px solid #e9ecef', 'borderRadius': '8px', 'minHeight': '100px', 'backgroundColor': '#f8f9fa'})
+                ], style={'padding': '20px'})
+            ]),
+            dcc.Tab(label='STEP 2: Modeling & Solver', children=[
+                modeling_section 
             ])
         ])
-
     ])
+
+# ------------------------------------------------------------------------------
+# 5. Main Layout
+# ------------------------------------------------------------------------------
+app.layout = html.Div([
+    dcc.Store(id='current-mode', data='home'),  
+    html.Div([
+        html.H2("🧙‍♂️ OptiMystic Solver", style={'margin': 0, 'color': '#4a4e69'}),
+        html.Button("🏠 Home", id='btn-home', style={'padding': '5px 10px', 'cursor': 'pointer', 'border': 'none', 'background': 'transparent'})
+    ], style={'display': 'flex', 'justifyContent': 'space-between', 'alignItems': 'center', 'marginBottom': '30px', 'borderBottom': '1px solid #eee', 'paddingBottom': '15px'}),
+
+    html.Div(id='page-content')
 
 ], style=app_style)
 
+# ------------------------------------------------------------------------------
+# 6. Callbacks
+# ------------------------------------------------------------------------------
+
+# [Router] Navigation between Landing Page and Workspace
+@app.callback(
+    [Output('current-mode', 'data'),
+     Output('page-content', 'children')],
+    [Input({'type': 'tmpl-btn', 'index': ALL}, 'n_clicks'),
+     Input('btn-home', 'n_clicks')],
+    [State('current-mode', 'data')]
+)
+def navigate(tmpl_clicks, home_click, current_mode):
+    ctx = callback_context
+    if not ctx.triggered:
+        return 'home', render_landing_page()
+
+    button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+
+    if button_id == 'btn-home':
+        return 'home', render_landing_page()
+    
+    if 'tmpl-btn' in button_id:
+        import json
+        try:
+            clicked_id_dict = json.loads(button_id)
+            selected_mode = clicked_id_dict['index']
+            return selected_mode, render_workspace(selected_mode)
+        except:
+            return 'home', render_landing_page()
+
+    return 'home', render_landing_page()
+
+# [Wizard] Toggle Input Visibility based on User Selection
 @app.callback(
     [Output('index-config-area', 'style'),
      Output('value-input-container', 'style'),
@@ -242,6 +290,7 @@ def toggle_visibility(category, is_indexed):
 
     return style_idx, style_val, style_type
 
+# [Wizard] Render Dynamic Index Inputs
 @app.callback(
     Output('dynamic-index-inputs', 'children'),
     Input('input-num-indices', 'value')
@@ -256,12 +305,13 @@ def render_index_inputs(num):
         ]))
     return inputs
 
+# [Wizard] Add Data to Tables
 @app.callback(
     [Output('var-table', 'data'),
      Output('param-table', 'data'),
-     Output('msg-output', 'children'),
+     Output('add-msg', 'children'),
      Output('input-name', 'value')],
-    Input('submit-btn', 'n_clicks'),
+    Input('add-btn', 'n_clicks'),
     [State('input-category', 'value'),
      State('input-name', 'value'),
      State('input-unit-num', 'value'),
@@ -275,8 +325,12 @@ def render_index_inputs(num):
      State('param-table', 'data')]
 )
 def add_row(n_clicks, category, name, u_num, u_denom, is_indexed, num_indices, idx_ranges_list, val, var_type, var_rows, param_rows):
-    if n_clicks == 0: return dash.no_update
-    if not name: return dash.no_update, dash.no_update, html.Span("❌ Please enter a name!", style={'color': '#dc3545'}), dash.no_update
+    if n_clicks == 0: return dash.no_update, dash.no_update, "", ""
+    if not name: return dash.no_update, dash.no_update, html.Span("❌ Please enter a name!", style={'color': '#dc3545', 'fontWeight': 'bold'}), dash.no_update
+
+    # Initialize lists if they are None
+    if var_rows is None: var_rows = []
+    if param_rows is None: param_rows = []
 
     final_u_num = u_num if u_num else "-"
     final_u_denom = u_denom if u_denom else "1"
@@ -287,7 +341,7 @@ def add_row(n_clicks, category, name, u_num, u_denom, is_indexed, num_indices, i
         final_range_str = ", ".join(valid_ranges)
     else:
         final_num_indices = 0
-        final_range_str = ""
+        final_range_str = "-"
         
     new_row = {
         'var_name': name, 
@@ -298,14 +352,15 @@ def add_row(n_clicks, category, name, u_num, u_denom, is_indexed, num_indices, i
     }
 
     if category == 'param':
-        new_row['value'] = val if is_indexed == 'no' else ""
+        new_row['value'] = val if is_indexed == 'no' else "Matrix(TBD)"
         param_rows.append(new_row)
-        return var_rows, param_rows, html.Span(f"✅ Added Parameter '{name}'", style={'color': '#28a745'}), ""
+        return var_rows, param_rows, html.Span(f"✅ Added Parameter '{name}'", style={'color': '#28a745', 'fontWeight': 'bold'}), ""
     else:
         new_row['var_type'] = var_type
         var_rows.append(new_row)
-        return var_rows, param_rows, html.Span(f"✅ Added Variable '{name}'", style={'color': '#28a745'}), ""
+        return var_rows, param_rows, html.Span(f"✅ Added Variable '{name}'", style={'color': '#007bff', 'fontWeight': 'bold'}), ""
 
+# [Solver] Dummy Logic for Phase 2
 @app.callback(
     Output('solver-output', 'children'),
     Input('solve-btn', 'n_clicks'),
@@ -322,4 +377,4 @@ def run_solver(n_clicks, obj, const):
     ])
 
 if __name__ == '__main__':
-    app.run_server(debug=True, dev_tools_ui=False)
+    app.run_server(debug=True)
