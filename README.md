@@ -1,123 +1,154 @@
-https://optimystic.onrender.com/
-# 🧙‍♂️ OptiMystic Solver: 웹 기반 최적화 모델링 & 시뮬레이션 플랫폼
+# 🧙‍♂️ OptiMystic Solver
+**웹 기반 최적화 모델링 & 시뮬레이션 플랫폼**
 
-## 💡 프로젝트 소개 (Value Proposition)
-
-> 수학적 최적화 모델링은 강력한 의사결정 도구이지만, 코드를 직접 작성해야 하는 진입 장벽이 존재합니다.
-> **OptiMystic Solver**는 복잡한 최적화(LP/MIP) 모델 정의 과정을 **질문형 마법사(Wizard) UI**로 변환하여, 사용자에게 **직관적인 노코드(No-Code) 모델링 환경**을 제공합니다.
-
-**최종 목표:** 사용자가 마법사를 통해 정의한 데이터를 `PuLP` 객체로 완벽하게 변환하고, **산업 및 연구 수준의 의사결정 모델**을 웹에서 즉시 구축 및 실행할 수 있도록 지원하는 것입니다.
+> **수학적 최적화의 대중화.** > 코딩 없이 클릭만으로 복잡한 의사결정 문제를 해결하세요.
 
 ---
 
-## 🧱 시스템 아키텍처 및 기술 스택
+## 💡 프로젝트 소개
+수학적 최적화(LP/MIP)는 강력한 도구이지만, 코드를 직접 짜야 한다는 진입 장벽이 존재합니다. **OptiMystic Solver**는 복잡한 모델링 과정을 **질문형 마법사(Wizard) UI**로 변환하여, 누구나 쉽게 최적의 해답을 찾을 수 있도록 돕습니다.
 
-OptiMystic Solver는 Python 생태계의 강력한 라이브러리들로 구성되어 있습니다.
-
-* **Frontend/App**: `Python Dash`를 사용하여 반응형 웹 인터페이스 및 복잡한 콜백 로직을 관리합니다.
-* **UX/UI Engine**: `Dash Core Components`와 `Pattern Matching Callbacks`를 활용한 **동적 마법사(Wizard) 폼**을 구현했습니다.
-* **Data Structure**: 입력 데이터를 **변수(Variable)**와 **파라미터(Parameter)**로 명확히 분리하여 관리하며, `Pandas`를 통해 구조화합니다.
-* **Solver Core**: `PuLP`를 사용하여 최적화 문제(LP/MIP)를 수식적으로 모델링하고, 오픈소스 솔버(CBC 등)와 연동합니다.
+우리의 목표는 중소기업(SME)과 연구자들이 산업 수준의 의사결정 모델을 웹에서 즉시 구축하고 실행할 수 있도록 지원하는 것입니다.
 
 ---
 
-## ✅ 핵심 기능 상세 (Key Features)
+## 🚀 핵심 기능 (Key Features)
 
-### 1. 스마트 데이터 정의 마법사 (Data Definition Wizard)
-* **질문형 인터페이스:** 엑셀처럼 막막한 그리드 대신, "어떤 데이터인가요?", "인덱스가 있나요?"와 같은 질문을 통해 데이터를 정의합니다.
-* **자동 분류 시스템:** 사용자의 응답에 따라 데이터를 **'결정 변수(Variables)'** 탭과 **'파라미터(Parameters)'** 탭으로 자동 분류하여 저장합니다.
-* **동적 입력 폼:** 인덱스 사용 여부($x$ vs $x_i$)에 따라 범위 입력창이 자동으로 생성되거나 숨겨집니다.
+### 1. 🏛️ 7대 필승 템플릿 (Template Gallery)
+현업에서 발생하는 문제의 95%를 커버하는 **6가지 정형화 모델**과 **자유 모드**를 제공합니다.
+- **✂️ 자재 절단 (Cutting Stock):** 원자재 낭비(Loss) 최소화.
+- **📦 화물 적재 (Bin Packing):** 트럭/컨테이너 적재 효율 극대화 (배낭 문제).
+- **🧪 배합 최적화 (Blending):** 최소 비용으로 최상의 품질 레시피 도출.
+- **🏭 생산 계획 (Product Mix):** 한정된 자원 내에서 이익 극대화.
+- **📅 근무표 생성 (Scheduling):** 법적 제약을 준수하는 자동 인력 배치.
+- **🚚 수송 최적화 (Transportation):** 물류비용을 최소화하는 최적 경로 산출.
+- **🔮 자유 모델링 (Custom Mode):** 나만의 수식을 직접 정의하는 마법사 모드.
 
-### 2. 지능형 유효성 검사 (Smart Input Guards)
-* **문맥 인식 입력 제어:**
-    * **변수(Variable)** 정의 시: 초기값 입력창을 숨겨 혼란을 방지합니다.
-    * **파라미터(Parameter)** 정의 시: 변수 타입(Binary 등) 선택창을 숨깁니다.
-* **실시간 방어:** 이름 누락, 단위 누락 등 필수 정보가 없을 경우 테이블 추가를 원천적으로 방지합니다.
+### 2. 🧙‍♂️ 스마트 데이터 마법사
+- **질문형 인터페이스:** "어떤 데이터인가요?", "인덱스가 있나요?"와 같은 질문을 통해 데이터를 정의합니다.
+- **입력 방어(Input Guard):** 변수 타입 오설정이나 필수 값 누락을 원천적으로 차단합니다.
 
-### 3. 단계별 모델링 워크플로우 (Step-by-Step Modeling)
-* **STEP 1 (Data):** 마법사를 통해 재료(변수/파라미터)를 준비합니다.
-* **STEP 2 (Model):** 준비된 재료를 사용하여 목적 함수와 제약 조건을 수립하고 솔버를 가동합니다.
-
----
-
-## 🗺️ OptiMystic Solver: 개발 로드맵 (Development Roadmap)
-
-| Phase | 퀘스트 | 퀘스트 이름 | 상태 | 세부 구현 내용 |
-| :---: | :---: | :---: | :---: | :--- |
-| **Phase 1** | Q 1-1 | 개발 환경 세팅 | ✅ 완료 | Python, Dash, PuLP 라이브러리 설치 및 환경 구성. |
-| (기반 구축) | Q 1-2 | 핵심 엔진 설계 | ✅ 완료 | `UnitVariable` 객체 구조화 및 인덱스 처리 로직 설계. |
-| **Phase 2** | Q 2-1 | 연구실(UI) 배치 | ✅ 완료 | 탭(Tabs) 구조 도입 (Step 1: 데이터 / Step 2: 모델링) 및 레이아웃 분리. |
-| (UI/UX) | Q 2-2 | **마법사(Wizard) 구현** | ✅ 완료 | 라디오 버튼과 질문 형태의 동적 입력 폼(Pattern Matching Callback) 완성. |
-| | Q 2-3 | **스마트 유효성 검사** | ✅ 완료 | 변수/파라미터 자동 분류 및 상황에 따른 입력창 동적 제어(Input Guard) 구축. |
-| **Phase 3** | Q 3-1 | **데이터 구조화** | ✅ 완료 | 마법사를 통해 입력된 데이터를 `DataTable`에 구조적으로 수집 및 저장. |
-| (데이터 연결) | **Q 3-2** | **상세 데이터 입력** | 🚧 진행중 | **[Matrix Input]** 인덱스 파라미터($C_{i,j}$)의 구체적인 값을 입력받을 수 있는 팝업/행렬 테이블 구현. |
-| | Q 3-3 | 엔진 동기화 | ⬜ 대기 | UI에 입력된 상세 데이터를 `unit_core` 엔진과 실시간 동기화. |
-| **Phase 4** | Q 4-1 | 수식 마법사 | ⬜ 대기 | 목적 함수 및 제약식을 텍스트 파싱하여 PuLP 객체로 변환하는 로직 구현. |
-| (솔버 가동) | **Q 4-2** | **솔버 연결 (Solve)** | ⬜ 대기 | `Run` 버튼 클릭 시 실제 최적화 엔진 구동 및 결과 도출. |
-| **Phase 5** | Q 5-1 | 결과 대시보드 | ⬜ 대기 | 최적 해(Optimal Solution)와 변수 상태를 시각화된 테이블로 출력. |
-| (분석/배포) | Q 6 | 디자인 고도화 | ⬜ 대기 | CSS 커스텀 및 반응형 레이아웃 적용 (Inter 폰트 적용 완료). |
+### 3. ⚡ 단계별 워크플로우
+- **STEP 1 (Data):** 템플릿을 선택하고 필요한 재료(데이터)를 입력합니다.
+- **STEP 2 (Model):** 엔진이 자동으로 수학적 모델(수식)을 생성합니다.
+- **STEP 3 (Solve):** 솔버를 구동하고 결과를 시각적으로 확인합니다.
 
 ---
 
-<br>
-
-***
-
-# 🧙‍♂️ OptiMystic Solver: Web-Based Optimization Modeling Platform
-
-## 💡 Project Overview
-
-> Mathematical optimization is a powerful tool, but coding it from scratch is a barrier for many.
-> **OptiMystic Solver** replaces complex coding with an **intuitive Wizard UI**, providing a **No-Code environment** for defining Linear Programming (LP) and Mixed-Integer Programming (MIP) models.
-
-**Goal:** To seamlessly convert user-defined data from the Wizard into `PuLP` objects, enabling the construction and execution of **decision-making models** directly on the web.
+## 🧱 기술 스택 (Tech Stack)
+- **Frontend/App:** Python Dash (Interactive Web Interface)
+- **Data Structure:** Pandas
+- **Solver Core:** PuLP (Python Linear Programming API)
+- **Visualization:** Plotly Graphing Libraries
 
 ---
 
-## 🧱 Tech Stack & Architecture
+## 🗺️ 개발 로드맵 (Development Roadmap)
 
-* **Frontend:** `Python Dash` for reactive web interfaces.
-* **UX Engine:** Utilizes `Dash Pattern Matching Callbacks` to build a **Dynamic Wizard Form**.
-* **Data Logic:** Structurally separates **Variables** and **Parameters** using `Pandas`.
-* **Solver Core:** `PuLP` for mathematical modeling, interfacing with open-source solvers (e.g., CBC).
+### Phase 1: 기반 구축 (✅ 완료)
+- **Q 1-1:** Python, Dash, PuLP 개발 환경 세팅.
+- **Q 1-2:** `UnitVariable` 객체 및 인덱스 처리 코어 설계.
+
+### Phase 2: UI/UX & 진입점 (Gate)
+- **Q 2-1:** 탭(Tabs) 구조 도입 및 레이아웃 분리. (✅ 완료)
+- **Q 2-2:** 동적 입력 폼(Pattern Matching Callback) 마법사 구현. (✅ 완료)
+- **Q 2-3:** 스마트 유효성 검사(Input Guard) 구축. (✅ 완료)
+- **Q 2-4:** **템플릿 갤러리:** 앱 접속 시 7가지 문제 유형 선택 화면 구현. (🆕)
+
+### Phase 3: 데이터 구조화 & 입력
+- **Q 3-1:** 마법사 데이터를 DataTable로 구조화. (✅ 완료)
+- **Q 3-2:** **상세(행렬) 입력:** 수송/근무표용 엑셀 스타일 팝업 구현. (🚧 진행중)
+- **Q 3-3:** **상세(리스트) 입력:** 절단/적재용 행 추가(Add Row) 리스트 구현. (🆕)
+- **Q 3-4:** UI 데이터와 `unit_core` 엔진 실시간 동기화.
+
+### Phase 4: 솔버 엔진 & 로직
+- **Q 4-1:** **템플릿 로직 빌더:** 6대 템플릿 데이터 자동 수식화(PuLP 변환). (🆕)
+- **Q 4-2:** **수식 파서:** 자유 모드용 텍스트 수식 해석기 구현.
+- **Q 4-3:** 솔버 구동(Solve) 및 결과 반환 로직.
+
+### Phase 5: 결과 시각화 & 배포
+- **Q 5-1:** 최적 해(Optimal Solution) 결과 테이블 출력.
+- **Q 5-2:** **템플릿별 맞춤 시각화:**
+  - 적재율 게이지, 물류 생키(Sankey) 차트, 근무 간트(Gantt) 차트 등.
+- **Q 6:** 디자인 고도화 (CSS/반응형).
 
 ---
 
-## ✅ Key Features
 
-### 1. Smart Data Definition Wizard
-* **Question-Driven Interface:** Instead of complex grids, users answer simple questions (e.g., "Is this a variable?", "Does it have indices?").
-* **Auto-Classification:** Automatically routes data to the **'Variables'** or **'Parameters'** tab based on user input.
-* **Dynamic Forms:** Input fields for index ranges appear or disappear dynamically based on the dimension settings.
+# 🧙‍♂️ OptiMystic Solver
+**Web-based Optimization Modeling & Simulation Platform**
 
-### 2. Intelligent Input Guards
-* **Context-Aware:**
-    * For **Variables**: Hides initial value inputs (preventing confusion).
-    * For **Parameters**: Hides variable type selectors (e.g., Binary/Integer).
-* **Real-time Protection:** Prevents submission if essential fields (Name, Unit) are missing.
+> **Democratizing Mathematical Optimization.** > Solve complex LP/MIP problems without writing a single line of code.
 
-### 3. Step-by-Step Workflow
-* **STEP 1 (Define Data):** Prepare ingredients (Variables/Parameters) using the Wizard.
-* **STEP 2 (Model & Solve):** Build objective functions/constraints and run the solver.
+---
+
+## 💡 Introduction
+Mathematical optimization is a powerful decision-making tool, but the barrier to entry—coding—is too high for many. **OptiMystic Solver** bridges this gap by transforming complex Linear Programming (LP) and Mixed-Integer Programming (MIP) processes into an intuitive **Wizard-based UI**.
+
+Our goal is to empower SMEs (Small and Medium Enterprises) and researchers to build industrial-grade decision models instantly on the web.
+
+---
+
+## 🚀 Key Features
+
+### 1. 🏛️ Template Gallery (7 Industry Patterns)
+Don't start from a blank page. We provide 7 pre-built templates that cover 95% of industrial optimization problems:
+- **✂️ Cutting Stock:** Minimize material waste (1D packing).
+- **📦 Bin Packing:** Maximize truck/container loading efficiency.
+- **🧪 Blending:** Optimize recipes for minimum cost and quality.
+- **🏭 Production Mix:** Maximize profit with limited resources and time.
+- **📅 Shift Scheduling:** Automate workforce rostering while complying with laws.
+- **🚚 Transportation:** Find the cheapest logistics routes.
+- **🔮 Custom Mode:** Build any model from scratch using our Wizard.
+
+### 2. 🧙‍♂️ Smart Data Wizard
+- **Question-Driven:** Instead of coding, answer simple questions like "What are your resources?".
+- **Input Guards:** Prevents errors by automatically handling variable types and constraints.
+
+### 3. ⚡ Step-by-Step Workflow
+- **STEP 1 (Data):** Define variables and parameters via templates.
+- **STEP 2 (Model):** The engine automatically builds mathematical formulations.
+- **STEP 3 (Solve):** Run the solver (CBC/GLPK) and visualize results.
+
+---
+
+## 🧱 Tech Stack
+- **Frontend:** Python Dash (React.js based)
+- **Data:** Pandas
+- **Solver Core:** PuLP (Python LP modeler)
+- **Visualization:** Plotly, Dash Core Components
 
 ---
 
 ## 🗺️ Development Roadmap
 
-| Phase | Quest | Quest Name | Status | Details |
-| :---: | :---: | :---: | :---: | :--- |
-| **Phase 1** | Q 1-1 | Env Setup | ✅ Done | Python, Dash, PuLP installation. |
-| (Foundation) | Q 1-2 | Engine Design | ✅ Done | `UnitVariable` class structure & index logic. |
-| **Phase 2** | Q 2-1 | Layout Setup | ✅ Done | Implemented Step-by-Step Tabs (Data vs. Model). |
-| (UI/UX) | Q 2-2 | **Wizard UI** | ✅ Done | Dynamic form with Radio buttons & Question flow. |
-| | Q 2-3 | **Smart Validation** | ✅ Done | Auto-classification & Dynamic Input Guards. |
-| **Phase 3** | Q 3-1 | **Data Structuring** | ✅ Done | Collecting Wizard inputs into structured DataTables. |
-| (Data) | **Q 3-2** | **Matrix Input** | 🚧 In Progress | UI for inputting specific values for indexed parameters ($C_{i,j}$). |
-| | Q 3-3 | Engine Sync | ⬜ Pending | Syncing UI data with `unit_core` engine. |
-| **Phase 4** | Q 4-1 | Formula Wizard | ⬜ Pending | Parsing text formulas into PuLP objects. |
-| (Solver) | **Q 4-2** | **Solve** | ⬜ Pending | Triggering the actual optimization engine. |
-| **Phase 5** | Q 5-1 | Dashboard | ⬜ Pending | Visualizing Optimal Solutions. |
-| (Polish) | Q 6 | Design | ⬜ Pending | Advanced CSS & Responsive Layout (Inter font applied). |
+### Phase 1: Foundation (✅ Completed)
+- **Q 1-1:** Setup Python, Dash, and PuLP environment.
+- **Q 1-2:** Design `UnitVariable` core engine and index logic.
+
+### Phase 2: UI & Entry Gate
+- **Q 2-1:** Implement Tab structure (Data/Model separation). (✅ Completed)
+- **Q 2-2:** Develop Dynamic Wizard with Pattern Matching Callbacks. (✅ Completed)
+- **Q 2-3:** Implement Smart Input Guards. (✅ Completed)
+- **Q 2-4:** **Template Gallery (Landing Page):** Entry point for 7 optimization patterns. (🆕)
+
+### Phase 3: Data Structure & Input
+- **Q 3-1:** Structure Wizard data into DataTable. (✅ Completed)
+- **Q 3-2:** **Matrix Input:** Spreadsheet-like popup for Transportation/Scheduling. (🚧 In Progress)
+- **Q 3-3:** **List Input:** Dynamic row addition for Cutting Stock/Packing. (🆕)
+- **Q 3-4:** Real-time synchronization with `unit_core` engine.
+
+### Phase 4: Solver Engine & Logic
+- **Q 4-1:** **Template Logic Builder:** Auto-generate PuLP formulations for 6 templates. (🆕)
+- **Q 4-2:** **Formula Parser:** Text-to-Model conversion for Custom Mode.
+- **Q 4-3:** Connect Solver (Run) and handle status/errors.
+
+### Phase 5: Visualization & Deployment
+- **Q 5-1:** Result Tables (Optimal values).
+- **Q 5-2:** **Template Visualization:**
+  - Gauge Charts (Packing)
+  - Sankey Diagrams (Transportation)
+  - Gantt Charts (Scheduling)
+- **Q 6:** Design Refinement (CSS/Responsive).
 
 ---
-*This README reflects the "Wizard Edition" update.*
