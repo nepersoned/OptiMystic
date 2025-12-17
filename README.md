@@ -49,20 +49,19 @@
 - **Q 1-1:** Python, Dash, PuLP 개발 환경 세팅.
 - **Q 1-2:** `UnitVariable` 객체 및 인덱스 처리 코어 설계.
 
-### Phase 2: UI/UX & 진입점 (Gate)
+### Phase 2: UI/UX & 진입점 (✅ 완료)
 - **Q 2-1:** 탭(Tabs) 구조 도입 및 레이아웃 분리. (✅ 완료)
 - **Q 2-2:** 동적 입력 폼(Pattern Matching Callback) 마법사 구현. (✅ 완료)
 - **Q 2-3:** 스마트 유효성 검사(Input Guard) 구축. (✅ 완료)
-- **Q 2-4:** **템플릿 갤러리:** 앱 접속 시 7가지 문제 유형 선택 화면 구현. (🆕)
+- **Q 2-4:** **템플릿 갤러리:** 앱 접속 시 7가지 문제 유형 선택 화면 구현. (✅ 완료)
 
-### Phase 3: 데이터 구조화 & 입력
+### Phase 3: 데이터 구조화 & 입력 (✅ 완료)
 - **Q 3-1:** 마법사 데이터를 DataTable로 구조화. (✅ 완료)
-- **Q 3-2:** **상세(행렬) 입력:** 수송/근무표용 엑셀 스타일 팝업 구현. (🚧 진행중)
-- **Q 3-3:** **상세(리스트) 입력:** 절단/적재용 행 추가(Add Row) 리스트 구현. (🆕)
-- **Q 3-4:** UI 데이터와 `unit_core` 엔진 실시간 동기화.
+- **Q 3-2:** **상세(행렬) 입력:** 수송/근무표용 엑셀 스타일 팝업 구현. (✅ 완료)
+- **Q 3-3:** **상세(리스트) 입력:** 절단/적재용 행 추가(Add Row) 리스트 구현. (✅ 완료)
 
 ### Phase 4: 솔버 엔진 & 로직
-- **Q 4-1:** **템플릿 로직 빌더:** 6대 템플릿 데이터 자동 수식화(PuLP 변환). (🆕)
+- **Q 4-1:** **템플릿 로직 빌더:** 6대 템플릿 데이터 자동 수식화(PuLP 변환). 
 - **Q 4-2:** **수식 파서:** 자유 모드용 텍스트 수식 해석기 구현.
 - **Q 4-3:** 솔버 구동(Solve) 및 결과 반환 로직.
 
@@ -126,17 +125,16 @@ Don't start from a blank page. We provide 7 pre-built templates that cover 95% o
 - **Q 1-1:** Setup Python, Dash, and PuLP environment.
 - **Q 1-2:** Design `UnitVariable` core engine and index logic.
 
-### Phase 2: UI & Entry Gate
+### Phase 2: UI & Entry Gate (✅ Completed)
 - **Q 2-1:** Implement Tab structure (Data/Model separation). (✅ Completed)
 - **Q 2-2:** Develop Dynamic Wizard with Pattern Matching Callbacks. (✅ Completed)
 - **Q 2-3:** Implement Smart Input Guards. (✅ Completed)
-- **Q 2-4:** **Template Gallery (Landing Page):** Entry point for 7 optimization patterns. (🆕)
+- **Q 2-4:** **Template Gallery (Landing Page):** Entry point for 7 optimization patterns. (✅ Completed)
 
-### Phase 3: Data Structure & Input
+### Phase 3: Data Structure & Input (✅ Completed)
 - **Q 3-1:** Structure Wizard data into DataTable. (✅ Completed)
-- **Q 3-2:** **Matrix Input:** Spreadsheet-like popup for Transportation/Scheduling. (🚧 In Progress)
-- **Q 3-3:** **List Input:** Dynamic row addition for Cutting Stock/Packing. (🆕)
-- **Q 3-4:** Real-time synchronization with `unit_core` engine.
+- **Q 3-2:** **Matrix Input:** Spreadsheet-like popup for Transportation/Scheduling. (✅ Completed)
+- **Q 3-3:** **List Input:** Dynamic row addition for Cutting Stock/Packing. (✅ Completed)
 
 ### Phase 4: Solver Engine & Logic
 - **Q 4-1:** **Template Logic Builder:** Auto-generate PuLP formulations for 6 templates. (🆕)
