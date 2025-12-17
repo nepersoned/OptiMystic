@@ -9,10 +9,7 @@ server = app.server
 
 app_style = {
     'fontFamily': 'Inter, sans-serif',
-    'maxWidth': '1200px',
-    'margin': 'auto',
-    'padding': '40px 20px',
-    'color': '#333'
+    'maxWidth': '1200px', 'margin': 'auto', 'padding': '40px 20px', 'color': '#333'
 }
 
 card_style = {
@@ -24,12 +21,8 @@ card_style = {
 }
 
 question_style = {
-    'padding': '25px',
-    'backgroundColor': '#f8f9fa',
-    'borderRadius': '12px',
-    'marginBottom': '30px',
-    'border': '1px solid #e9ecef',
-    'boxShadow': '0 4px 12px rgba(0,0,0,0.05)'
+    'padding': '25px', 'backgroundColor': '#f8f9fa', 'borderRadius': '12px',
+    'marginBottom': '30px', 'border': '1px solid #e9ecef', 'boxShadow': '0 4px 12px rgba(0,0,0,0.05)'
 }
 
 input_style = {
@@ -58,99 +51,74 @@ TEMPLATE_GALLERY = [
 ]
 
 # --- UI Components ---
-
 wizard_input_section = html.Div([
     html.H4("1. Data Definition Wizard", style={'marginBottom': '20px'}),
     
-    # [1] Role Selection
     html.Label("Step 1. What is the Role?", style={'fontWeight': 'bold', 'color': '#007bff'}),
     dcc.RadioItems(
         id='input-role',
-        options=[
-            {'label': ' Decision Variable (Unknown)', 'value': 'var'},
-            {'label': ' Parameter (Known Constant)', 'value': 'param'}
-        ],
-        value='var',
-        labelStyle={'display': 'inline-block', 'marginRight': '20px', 'marginBottom': '15px'}
+        options=[{'label': ' Decision Variable (Unknown)', 'value': 'var'}, {'label': ' Parameter (Known Constant)', 'value': 'param'}],
+        value='var', labelStyle={'display': 'inline-block', 'marginRight': '20px', 'marginBottom': '15px'}
     ),
 
-    # [2] Shape Selection (List Added!)
     html.Label("Step 2. What is the Shape?", style={'fontWeight': 'bold', 'color': '#28a745'}),
     dcc.RadioItems(
         id='input-shape',
         options=[
             {'label': ' Scalar (Single Value)', 'value': 'scalar'},
             {'label': ' Matrix / Grid (Fixed Size)', 'value': 'matrix'},
-            {'label': ' List / Sequence (Dynamic Rows)', 'value': 'list'} # [New] 리스트 옵션
+            {'label': ' List / Sequence (Dynamic Rows)', 'value': 'list'}
         ],
-        value='scalar',
-        labelStyle={'display': 'inline-block', 'marginRight': '20px', 'marginBottom': '15px'}
+        value='scalar', labelStyle={'display': 'inline-block', 'marginRight': '20px', 'marginBottom': '15px'}
     ),
     
     html.Hr(style={'margin': '20px 0', 'borderTop': '1px dashed #ccc'}),
 
-    # Common Input: Name
     html.Label("Name (e.g., Orders, Items):", style={'fontWeight': 'bold'}),
     dcc.Input(id='input-name', type='text', placeholder="Enter unique name...", style=input_style),
 
-    # --- [A] Matrix Config ---
+    # Matrix Config
     html.Div(id='matrix-config-area', children=[
         html.Label("Matrix Configuration:", style={'fontWeight': 'bold', 'marginTop': '10px'}),
         html.Div([
-            html.Div([
-                html.Label("Row Labels:", style={'fontSize': '13px'}),
-                dcc.Input(id='matrix-rows', type='text', placeholder="e.g. Factory_A, Factory_B", style=input_style)
-            ], style={'width': '48%', 'marginRight': '4%'}),
-            html.Div([
-                html.Label("Column Labels:", style={'fontSize': '13px'}),
-                dcc.Input(id='matrix-cols', type='text', placeholder="e.g. Warehouse_1, Warehouse_2", style=input_style)
-            ], style={'width': '48%'}),
+            html.Div([html.Label("Row Labels:", style={'fontSize': '13px'}), dcc.Input(id='matrix-rows', type='text', placeholder="e.g. Factory_A, Factory_B", style=input_style)], style={'width': '48%', 'marginRight': '4%'}),
+            html.Div([html.Label("Column Labels:", style={'fontSize': '13px'}), dcc.Input(id='matrix-cols', type='text', placeholder="e.g. Warehouse_1, Warehouse_2", style=input_style)], style={'width': '48%'}),
         ], style={'display': 'flex'}),
         html.Button("Generate Grid", id='btn-gen-matrix', n_clicks=0, style={'marginTop': '5px', 'padding': '8px 15px', 'backgroundColor': '#6c757d', 'color': 'white', 'border': 'none', 'borderRadius': '4px', 'cursor': 'pointer'}),
-        
         html.Div(style={'marginTop': '15px'}, children=[
-             dash_table.DataTable(
-                id='matrix-data-table', columns=[{'name': 'No Data', 'id': 'dummy'}], data=[], editable=True,
-                style_table={'display': 'none'}, style_cell={'textAlign': 'center', 'minWidth': '80px'},
-                style_header={'backgroundColor': '#adb5bd', 'color': 'white', 'fontWeight': 'bold'}
-            )
+             dash_table.DataTable(id='matrix-data-table', columns=[{'name': 'No Data', 'id': 'dummy'}], data=[], editable=True, style_table={'display': 'none'}, style_cell={'textAlign': 'center', 'minWidth': '80px'}, style_header={'backgroundColor': '#adb5bd', 'color': 'white', 'fontWeight': 'bold'})
         ])
     ], style={'display': 'none', 'padding': '15px', 'backgroundColor': '#e9ecef', 'borderRadius': '8px', 'marginBottom': '15px'}),
 
-    # --- [B] List Config (New!) ---
+    # List Config
     html.Div(id='list-config-area', children=[
         html.Label("List Configuration:", style={'fontWeight': 'bold', 'marginTop': '10px'}),
         html.Label("Column Names (comma separated):", style={'fontSize': '13px'}),
         dcc.Input(id='list-cols', type='text', placeholder="e.g. Length, Quantity, Profit", style=input_style),
-        
         html.Button("Initialize List", id='btn-init-list', n_clicks=0, style={'marginTop': '5px', 'padding': '8px 15px', 'backgroundColor': '#17a2b8', 'color': 'white', 'border': 'none', 'borderRadius': '4px', 'cursor': 'pointer'}),
-        
         html.Div(id='list-input-container', style={'marginTop': '15px', 'display': 'none'}, children=[
-            dash_table.DataTable(
-                id='list-data-table', columns=[{'name': 'Col1', 'id': 'col1'}], data=[], editable=True, row_deletable=True,
-                style_cell={'textAlign': 'center', 'minWidth': '80px'},
-                style_header={'backgroundColor': '#17a2b8', 'color': 'white', 'fontWeight': 'bold'}
-            ),
+            dash_table.DataTable(id='list-data-table', columns=[{'name': 'Col1', 'id': 'col1'}], data=[], editable=True, row_deletable=True, style_cell={'textAlign': 'center', 'minWidth': '80px'}, style_header={'backgroundColor': '#17a2b8', 'color': 'white', 'fontWeight': 'bold'}),
             html.Button("+ Add Row", id='btn-add-list-row', n_clicks=0, style={'marginTop': '10px', 'width': '100%', 'padding': '8px', 'border': '1px dashed #17a2b8', 'color': '#17a2b8', 'backgroundColor': 'white', 'cursor': 'pointer', 'fontWeight': 'bold'})
         ])
     ], style={'display': 'none', 'padding': '15px', 'backgroundColor': '#e3f2fd', 'borderRadius': '8px', 'marginBottom': '15px'}),
 
-    # --- [C] Scalar Input ---
-    html.Div(id='scalar-input-container', style={'display': 'block'}, children=[
-        html.Div(id='val-input-box', children=[
-            html.Label("Parameter Value (Numeric):", style={'fontWeight': 'bold'}),
-            dcc.Input(id='input-value', type='number', placeholder="Enter value", style=input_style)
-        ], style={'display': 'none'}),
-        
-        html.Div(id='type-input-box', children=[
-            html.Label("Variable Type:", style={'fontWeight': 'bold'}),
-            dcc.Dropdown(
-                id='input-var-type',
-                options=[{'label': 'Continuous', 'value': 'Continuous'}, {'label': 'Integer', 'value': 'Integer'}, {'label': 'Binary', 'value': 'Binary'}],
-                value='Continuous', style={'marginBottom': '10px'}
-            )
-        ], style={'display': 'block'})
+    # Scalar Value Input (Only for Parameter)
+    html.Div(id='val-input-box', style={'display': 'none'}, children=[
+        html.Label("Parameter Value (Numeric):", style={'fontWeight': 'bold'}),
+        dcc.Input(id='input-value', type='number', placeholder="Enter value", style=input_style)
+    ]),
+    
+    # [수정됨] Type Input은 이제 독립적입니다! (Scalar/Matrix/List 상관없이 보임)
+    html.Div(id='type-input-box', style={'display': 'block'}, children=[
+        html.Label("Variable Type:", style={'fontWeight': 'bold', 'color': '#d63384'}),
+        dcc.Dropdown(
+            id='input-var-type', 
+            options=[{'label': 'Continuous', 'value': 'Continuous'}, {'label': 'Integer', 'value': 'Integer'}, {'label': 'Binary', 'value': 'Binary'}], 
+            value='Continuous', 
+            style={'marginBottom': '10px'}
+        )
     ])
+
 ], style=question_style)
 
 modeling_section = html.Div([
@@ -199,6 +167,7 @@ def render_workspace(mode):
 # --- Main Layout ---
 app.layout = html.Div([
     dcc.Store(id='current-mode', data='home'),
+    dcc.Store(id='all-data-store', data={'variables': [], 'parameters': []}),
     html.Div([
         html.H2("🧙‍♂️ OptiMystic Solver", style={'margin': 0, 'color': '#4a4e69'}),
         html.Button("🏠 Home", id='btn-home', style={'padding': '5px 10px', 'cursor': 'pointer', 'border': 'none', 'background': 'transparent'})
@@ -226,42 +195,24 @@ def navigate(tmpl_clicks, home_click, current_mode):
         except: return 'home', render_landing_page()
     return 'home', render_landing_page()
 
-# [Logic] Visibility Control (Scalar / Matrix / List)
 @app.callback(
-    [Output('matrix-config-area', 'style'),
-     Output('list-config-area', 'style'),
-     Output('scalar-input-container', 'style'),
-     Output('val-input-box', 'style'),
-     Output('type-input-box', 'style')],
-    [Input('input-role', 'value'),
-     Input('input-shape', 'value')]
+    [Output('matrix-config-area', 'style'), Output('list-config-area', 'style'), Output('val-input-box', 'style'), Output('type-input-box', 'style')],
+    [Input('input-role', 'value'), Input('input-shape', 'value')]
 )
 def toggle_inputs(role, shape):
-    matrix_style = {'display': 'none'}
-    list_style = {'display': 'none'}
-    scalar_style = {'display': 'none'}
+    # Shape Styles
+    matrix_style = {'display': 'block', 'padding': '15px', 'backgroundColor': '#e9ecef', 'borderRadius': '8px', 'marginBottom': '15px'} if shape == 'matrix' else {'display': 'none'}
+    list_style = {'display': 'block', 'padding': '15px', 'backgroundColor': '#e3f2fd', 'borderRadius': '8px', 'marginBottom': '15px'} if shape == 'list' else {'display': 'none'}
+    
+    # Detail Styles
+    # Value box: Only for Scalar Parameter
+    val_style = {'display': 'block', 'marginBottom': '15px'} if role == 'param' and shape == 'scalar' else {'display': 'none'}
+    
+    # Type box: For ALL Variables (Scalar, Matrix, List)
+    type_style = {'display': 'block', 'marginBottom': '15px'} if role == 'var' else {'display': 'none'}
+    
+    return matrix_style, list_style, val_style, type_style
 
-    if shape == 'matrix':
-        matrix_style = {'display': 'block', 'padding': '15px', 'backgroundColor': '#e9ecef', 'borderRadius': '8px', 'marginBottom': '15px'}
-    elif shape == 'list':
-        list_style = {'display': 'block', 'padding': '15px', 'backgroundColor': '#e3f2fd', 'borderRadius': '8px', 'marginBottom': '15px'}
-    else: # scalar
-        scalar_style = {'display': 'block'}
-
-    # Scalar Detail Logic
-    if role == 'param' and shape == 'scalar':
-        val_style = {'display': 'block'}
-    else:
-        val_style = {'display': 'none'}
-
-    if role == 'var':
-        type_style = {'display': 'block'}
-    else:
-        type_style = {'display': 'none'}
-
-    return matrix_style, list_style, scalar_style, val_style, type_style
-
-# [Logic] Generate Matrix
 @app.callback(
     [Output('matrix-data-table', 'data'), Output('matrix-data-table', 'columns'), Output('matrix-data-table', 'style_table')],
     Input('btn-gen-matrix', 'n_clicks'),
@@ -275,7 +226,6 @@ def generate_matrix(n_clicks, row_str, col_str):
     data = [{'row_label': r, **{c: 0 for c in cols}} for r in rows]
     return data, columns, {'overflowX': 'auto', 'minWidth': '100%', 'display': 'block'}
 
-# [Logic] Init List & Add Row (Combined)
 @app.callback(
     [Output('list-data-table', 'data'), Output('list-data-table', 'columns'), Output('list-input-container', 'style')],
     [Input('btn-init-list', 'n_clicks'), Input('btn-add-list-row', 'n_clicks')],
@@ -284,75 +234,73 @@ def generate_matrix(n_clicks, row_str, col_str):
 def manage_list_table(init_clicks, add_clicks, col_str, current_data, current_columns):
     ctx = callback_context
     if not ctx.triggered: return [], [{'name': 'Col1', 'id': 'col1'}], {'display': 'none'}
-    
     btn_id = ctx.triggered[0]['prop_id'].split('.')[0]
-
-    # Case 1: Initialize List
     if btn_id == 'btn-init-list':
         cols = [c.strip() for c in col_str.split(',')] if col_str else ['Item', 'Quantity']
         columns = [{'name': c, 'id': c, 'type': 'numeric'} for c in cols]
-        # Start with 1 empty row
         data = [{c: 0 for c in cols}]
         return data, columns, {'marginTop': '15px', 'display': 'block'}
-
-    # Case 2: Add Row
     if btn_id == 'btn-add-list-row':
         if not current_columns: return [], [], {'display': 'none'}
-        # Create empty row based on current columns
         new_row = {col['id']: 0 for col in current_columns}
         current_data.append(new_row)
         return current_data, current_columns, {'marginTop': '15px', 'display': 'block'}
-
     return [], [], {'display': 'none'}
 
-# [Logic] Add Data to Main Table
 @app.callback(
     [Output('var-table', 'data'), Output('param-table', 'data'),
-     Output('add-msg', 'children'), Output('input-name', 'value')],
+     Output('all-data-store', 'data'), Output('add-msg', 'children'), Output('input-name', 'value')],
     Input('add-btn', 'n_clicks'),
     [State('input-role', 'value'), State('input-shape', 'value'), State('input-name', 'value'),
      State('input-value', 'value'), State('input-var-type', 'value'),
      State('matrix-data-table', 'data'), State('list-data-table', 'data'),
-     State('var-table', 'data'), State('param-table', 'data')]
+     State('var-table', 'data'), State('param-table', 'data'),
+     State('all-data-store', 'data')]
 )
-def add_data_integrated(n_clicks, role, shape, name, val, var_type, matrix_data, list_data, var_rows, param_rows):
-    if n_clicks == 0: return [], [], "", ""
-    if not name: return dash.no_update, dash.no_update, html.Span("❌ Name is required!", style={'color': 'red'}), dash.no_update
+def add_data_integrated(n_clicks, role, shape, name, val, var_type, matrix_data, list_data, var_rows, param_rows, store_data):
+    if n_clicks == 0: return [], [], store_data, "", ""
+    if not name: return dash.no_update, dash.no_update, dash.no_update, html.Span("❌ Name is required!", style={'color': 'red'}), dash.no_update
 
     if var_rows is None: var_rows = []
     if param_rows is None: param_rows = []
+    if store_data is None: store_data = {'variables': [], 'parameters': []}
 
-    # 1. Prepare Data
+    real_data = None
     if shape == 'scalar':
         preview = str(val) if role == 'param' else "-"
         shape_desc = "Scalar"
+        real_data = val if role == 'param' else None
     elif shape == 'matrix':
-        if not matrix_data: return dash.no_update, dash.no_update, html.Span("❌ Generate matrix first!", style={'color': 'red'}), dash.no_update
+        if not matrix_data: return dash.no_update, dash.no_update, dash.no_update, html.Span("❌ Generate matrix first!", style={'color': 'red'}), dash.no_update
         rows = len(matrix_data)
         cols = len(matrix_data[0]) - 1 if rows > 0 else 0
         preview = f"Grid ({rows}x{cols})"
         shape_desc = f"Matrix ({rows}x{cols})"
+        real_data = matrix_data
     elif shape == 'list':
-        if not list_data: return dash.no_update, dash.no_update, html.Span("❌ Initialize list first!", style={'color': 'red'}), dash.no_update
+        if not list_data: return dash.no_update, dash.no_update, dash.no_update, html.Span("❌ Initialize list first!", style={'color': 'red'}), dash.no_update
         rows = len(list_data)
-        cols = len(list_data[0]) if rows > 0 else 0
         preview = f"List ({rows} Items)"
         shape_desc = f"List ({rows} Rows)"
+        real_data = list_data
 
-    new_row = {'Name': name, 'Shape': shape_desc}
-
-    # 2. Add to Table
+    new_ui_row = {'Name': name, 'Shape': shape_desc}
     if role == 'var':
-        new_row['Type'] = var_type
-        new_row['Preview'] = "-"
-        var_rows.append(new_row)
+        new_ui_row['Type'] = var_type
+        new_ui_row['Preview'] = "-"
+        var_rows.append(new_ui_row)
+        store_data['variables'].append({'name': name, 'shape': shape, 'type': var_type, 'data': real_data})
         msg = html.Span(f"✅ Variable '{name}' ({var_type}) added!", style={'color': 'blue'})
     else:
-        new_row['Value/Preview'] = preview
-        param_rows.append(new_row)
+        new_ui_row['Value/Preview'] = preview
+        param_rows.append(new_ui_row)
+        store_data['parameters'].append({'name': name, 'shape': shape, 'data': real_data})
         msg = html.Span(f"✅ Parameter '{name}' added!", style={'color': 'green'})
 
-    return var_rows, param_rows, msg, ""
+    import json
+    print(json.dumps(store_data, indent=2))
+
+    return var_rows, param_rows, store_data, msg, ""
 
 if __name__ == '__main__':
     app.run_server(debug=True)
