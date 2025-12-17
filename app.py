@@ -1,12 +1,10 @@
 import dash
 from dash import html, dash_table, dcc, Input, Output, State, ALL, callback_context
 
-# ------------------------------------------------------------------------------
-# 1. Styles & Assets
-# ------------------------------------------------------------------------------
 external_stylesheets = ['https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap']
 
-app = dash.Dash(__name__, external_stylesheets=external_stylesheets, title='OptiMystic Solver')
+# [FIX] Added suppress_callback_exceptions=True to handle dynamic layout
+app = dash.Dash(__name__, external_stylesheets=external_stylesheets, title='OptiMystic Solver', suppress_callback_exceptions=True)
 server = app.server
 
 app_style = {
@@ -56,9 +54,6 @@ table_cell_style = {
     'fontFamily': 'Inter, sans-serif'
 }
 
-# ------------------------------------------------------------------------------
-# 2. Data & Templates (English)
-# ------------------------------------------------------------------------------
 TEMPLATE_GALLERY = [
     {"id": "cutting", "icon": "✂️", "title": "Cutting Stock", "desc": "Minimize material waste (1D packing) for pipes, wood, or coils."},
     {"id": "packing", "icon": "📦", "title": "Bin Packing", "desc": "Maximize truck or container loading efficiency (Knapsack Problem)."},
@@ -69,15 +64,9 @@ TEMPLATE_GALLERY = [
     {"id": "custom", "icon": "🔮", "title": "Custom Mode", "desc": "Build your own model from scratch using the Wizard."}
 ]
 
-# ------------------------------------------------------------------------------
-# 3. UI Components (Wizard Parts)
-# ------------------------------------------------------------------------------
-
-# 3-1. Input Section (Wizard Form)
 wizard_input_section = html.Div([
     html.H4("1. Data Definition Wizard", style={'marginBottom': '20px'}),
     
-    # Category Selection
     html.Label("What type of data is this?", style={'fontWeight': 'bold'}),
     dcc.RadioItems(
         id='input-category',
@@ -90,18 +79,15 @@ wizard_input_section = html.Div([
     ),
     html.Br(),
 
-    # Name Input
     html.Label("Name (e.g., Production_Qty, Cost):", style={'fontWeight': 'bold'}),
     dcc.Input(id='input-name', type='text', placeholder="Enter name...", style=input_style),
 
-    # Unit Input
     html.Label("Unit (Optional):", style={'fontWeight': 'bold', 'marginTop': '10px'}),
     html.Div([
         dcc.Input(id='input-unit-num', type='text', placeholder="Numerator (e.g. km)", style={'width': '48%', 'marginRight': '4%'}),
         dcc.Input(id='input-unit-denom', type='text', placeholder="Denominator (e.g. hour)", style={'width': '48%'})
     ], style={'display': 'flex', 'marginBottom': '15px'}),
 
-    # Index Configuration
     html.Label("Is this data indexed (Sets)?", style={'fontWeight': 'bold'}),
     dcc.RadioItems(
         id='input-is-indexed',
@@ -110,20 +96,17 @@ wizard_input_section = html.Div([
         labelStyle={'display': 'inline-block', 'marginRight': '20px'}
     ),
     
-    # Dynamic Index Inputs (Hidden by default)
     html.Div(id='index-config-area', children=[
         html.Label("Number of Indices:", style={'marginTop': '10px'}),
         dcc.Input(id='input-num-indices', type='number', min=1, max=5, step=1, value=1, style=input_style),
         html.Div(id='dynamic-index-inputs')
     ], style={'display': 'none'}),
 
-    # Value Input (Only for Parameters)
     html.Div(id='value-input-container', children=[
         html.Label("Value (Numeric):", style={'fontWeight': 'bold', 'marginTop': '10px'}),
         dcc.Input(id='input-value', type='number', placeholder="Enter constant value", style=input_style)
     ], style={'display': 'none'}),
 
-    # Type Input (Only for Variables)
     html.Div(id='type-input-container', children=[
         html.Label("Variable Type:", style={'fontWeight': 'bold', 'marginTop': '10px'}),
         dcc.Dropdown(
@@ -140,7 +123,6 @@ wizard_input_section = html.Div([
 
 ], style=question_style)
 
-# 3-2. Modeling Section (Step 2)
 modeling_section = html.Div([
     html.H4("Define Optimization Model", style={'marginBottom': '20px'}),
     
@@ -156,9 +138,6 @@ modeling_section = html.Div([
     html.Div(id='solver-output', style={'marginTop': '30px', 'padding': '20px', 'backgroundColor': '#f8f9fa', 'borderRadius': '8px', 'border': '1px solid #ddd'})
 ])
 
-# ------------------------------------------------------------------------------
-# 4. Page Rendering Functions
-# ------------------------------------------------------------------------------
 def render_landing_page():
     cards = []
     for t in TEMPLATE_GALLERY:
@@ -198,7 +177,6 @@ def render_workspace(mode):
                     
                     html.H4("📊 Defined Data List", style={'marginTop': '30px'}),
                     
-                    # Variables Table
                     html.H5("Decision Variables", style={'color': '#007bff'}),
                     dash_table.DataTable(
                         id='var-table', 
@@ -208,7 +186,6 @@ def render_workspace(mode):
                         style_cell=table_cell_style
                     ),
                     
-                    # Parameters Table
                     html.H5("Parameters", style={'color': '#28a745', 'marginTop': '20px'}),
                     dash_table.DataTable(
                         id='param-table', 
@@ -225,9 +202,6 @@ def render_workspace(mode):
         ])
     ])
 
-# ------------------------------------------------------------------------------
-# 5. Main Layout
-# ------------------------------------------------------------------------------
 app.layout = html.Div([
     dcc.Store(id='current-mode', data='home'),  
     html.Div([
@@ -239,11 +213,6 @@ app.layout = html.Div([
 
 ], style=app_style)
 
-# ------------------------------------------------------------------------------
-# 6. Callbacks
-# ------------------------------------------------------------------------------
-
-# [Router] Navigation between Landing Page and Workspace
 @app.callback(
     [Output('current-mode', 'data'),
      Output('page-content', 'children')],
@@ -272,7 +241,6 @@ def navigate(tmpl_clicks, home_click, current_mode):
 
     return 'home', render_landing_page()
 
-# [Wizard] Toggle Input Visibility based on User Selection
 @app.callback(
     [Output('index-config-area', 'style'),
      Output('value-input-container', 'style'),
@@ -290,7 +258,6 @@ def toggle_visibility(category, is_indexed):
 
     return style_idx, style_val, style_type
 
-# [Wizard] Render Dynamic Index Inputs
 @app.callback(
     Output('dynamic-index-inputs', 'children'),
     Input('input-num-indices', 'value')
@@ -305,7 +272,6 @@ def render_index_inputs(num):
         ]))
     return inputs
 
-# [Wizard] Add Data to Tables
 @app.callback(
     [Output('var-table', 'data'),
      Output('param-table', 'data'),
@@ -328,7 +294,6 @@ def add_row(n_clicks, category, name, u_num, u_denom, is_indexed, num_indices, i
     if n_clicks == 0: return dash.no_update, dash.no_update, "", ""
     if not name: return dash.no_update, dash.no_update, html.Span("❌ Please enter a name!", style={'color': '#dc3545', 'fontWeight': 'bold'}), dash.no_update
 
-    # Initialize lists if they are None
     if var_rows is None: var_rows = []
     if param_rows is None: param_rows = []
 
@@ -360,7 +325,6 @@ def add_row(n_clicks, category, name, u_num, u_denom, is_indexed, num_indices, i
         var_rows.append(new_row)
         return var_rows, param_rows, html.Span(f"✅ Added Variable '{name}'", style={'color': '#007bff', 'fontWeight': 'bold'}), ""
 
-# [Solver] Dummy Logic for Phase 2
 @app.callback(
     Output('solver-output', 'children'),
     Input('solve-btn', 'n_clicks'),
