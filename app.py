@@ -267,7 +267,7 @@ def render_workspace(mode):
 
 # --- Main Layout ---
 app.layout = html.Div([
-    dcc.Store(id='current-mode', data='home'),
+    dcc.Location(id='url', refresh=False),
     dcc.Store(id='all-data-store', data={'variables': [], 'parameters': []}),
     html.Div([
         html.H2("🧙‍♂️ OptiMystic Solver", style={'margin': 0, 'color': '#4a4e69'}),
@@ -283,18 +283,43 @@ app.layout = html.Div([
     [Input({'type': 'tmpl-btn', 'index': ALL}, 'n_clicks'), Input('btn-home', 'n_clicks')],
     [State('current-mode', 'data')]
 )
-def navigate(tmpl_clicks, home_click, current_mode):
+
+@app.callback(
+    Output('url', 'pathname'),
+    [Input({'type': 'tmpl-btn', 'index': ALL}, 'n_clicks'), Input('btn-home', 'n_clicks')],
+    [State('url', 'pathname')]
+)
+def change_url(tmpl_clicks, home_click, current_path):
     ctx = callback_context
-    if not ctx.triggered: return 'home', render_landing_page()
+    if not ctx.triggered: return dash.no_update
+    
     btn_id = ctx.triggered[0]['prop_id'].split('.')[0]
-    if btn_id == 'btn-home': return 'home', render_landing_page()
+    
+    if btn_id == 'btn-home':
+        return "/"
+        
     if 'tmpl-btn' in btn_id:
         import json
         try:
             mode = json.loads(btn_id)['index']
-            return mode, render_workspace(mode)
-        except: return 'home', render_landing_page()
-    return 'home', render_landing_page()
+            return f"/{mode}"  # 예: /cutting, /packing 등으로 URL 변경
+        except: return dash.no_update
+        
+    return dash.no_update
+
+@app.callback(
+    Output('page-content', 'children'),
+    Input('url', 'pathname')
+)
+def render_page_content(pathname):
+    if pathname in [None, '/', '/home']:
+        return render_landing_page()
+)
+    try:
+        mode = pathname.strip('/')
+        return render_workspace(mode)
+    except:
+        return render_landing_page()
 
 @app.callback(
     [Output('matrix-config-area', 'style'), Output('list-config-area', 'style'), Output('val-input-box', 'style'), Output('type-input-box', 'style')],
