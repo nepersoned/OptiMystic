@@ -237,7 +237,11 @@ def render_landing_page():
 def render_workspace(mode):
     mode_info = next((item for item in TEMPLATE_GALLERY if item["id"] == mode), None)
     title = mode_info['title'] if mode_info else "Custom Mode"
+
     return html.Div([
+
+        dcc.Store(id='all-data-store', data={'variables': [], 'parameters': []}),
+        
         html.Div([
             html.Span(f"Selected Mode: {title}", style={'backgroundColor': '#e2e6ea', 'padding': '5px 10px', 'borderRadius': '15px', 'fontSize': '14px', 'fontWeight': '600'})
         ], style={'marginBottom': '20px'}),
@@ -260,10 +264,10 @@ def render_workspace(mode):
             # Tab 2: Solver
             dcc.Tab(label='STEP 2: Solver', children=[modeling_section]),
             
-            # [New] Tab 3: Dashboard
+            # Tab 3: Dashboard
             dcc.Tab(label='STEP 3: Dashboard', children=[dashboard_section])
         ])
-    ])
+    ], key=mode)
 
 # --- Main Layout ---
 app.layout = html.Div([
