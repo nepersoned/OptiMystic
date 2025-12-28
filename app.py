@@ -310,7 +310,7 @@ def change_url(tmpl_clicks, home_click, current_path):
     Input('url', 'pathname')
 )
 def render_page_content(pathname):
-    if pathname in [None, '/', '/home']:
+    if pathname in [None, '/', '/home', '']:
         return render_landing_page()
 
     try:
