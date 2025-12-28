@@ -121,49 +121,95 @@ wizard_input_section = html.Div([
 
 ], style=question_style)
 
+# --- Modeling Section (Step 2: Solver) ---
 modeling_section = html.Div([
-    html.H4("Optimization Model Builder", style={'marginBottom': '20px'}),
+    html.H4("⚙️ Solver Engine", style={'marginBottom': '20px', 'color': '#4a4e69'}),
     
     html.Div([
-        # Objective Section
+        # Objective Input
         html.Div([
-            html.Label("1. Objective Goal:", style={'fontWeight': 'bold'}),
+            html.Label("1. Objective Goal:", style={'fontWeight': 'bold', 'color': '#007bff'}),
             dcc.RadioItems(
                 id='solver-sense',
                 options=[{'label': ' Minimize', 'value': 'minimize'}, {'label': ' Maximize', 'value': 'maximize'}],
                 value='minimize',
                 labelStyle={'display': 'inline-block', 'marginRight': '20px'}
             ),
-            html.Label("Objective Expression (e.g., 3*x + 5*y):", style={'marginTop': '10px'}),
             dcc.Textarea(
                 id='solver-objective',
-                placeholder="Enter formula...",
-                style={'width': '100%', 'height': '60px', 'fontFamily': 'monospace'}
+                placeholder="e.g. 5*P1 + 9*P2 + 7*P3",
+                style={'width': '100%', 'height': '60px', 'marginTop': '10px', 'borderRadius': '4px', 'border': '1px solid #ccc', 'fontFamily': 'monospace'}
             )
         ], style={'marginBottom': '25px'}),
 
-        # Constraints Section
+        # Constraints Input
         html.Div([
-            html.Label("2. Constraints (One per line):", style={'fontWeight': 'bold'}),
+            html.Label("2. Constraints:", style={'fontWeight': 'bold', 'color': '#d63384'}),
             dcc.Textarea(
                 id='solver-constraints',
-                placeholder="x + y <= 10\nx <= 5",
-                style={'width': '100%', 'height': '150px', 'fontFamily': 'monospace'}
+                placeholder="e.g.\n3*P1 + 6*P2 + 5*P3 <= 10\nsum([P1, P2, P3]) <= 2",
+                style={'width': '100%', 'height': '150px', 'borderRadius': '4px', 'border': '1px solid #ccc', 'fontFamily': 'monospace'}
             )
         ], style={'marginBottom': '25px'}),
 
         # Run Button
-        html.Button("Run Optimization", id='btn-solve', n_clicks=0, 
+        html.Button("🚀 Run Optimization", id='btn-solve', n_clicks=0, 
                     style={'width': '100%', 'padding': '15px', 'backgroundColor': '#28a745', 'color': 'white', 
-                           'border': 'none', 'borderRadius': '8px', 'fontSize': '16px', 'cursor': 'pointer'}),
+                           'border': 'none', 'borderRadius': '8px', 'fontSize': '18px', 'cursor': 'pointer', 'fontWeight': 'bold'}),
         
-        # Result Output
-        html.Hr(style={'margin': '30px 0'}),
-        html.H5("Optimization Results"),
-        html.Div(id='solver-output', style={'padding': '15px', 'backgroundColor': '#f8f9fa', 'border': '1px solid #ccc', 'whiteSpace': 'pre-wrap', 'fontFamily': 'monospace'})
+        html.P("Click 'Run' and then move to Step 3 to see results.", style={'marginTop': '10px', 'color': '#888', 'fontSize': '13px', 'textAlign': 'center'})
 
     ], style=question_style)
 ])
+
+# --- Dashboard Section (Step 3: Result) ---
+dashboard_section = html.Div([
+    html.H4("📊 Optimization Dashboard", style={'marginBottom': '20px', 'color': '#4a4e69'}),
+    
+    # 1. Status and KPI Cards
+    html.Div([
+        # Status Card
+        html.Div([
+            html.H6("Solver Status", style={'color': '#6c757d', 'fontSize': '14px', 'marginBottom': '5px'}),
+            html.H2(id='res-status', children="-", style={'margin': 0, 'fontWeight': 'bold', 'color': '#333'})
+        ], style={'flex': '1', 'padding': '20px', 'backgroundColor': 'white', 'borderRadius': '12px', 'boxShadow': '0 4px 6px rgba(0,0,0,0.05)', 'textAlign': 'center', 'border': '1px solid #e9ecef'}),
+        
+        # Objective Card
+        html.Div([
+            html.H6("Objective Value", style={'color': '#6c757d', 'fontSize': '14px', 'marginBottom': '5px'}),
+            html.H2(id='res-objective', children="-", style={'margin': 0, 'fontWeight': 'bold', 'color': '#007bff'})
+        ], style={'flex': '1', 'padding': '20px', 'backgroundColor': 'white', 'borderRadius': '12px', 'boxShadow': '0 4px 6px rgba(0,0,0,0.05)', 'textAlign': 'center', 'border': '1px solid #e9ecef'}),
+    ], style={'display': 'flex', 'gap': '20px', 'marginBottom': '30px'}),
+
+    # 2. Result Table
+    html.Div(id='result-dashboard', style={'display': 'none'}, children=[
+        html.H5("🧩 Decision Variables", style={'marginBottom': '15px', 'color': '#333'}),
+        dash_table.DataTable(
+            id='res-table',
+            columns=[
+                {'name': 'Variable Name', 'id': 'Variable'}, 
+                {'name': 'Optimal Value', 'id': 'Value'}
+            ],
+            data=[],
+            page_size=10,  # Pagination
+            style_header={
+                'backgroundColor': '#f1f3f5', 'fontWeight': 'bold', 
+                'border': '1px solid #dee2e6', 'textAlign': 'left', 'padding': '12px'
+            },
+            style_cell={
+                'padding': '12px', 'borderBottom': '1px solid #dee2e6', 
+                'fontFamily': 'Inter, sans-serif', 'textAlign': 'left'
+            },
+            style_data_conditional=[
+                {'if': {'row_index': 'odd'}, 'backgroundColor': '#f8f9fa'}
+            ]
+        )
+    ]),
+
+    # 3. Error Message Area
+    html.Div(id='solver-error-msg', style={'color': '#dc3545', 'marginTop': '20px', 'fontWeight': 'bold', 'whiteSpace': 'pre-wrap'})
+
+], style={'padding': '30px', 'backgroundColor': '#f8f9fa', 'borderRadius': '12px'})
 
 # --- Helper Functions ---
 def render_landing_page():
@@ -185,12 +231,16 @@ def render_workspace(mode):
     mode_info = next((item for item in TEMPLATE_GALLERY if item["id"] == mode), None)
     title = mode_info['title'] if mode_info else "Custom Mode"
     return html.Div([
-        html.Div([html.Span(f"Selected Mode: {title}", style={'backgroundColor': '#e2e6ea', 'padding': '5px 10px', 'borderRadius': '15px', 'fontSize': '14px', 'fontWeight': '600'})], style={'marginBottom': '20px'}),
+        html.Div([
+            html.Span(f"Selected Mode: {title}", style={'backgroundColor': '#e2e6ea', 'padding': '5px 10px', 'borderRadius': '15px', 'fontSize': '14px', 'fontWeight': '600'})
+        ], style={'marginBottom': '20px'}),
+        
         dcc.Tabs([
+            # Tab 1: Input
             dcc.Tab(label='STEP 1: Data Input', children=[
                 html.Div([
                     wizard_input_section,
-                    html.Button('Add to Table', id='add-btn', n_clicks=0, style={'width': '100%', 'padding': '12px', 'backgroundColor': '#4a4e69', 'color': 'white', 'border': 'none', 'borderRadius': '8px', 'cursor': 'pointer', 'fontSize': '16px'}),
+                    html.Button('Add to Table', id='add-btn', n_clicks=0, style={'width': '100%', 'padding': '12px', 'backgroundColor': '#4a4e69', 'color': 'white', 'border': 'none', 'borderRadius': '8px', 'cursor': 'pointer'}),
                     html.Div(id='add-msg', style={'marginTop': '10px'}),
                     html.H4("📊 Defined Data List", style={'marginTop': '30px'}),
                     html.H5("Decision Variables", style={'color': '#007bff'}),
@@ -199,7 +249,12 @@ def render_workspace(mode):
                     dash_table.DataTable(id='param-table', columns=[{'name': i, 'id': i} for i in ['Name', 'Shape', 'Value/Preview']], data=[], style_header=table_header_style, style_cell=table_cell_style),
                 ], style={'padding': '20px'})
             ]),
-            dcc.Tab(label='STEP 2: Solver', children=[modeling_section])
+            
+            # Tab 2: Solver
+            dcc.Tab(label='STEP 2: Solver', children=[modeling_section]),
+            
+            # [New] Tab 3: Dashboard
+            dcc.Tab(label='STEP 3: Dashboard', children=[dashboard_section])
         ])
     ])
 
@@ -341,8 +396,14 @@ def add_data_integrated(n_clicks, role, shape, name, val, var_type, matrix_data,
 
     return var_rows, param_rows, store_data, msg, ""
 
+# --- [Updated] Solver Execution Callback ---
 @app.callback(
-    Output('solver-output', 'children'),
+    [Output('result-dashboard', 'style'), 
+     Output('res-status', 'children'),
+     Output('res-status', 'style'),
+     Output('res-objective', 'children'),
+     Output('res-table', 'data'),
+     Output('solver-error-msg', 'children')],
     Input('btn-solve', 'n_clicks'),
     [State('solver-sense', 'value'),
      State('solver-objective', 'value'),
@@ -351,17 +412,28 @@ def add_data_integrated(n_clicks, role, shape, name, val, var_type, matrix_data,
 )
 def run_solver(n_clicks, sense, objective, constraints, store_data):
     if n_clicks == 0:
-        return "Ready. Please define variables and click Run."
+        return {'display': 'none'}, "-", {}, "-", [], ""
     
     if not objective:
-        return "⚠️ Please enter an objective function."
+        return {'display': 'none'}, "-", {}, "-", [], "⚠️ Please enter an objective function."
         
-    # solver_engine 
-    try:
-        result = solver_engine.solve_model(store_data, sense, objective, constraints)
-        return result
-    except Exception as e:
-        return f"System Error: {str(e)}"
+    # Call Engine (returns dict)
+    result = solver_engine.solve_model(store_data, sense, objective, constraints)
+    
+    # Handle Error
+    if result.get('status') == 'Error':
+        return {'display': 'none'}, "Error", {'color': '#dc3545'}, "-", [], f"❌ System Error:\n{result.get('error_msg')}"
+
+    # Handle Success
+    status = result['status']
+    status_style = {'color': '#28a745'} if status == 'Optimal' else {'color': '#ffc107'}
+    
+    obj_val = result['objective']
+    formatted_obj = f"{obj_val:,.2f}" if isinstance(obj_val, (int, float)) else str(obj_val)
+    
+    table_data = result['variables']
+    
+    return {'display': 'block'}, status, status_style, formatted_obj, table_data, ""
 
 if __name__ == '__main__':
     app.run_server(debug=True)
