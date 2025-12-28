@@ -183,6 +183,7 @@ dashboard_section = html.Div([
 
     # 2. Result Table
     html.Div(id='result-dashboard', style={'display': 'none'}, children=[
+        
         html.H5("🧩 Decision Variables", style={'marginBottom': '15px', 'color': '#333'}),
         dash_table.DataTable(
             id='res-table',
@@ -191,18 +192,24 @@ dashboard_section = html.Div([
                 {'name': 'Optimal Value', 'id': 'Value'}
             ],
             data=[],
-            page_size=10,  # Pagination
-            style_header={
-                'backgroundColor': '#f1f3f5', 'fontWeight': 'bold', 
-                'border': '1px solid #dee2e6', 'textAlign': 'left', 'padding': '12px'
-            },
-            style_cell={
-                'padding': '12px', 'borderBottom': '1px solid #dee2e6', 
-                'fontFamily': 'Inter, sans-serif', 'textAlign': 'left'
-            },
-            style_data_conditional=[
-                {'if': {'row_index': 'odd'}, 'backgroundColor': '#f8f9fa'}
-            ]
+            page_size=5,
+            style_header={'backgroundColor': '#f1f3f5', 'fontWeight': 'bold', 'border': '1px solid #dee2e6', 'textAlign': 'left', 'padding': '12px'},
+            style_cell={'padding': '12px', 'borderBottom': '1px solid #dee2e6', 'fontFamily': 'Inter, sans-serif', 'textAlign': 'left'},
+            style_data_conditional=[{'if': {'row_index': 'odd'}, 'backgroundColor': '#f8f9fa'}]
+        ),
+
+        html.H5("🔍 Sensitivity Analysis (Constraints)", style={'marginTop': '30px', 'marginBottom': '15px', 'color': '#d63384'}),
+        dash_table.DataTable(
+            id='res-constraints-table',
+            columns=[
+                {'name': 'Constraint ID', 'id': 'Constraint'}, 
+                {'name': 'Shadow Price (Unit Value)', 'id': 'Shadow Price'},
+                {'name': 'Slack (Leftover)', 'id': 'Slack (Remaining)'}
+            ],
+            data=[],
+            page_size=5,
+            style_header={'backgroundColor': '#fff0f6', 'fontWeight': 'bold', 'border': '1px solid #dee2e6', 'textAlign': 'left', 'padding': '12px'},
+            style_cell={'padding': '12px', 'borderBottom': '1px solid #dee2e6', 'fontFamily': 'Inter, sans-serif', 'textAlign': 'left'},
         )
     ]),
 
@@ -396,13 +403,13 @@ def add_data_integrated(n_clicks, role, shape, name, val, var_type, matrix_data,
 
     return var_rows, param_rows, store_data, msg, ""
 
-# --- [Updated] Solver Execution Callback ---
 @app.callback(
     [Output('result-dashboard', 'style'), 
      Output('res-status', 'children'),
      Output('res-status', 'style'),
      Output('res-objective', 'children'),
      Output('res-table', 'data'),
+     Output('res-constraints-table', 'data'),  # <-- 여기 추가됨
      Output('solver-error-msg', 'children')],
     Input('btn-solve', 'n_clicks'),
     [State('solver-sense', 'value'),
@@ -412,28 +419,26 @@ def add_data_integrated(n_clicks, role, shape, name, val, var_type, matrix_data,
 )
 def run_solver(n_clicks, sense, objective, constraints, store_data):
     if n_clicks == 0:
-        return {'display': 'none'}, "-", {}, "-", [], ""
-    
-    if not objective:
-        return {'display': 'none'}, "-", {}, "-", [], "⚠️ Please enter an objective function."
-        
-    # Call Engine (returns dict)
-    result = solver_engine.solve_model(store_data, sense, objective, constraints)
-    
-    # Handle Error
-    if result.get('status') == 'Error':
-        return {'display': 'none'}, "Error", {'color': '#dc3545'}, "-", [], f"❌ System Error:\n{result.get('error_msg')}"
+        return {'display': 'none'}, "-", {}, "-", [], [], ""
 
-    # Handle Success
+    if not objective:
+        return {'display': 'none'}, "-", {}, "-", [], [], "⚠️ Please enter an objective function."
+
+    result = solver_engine.solve_model(store_data, sense, objective, constraints)
+
+    if result.get('status') == 'Error':
+        return {'display': 'none'}, "Error", {'color': '#dc3545'}, "-", [], [], f"❌ System Error:\n{result.get('error_msg')}"
+
     status = result['status']
     status_style = {'color': '#28a745'} if status == 'Optimal' else {'color': '#ffc107'}
     
     obj_val = result['objective']
     formatted_obj = f"{obj_val:,.2f}" if isinstance(obj_val, (int, float)) else str(obj_val)
     
-    table_data = result['variables']
+    var_data = result['variables']
+    cons_data = result['constraints']
     
-    return {'display': 'block'}, status, status_style, formatted_obj, table_data, ""
+    return {'display': 'block'}, status, status_style, formatted_obj, var_data, cons_data, ""
 
 if __name__ == '__main__':
     app.run_server(debug=True)
