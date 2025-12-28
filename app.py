@@ -1,6 +1,7 @@
 import dash
 from dash import html, dash_table, dcc, Input, Output, State, ALL, callback_context
 import json
+import solver_engine
 
 external_stylesheets = ['https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap']
 
@@ -107,8 +108,7 @@ wizard_input_section = html.Div([
         html.Label("Parameter Value (Numeric):", style={'fontWeight': 'bold'}),
         dcc.Input(id='input-value', type='number', placeholder="Enter value", style=input_style)
     ]),
-    
-    # [수정됨] Type Input은 이제 독립적입니다! (Scalar/Matrix/List 상관없이 보임)
+
     html.Div(id='type-input-box', style={'display': 'block'}, children=[
         html.Label("Variable Type:", style={'fontWeight': 'bold', 'color': '#d63384'}),
         dcc.Dropdown(
@@ -122,8 +122,47 @@ wizard_input_section = html.Div([
 ], style=question_style)
 
 modeling_section = html.Div([
-    html.H4("Optimization Model (Preview)", style={'marginBottom': '20px'}),
-    html.Div("Phase 4 (Solver Engine) will be connected here.", style={'color': '#888', 'fontStyle': 'italic'})
+    html.H4("Optimization Model Builder", style={'marginBottom': '20px'}),
+    
+    html.Div([
+        # Objective Section
+        html.Div([
+            html.Label("1. Objective Goal:", style={'fontWeight': 'bold'}),
+            dcc.RadioItems(
+                id='solver-sense',
+                options=[{'label': ' Minimize', 'value': 'minimize'}, {'label': ' Maximize', 'value': 'maximize'}],
+                value='minimize',
+                labelStyle={'display': 'inline-block', 'marginRight': '20px'}
+            ),
+            html.Label("Objective Expression (e.g., 3*x + 5*y):", style={'marginTop': '10px'}),
+            dcc.Textarea(
+                id='solver-objective',
+                placeholder="Enter formula...",
+                style={'width': '100%', 'height': '60px', 'fontFamily': 'monospace'}
+            )
+        ], style={'marginBottom': '25px'}),
+
+        # Constraints Section
+        html.Div([
+            html.Label("2. Constraints (One per line):", style={'fontWeight': 'bold'}),
+            dcc.Textarea(
+                id='solver-constraints',
+                placeholder="x + y <= 10\nx <= 5",
+                style={'width': '100%', 'height': '150px', 'fontFamily': 'monospace'}
+            )
+        ], style={'marginBottom': '25px'}),
+
+        # Run Button
+        html.Button("Run Optimization", id='btn-solve', n_clicks=0, 
+                    style={'width': '100%', 'padding': '15px', 'backgroundColor': '#28a745', 'color': 'white', 
+                           'border': 'none', 'borderRadius': '8px', 'fontSize': '16px', 'cursor': 'pointer'}),
+        
+        # Result Output
+        html.Hr(style={'margin': '30px 0'}),
+        html.H5("Optimization Results"),
+        html.Div(id='solver-output', style={'padding': '15px', 'backgroundColor': '#f8f9fa', 'border': '1px solid #ccc', 'whiteSpace': 'pre-wrap', 'fontFamily': 'monospace'})
+
+    ], style=question_style)
 ])
 
 # --- Helper Functions ---
@@ -301,6 +340,28 @@ def add_data_integrated(n_clicks, role, shape, name, val, var_type, matrix_data,
     print(json.dumps(store_data, indent=2))
 
     return var_rows, param_rows, store_data, msg, ""
+
+@app.callback(
+    Output('solver-output', 'children'),
+    Input('btn-solve', 'n_clicks'),
+    [State('solver-sense', 'value'),
+     State('solver-objective', 'value'),
+     State('solver-constraints', 'value'),
+     State('all-data-store', 'data')]
+)
+def run_solver(n_clicks, sense, objective, constraints, store_data):
+    if n_clicks == 0:
+        return "Ready. Please define variables and click Run."
+    
+    if not objective:
+        return "⚠️ Please enter an objective function."
+        
+    # solver_engine 
+    try:
+        result = solver_engine.solve_model(store_data, sense, objective, constraints)
+        return result
+    except Exception as e:
+        return f"System Error: {str(e)}"
 
 if __name__ == '__main__':
     app.run_server(debug=True)
