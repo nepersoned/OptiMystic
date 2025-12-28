@@ -279,12 +279,6 @@ app.layout = html.Div([
 # --- Callbacks ---
 
 @app.callback(
-    [Output('current-mode', 'data'), Output('page-content', 'children')],
-    [Input({'type': 'tmpl-btn', 'index': ALL}, 'n_clicks'), Input('btn-home', 'n_clicks')],
-    [State('current-mode', 'data')]
-)
-
-@app.callback(
     Output('url', 'pathname'),
     [Input({'type': 'tmpl-btn', 'index': ALL}, 'n_clicks'), Input('btn-home', 'n_clicks')],
     [State('url', 'pathname')]
@@ -302,7 +296,7 @@ def change_url(tmpl_clicks, home_click, current_path):
         import json
         try:
             mode = json.loads(btn_id)['index']
-            return f"/{mode}"  # 예: /cutting, /packing 등으로 URL 변경
+            return f"/{mode}"
         except: return dash.no_update
         
     return dash.no_update
@@ -314,7 +308,7 @@ def change_url(tmpl_clicks, home_click, current_path):
 def render_page_content(pathname):
     if pathname in [None, '/', '/home']:
         return render_landing_page()
-)
+
     try:
         mode = pathname.strip('/')
         return render_workspace(mode)
@@ -326,17 +320,10 @@ def render_page_content(pathname):
     [Input('input-role', 'value'), Input('input-shape', 'value')]
 )
 def toggle_inputs(role, shape):
-    # Shape Styles
     matrix_style = {'display': 'block', 'padding': '15px', 'backgroundColor': '#e9ecef', 'borderRadius': '8px', 'marginBottom': '15px'} if shape == 'matrix' else {'display': 'none'}
     list_style = {'display': 'block', 'padding': '15px', 'backgroundColor': '#e3f2fd', 'borderRadius': '8px', 'marginBottom': '15px'} if shape == 'list' else {'display': 'none'}
-    
-    # Detail Styles
-    # Value box: Only for Scalar Parameter
     val_style = {'display': 'block', 'marginBottom': '15px'} if role == 'param' and shape == 'scalar' else {'display': 'none'}
-    
-    # Type box: For ALL Variables (Scalar, Matrix, List)
     type_style = {'display': 'block', 'marginBottom': '15px'} if role == 'var' else {'display': 'none'}
-    
     return matrix_style, list_style, val_style, type_style
 
 @app.callback(
@@ -392,6 +379,9 @@ def add_data_integrated(n_clicks, role, shape, name, val, var_type, matrix_data,
     if store_data is None: store_data = {'variables': [], 'parameters': []}
 
     real_data = None
+    shape_desc = ""
+    preview = ""
+
     if shape == 'scalar':
         preview = str(val) if role == 'param' else "-"
         shape_desc = "Scalar"
@@ -411,6 +401,8 @@ def add_data_integrated(n_clicks, role, shape, name, val, var_type, matrix_data,
         real_data = list_data
 
     new_ui_row = {'Name': name, 'Shape': shape_desc}
+    msg = ""
+    
     if role == 'var':
         new_ui_row['Type'] = var_type
         new_ui_row['Preview'] = "-"
@@ -423,9 +415,6 @@ def add_data_integrated(n_clicks, role, shape, name, val, var_type, matrix_data,
         store_data['parameters'].append({'name': name, 'shape': shape, 'data': real_data})
         msg = html.Span(f"✅ Parameter '{name}' added!", style={'color': 'green'})
 
-    import json
-    print(json.dumps(store_data, indent=2))
-
     return var_rows, param_rows, store_data, msg, ""
 
 @app.callback(
@@ -434,7 +423,7 @@ def add_data_integrated(n_clicks, role, shape, name, val, var_type, matrix_data,
      Output('res-status', 'style'),
      Output('res-objective', 'children'),
      Output('res-table', 'data'),
-     Output('res-constraints-table', 'data'),  # <-- 여기 추가됨
+     Output('res-constraints-table', 'data'),
      Output('solver-error-msg', 'children')],
     Input('btn-solve', 'n_clicks'),
     [State('solver-sense', 'value'),
@@ -465,5 +454,7 @@ def run_solver(n_clicks, sense, objective, constraints, store_data):
     
     return {'display': 'block'}, status, status_style, formatted_obj, var_data, cons_data, ""
 
+if __name__ == '__main__':
+    app.run_server(debug=True)
 if __name__ == '__main__':
     app.run_server(debug=True)
