@@ -8,6 +8,7 @@ external_stylesheets = ['https://fonts.googleapis.com/css2?family=Inter:wght@400
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets, title='OptiMystic Solver', suppress_callback_exceptions=True)
 server = app.server
 
+# --- Styles ---
 app_style = {
     'fontFamily': 'Inter, sans-serif',
     'maxWidth': '1200px', 'margin': 'auto', 'padding': '40px 20px', 'color': '#333'
@@ -41,6 +42,7 @@ table_cell_style = {
     'fontSize': '14px', 'fontFamily': 'Inter, sans-serif'
 }
 
+# --- Template Gallery Data ---
 TEMPLATE_GALLERY = [
     {"id": "cutting", "icon": "✂️", "title": "Cutting Stock", "desc": "Minimize material waste (1D packing) for pipes, wood, or coils."},
     {"id": "packing", "icon": "📦", "title": "Bin Packing", "desc": "Maximize truck or container loading efficiency (Knapsack Problem)."},
@@ -51,7 +53,7 @@ TEMPLATE_GALLERY = [
     {"id": "custom", "icon": "🔮", "title": "Custom Mode", "desc": "Build your own model from scratch using the Wizard."}
 ]
 
-# --- UI Components ---
+# --- UI Components (Wizard Parts) ---
 wizard_input_section = html.Div([
     html.H4("1. Data Definition Wizard", style={'marginBottom': '20px'}),
     
@@ -237,9 +239,9 @@ def render_landing_page():
 def render_workspace(mode):
     mode_info = next((item for item in TEMPLATE_GALLERY if item["id"] == mode), None)
     title = mode_info['title'] if mode_info else "Custom Mode"
-
+    
+    # Key change: 'key=mode' forces React/Dash to re-render the component from scratch when mode changes.
     return html.Div([
-
         dcc.Store(id='all-data-store', data={'variables': [], 'parameters': []}),
         
         html.Div([
@@ -271,17 +273,22 @@ def render_workspace(mode):
 
 # --- Main Layout ---
 app.layout = html.Div([
+    # URL Management Component
     dcc.Location(id='url', refresh=False),
-    dcc.Store(id='all-data-store', data={'variables': [], 'parameters': []}),
+    
+    # Global Header
     html.Div([
         html.H2("🧙‍♂️ OptiMystic Solver", style={'margin': 0, 'color': '#4a4e69'}),
-        html.Button("🏠 Home", id='btn-home', style={'padding': '5px 10px', 'cursor': 'pointer', 'border': 'none', 'background': 'transparent'})
+        html.Button("🏠 Home", id='btn-home', style={'padding': '5px 10px', 'cursor': 'pointer', 'border': 'none', 'background': 'transparent', 'fontSize': '16px'})
     ], style={'display': 'flex', 'justifyContent': 'space-between', 'alignItems': 'center', 'marginBottom': '30px', 'borderBottom': '1px solid #eee', 'paddingBottom': '15px'}),
+    
+    # Page Content Area
     html.Div(id='page-content')
 ], style=app_style)
 
 # --- Callbacks ---
 
+# 1. URL Routing (Button Click -> Change URL)
 @app.callback(
     Output('url', 'pathname'),
     [Input({'type': 'tmpl-btn', 'index': ALL}, 'n_clicks'), Input('btn-home', 'n_clicks')],
@@ -297,7 +304,6 @@ def change_url(tmpl_clicks, home_click, current_path):
         return "/"
         
     if 'tmpl-btn' in btn_id:
-        import json
         try:
             mode = json.loads(btn_id)['index']
             return f"/{mode}"
@@ -305,20 +311,23 @@ def change_url(tmpl_clicks, home_click, current_path):
         
     return dash.no_update
 
+# 2. Page Rendering (URL Change -> Render Content)
 @app.callback(
     Output('page-content', 'children'),
     Input('url', 'pathname')
 )
 def render_page_content(pathname):
+    # Guard clause: Redirect to home if path is empty or root
     if pathname in [None, '/', '/home', '']:
         return render_landing_page()
-
+    
     try:
         mode = pathname.strip('/')
         return render_workspace(mode)
     except:
         return render_landing_page()
 
+# 3. Wizard UI Logic
 @app.callback(
     [Output('matrix-config-area', 'style'), Output('list-config-area', 'style'), Output('val-input-box', 'style'), Output('type-input-box', 'style')],
     [Input('input-role', 'value'), Input('input-shape', 'value')]
@@ -330,6 +339,7 @@ def toggle_inputs(role, shape):
     type_style = {'display': 'block', 'marginBottom': '15px'} if role == 'var' else {'display': 'none'}
     return matrix_style, list_style, val_style, type_style
 
+# 4. Matrix Generation
 @app.callback(
     [Output('matrix-data-table', 'data'), Output('matrix-data-table', 'columns'), Output('matrix-data-table', 'style_table')],
     Input('btn-gen-matrix', 'n_clicks'),
@@ -343,6 +353,7 @@ def generate_matrix(n_clicks, row_str, col_str):
     data = [{'row_label': r, **{c: 0 for c in cols}} for r in rows]
     return data, columns, {'overflowX': 'auto', 'minWidth': '100%', 'display': 'block'}
 
+# 5. List Management
 @app.callback(
     [Output('list-data-table', 'data'), Output('list-data-table', 'columns'), Output('list-input-container', 'style')],
     [Input('btn-init-list', 'n_clicks'), Input('btn-add-list-row', 'n_clicks')],
@@ -364,6 +375,7 @@ def manage_list_table(init_clicks, add_clicks, col_str, current_data, current_co
         return current_data, current_columns, {'marginTop': '15px', 'display': 'block'}
     return [], [], {'display': 'none'}
 
+# 6. Data Add (Integrated)
 @app.callback(
     [Output('var-table', 'data'), Output('param-table', 'data'),
      Output('all-data-store', 'data'), Output('add-msg', 'children'), Output('input-name', 'value')],
@@ -421,6 +433,7 @@ def add_data_integrated(n_clicks, role, shape, name, val, var_type, matrix_data,
 
     return var_rows, param_rows, store_data, msg, ""
 
+# 7. Solver Run
 @app.callback(
     [Output('result-dashboard', 'style'), 
      Output('res-status', 'children'),
@@ -458,7 +471,5 @@ def run_solver(n_clicks, sense, objective, constraints, store_data):
     
     return {'display': 'block'}, status, status_style, formatted_obj, var_data, cons_data, ""
 
-if __name__ == '__main__':
-    app.run_server(debug=True)
 if __name__ == '__main__':
     app.run_server(debug=True)
