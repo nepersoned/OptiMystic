@@ -2,6 +2,7 @@ import dash
 from dash import html, dash_table, dcc, Input, Output, State, ALL, callback_context
 import json
 import solver_engine
+import bridge_logic
 
 # --- Server Start Notification ---
 print("\n" + "="*50)
@@ -379,6 +380,55 @@ def run_solver(n, sense, obj, const, store):
     res = solver_engine.solve_model(store, sense, obj, const)
     if res.get('status') == 'Error': return {'display':'none'}, "Error", {'color':'#dc3545'}, "-", [], [], f"System Error:\n{res.get('error_msg')}"
     return {'display':'block'}, res['status'], ({'color':'#28a745'} if res['status']=='Optimal' else {'color':'#ffc107'}), f"{res['objective']:,.2f}", res['variables'], res['constraints'], ""
+
+@app.callback(
+    [Output('solver-objective', 'value'),
+     Output('solver-constraints', 'value'),
+     Output('all-data-store', 'data', allow_duplicate=True)],
+    [Input('btn-solve', 'n_clicks')],
+    [State('url', 'pathname'),
+     State('trans-supply', 'data'),
+     State('trans-demand', 'data'),
+     State('blend-table', 'data'),
+     State('min-nuta', 'value'),
+     State('min-nutb', 'value')],
+    prevent_initial_call=True
+)
+def sync_bridge_to_ui(n, pathname, trans_supply, trans_demand, blend_data, min_a, min_b):
+    mode = pathname.strip('/')
+    
+    # Prepare Parameters for the Bridge
+    if mode == 'transportation':
+        params = {
+            'Plants': [r['Src'] for r in trans_supply],
+            'Regions': [r['Dst'] for r in trans_demand],
+            'Supply': {r['Src']: r['Cap'] for r in trans_supply},
+            'Demand': {r['Dst']: r['Dem'] for r in trans_demand}
+            # Note: Cost matrix logic will be linked here in Phase 6-2 finish
+        }
+    elif mode == 'blending':
+        params = {
+            'Ingredients': [r['Ingr'] for r in blend_data],
+            'Cost': {r['Ingr']: r['Cost'] for r in blend_data},
+            'NutA': {r['Ingr']: r['NutA'] for r in blend_data},
+            'NutB': {r['Ingr']: r['NutB'] for r in blend_data},
+            'min_a': min_a,
+            'min_b': min_b
+        }
+    else:
+        return dash.no_update, dash.no_update, dash.no_update
+
+    # Call the Bridge
+    obj, const, vars_config = bridge_logic.generate_logic(mode, params)
+    
+    # Build Store (Variables + Parameters)
+    # The parameters also need to be sent to symbol_table for 'eval' to work
+    store_data = {
+        'variables': vars_config,
+        'parameters': [{'name': k, 'shape': 'list' if isinstance(v, list) else 'scalar', 'data': v} for k, v in params.items()]
+    }
+    
+    return obj, const, store_data
 
 if __name__ == '__main__':
     app.run_server(debug=True)	
