@@ -1,111 +1,96 @@
 import pulp
+import time
 
 def solve_model(store_data, sense, objective_str, constraints_str):
-    # 1. Initialize Model
-    sense_obj = pulp.LpMinimize if sense == 'minimize' else pulp.LpMaximize
-    prob = pulp.LpProblem("OptiMystic_Model", sense_obj)
-    
-    symbol_table = {'sum': pulp.lpSum}
-    
-    # --- [Step 1] Parameters ---
-    for p in store_data.get('parameters', []):
-        name = p['name']
-        shape = p['shape']
-        data = p['data']
-        
-        if shape == 'scalar':
-            symbol_table[name] = float(data)
-        elif shape == 'matrix':
-            mat_dict = {}
-            for row in data:
-                r_label = row.get('row_label', 'Row')
-                mat_dict[r_label] = {k: v for k, v in row.items() if k != 'row_label'}
-            symbol_table[name] = mat_dict
-        elif shape == 'list':
-            symbol_table[name] = data
-
-    # --- [Step 2] Variables ---
-    # Note: Shadow Prices work best with Continuous variables.
-    for v in store_data.get('variables', []):
-        name = v['name']
-        shape = v['shape']
-        v_type = v['type']
-        real_data = v.get('data')
-        
-        cat = pulp.LpContinuous
-        if v_type == 'Integer': cat = pulp.LpInteger
-        elif v_type == 'Binary': cat = pulp.LpBinary
-        
-        if shape == 'scalar':
-            symbol_table[name] = pulp.LpVariable(name, lowBound=0, cat=cat)
-            
-        elif shape == 'matrix':
-            if not real_data:
-                symbol_table[name] = pulp.LpVariable(name, lowBound=0, cat=cat)
-                continue
-            var_dict = {}
-            for row in real_data:
-                r_label = row.get('row_label', 'Row')
-                var_dict[r_label] = {}
-                for c in [k for k in row.keys() if k != 'row_label']:
-                    var_name = f"{name}_{r_label}_{c}"
-                    var_dict[r_label][c] = pulp.LpVariable(var_name, lowBound=0, cat=cat)
-            symbol_table[name] = var_dict
-
-        elif shape == 'list':
-            if not real_data:
-                symbol_table[name] = pulp.LpVariable(name, lowBound=0, cat=cat)
-                continue
-            var_list = []
-            for i, item in enumerate(real_data):
-                var_list.append(pulp.LpVariable(f"{name}_{i}", lowBound=0, cat=cat))
-            symbol_table[name] = var_list
-
-    # --- [Step 3 & 4] Parse & Solve ---
+    print("----- [Engine] Start -----")
     try:
-        if objective_str:
-            prob += eval(objective_str, {"__builtins__": None}, symbol_table), "Objective"
+        # 1. Setup Context
+        variables = store_data.get('variables', [])
+        parameters = store_data.get('parameters', [])
         
-        if constraints_str:
-            for i, line in enumerate(constraints_str.split('\n')):
-                if line.strip():
-                    # Name constraints C1, C2... for easier analysis
-                    prob += eval(line, {"__builtins__": None}, symbol_table), f"C{i+1}"
+        lp_sense = pulp.LpMinimize if sense == 'minimize' else pulp.LpMaximize
+        prob = pulp.LpProblem("OptiMystic_Problem", lp_sense)
         
-        # Solve
-        prob.solve(pulp.PULP_CBC_CMD(msg=0))
+        symbol_table = {'pulp': pulp, 'prob': prob}
         
-    except Exception as e:
-        return {'status': 'Error', 'error_msg': str(e)}
+        # 2. Process Parameters
+        for p in parameters:
+            name = p['name']
+            data = p['data']
+            shape = p.get('shape', 'scalar')
+            if shape in ['list', 'matrix'] or isinstance(data, (list, dict)):
+                symbol_table[name] = data
+            else:
+                try:
+                    symbol_table[name] = float(data)
+                except:
+                    symbol_table[name] = data
 
-    # --- [Step 5] Build Result Dictionary ---
-    status = pulp.LpStatus[prob.status]
-    results = {
-        'status': status,
-        'objective': 0,
-        'variables': [],
-        'constraints': [], # New: Sensitivity Data
-        'error_msg': None
-    }
-    
-    if prob.status == pulp.LpStatusOptimal:
-        results['objective'] = pulp.value(prob.objective)
-        
-        # 1. Variables Data
-        for v in prob.variables():
-            if v.varValue is not None and abs(v.varValue) > 1e-5:
-                clean_name = v.name.replace('_', ' ')
-                results['variables'].append({'Variable': clean_name, 'Value': v.varValue})
-        
-        # 2. Constraints Sensitivity Data (New!)
-        for name, c in prob.constraints.items():
-            shadow_price = c.pi if c.pi is not None else 0.0
-            slack = c.slack if c.slack is not None else 0.0
+        # 3. Process Variables
+        for v in variables:
+            var_name = v['name']
+            var_shape = v.get('shape') # Safely get shape
+            var_type = v.get('type', 'Continuous')
+            cat = pulp.LpInteger if var_type == 'Integer' else (pulp.LpBinary if var_type == 'Binary' else pulp.LpContinuous)
             
-            results['constraints'].append({
-                'Constraint': name,
-                'Shadow Price': shadow_price,
-                'Slack (Remaining)': slack
-            })
+            print(f"[Engine] Creating Var: {var_name}, Shape: {var_shape}")
+
+            if var_shape == 'list':
+                indices = range(len(v['data'])) 
+                lp_vars = [pulp.LpVariable(f"{var_name}_{i}", lowBound=0, cat=cat) for i in indices]
+                symbol_table[var_name] = lp_vars
+                
+            elif var_shape == 'matrix':
+                rows = v['data']
+                matrix_vars = {}
+                for r_idx, row_data in enumerate(rows):
+                    r_lbl = row_data.get('row_label', f"R{r_idx}")
+                    matrix_vars[r_lbl] = {}
+                    for col_key in row_data.keys():
+                        if col_key == 'row_label': continue
+                        var_id = f"{var_name}_{r_lbl}_{col_key}"
+                        matrix_vars[r_lbl][col_key] = pulp.LpVariable(var_id, lowBound=0, cat=cat)
+                symbol_table[var_name] = matrix_vars
             
-    return results
+            else:
+                # Fallback for scalar or unknown shape
+                symbol_table[var_name] = pulp.LpVariable(var_name, lowBound=0, cat=cat)
+
+        # 4. Objective
+        symbol_table['range'] = range
+        symbol_table['len'] = len
+        
+        try:
+            # Explicitly pass symbol_table as both globals and locals to ensure visibility
+            obj_expr = eval(objective_str, symbol_table, symbol_table)
+            prob += obj_expr
+        except Exception as e:
+            return {'status': 'Error', 'error_msg': f"Objective Error: {e}"}
+
+        # 5. Constraints
+        cons_lines = [line.strip() for line in constraints_str.split('\n') if line.strip()]
+        for line in cons_lines:
+            try:
+                con_expr = eval(line, symbol_table, symbol_table)
+                prob += con_expr
+            except Exception as e:
+                return {'status': 'Error', 'error_msg': f"Constraint Error: {e}"}
+
+        # 6. Solve
+        solver = pulp.PULP_CBC_CMD(msg=False, timeLimit=5) 
+        prob.solve(solver)
+        
+        status = pulp.LpStatus[prob.status]
+        res_vars = [{'Variable': v.name, 'Value': v.varValue} for v in prob.variables()]
+            
+        return {
+            'status': status,
+            'objective': pulp.value(prob.objective),
+            'variables': res_vars,
+            'constraints': []
+        }
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {'status': 'Error', 'error_msg': f"System Error:\n{str(e)}"}
