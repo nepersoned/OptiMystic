@@ -148,16 +148,34 @@ ui_prod_mix = html.Div([
                          style_table=table_container_style, style_header=table_header_style, style_cell=table_cell_style, style_data_conditional=table_conditional_style, css=fixed_css),
     html.Button("＋ Add Product", id='pm-add-prod-btn', n_clicks=0, style=add_btn_style),
     html.Div([
-        html.Label("2. Resource Usage", style={'fontWeight': 'bold', 'color': '#28a745', 'marginBottom': '10px', 'display': 'block'}),
-        html.Div(id='pm-resource-matrix-container', children="[Matrix Input - Wired in Phase 6-2]", style={'padding': '30px', 'backgroundColor': '#f9f9f9', 'border': '1px dashed #ccc', 'textAlign': 'center', 'borderRadius':'8px', 'color': '#999'})
+        html.Label("2. Resource Usage (Consumption per Unit)", style={'fontWeight': 'bold', 'color': '#28a745', 'marginBottom': '10px', 'display': 'block'}),
+        dash_table.DataTable(
+            id='pm-resource-matrix',
+            columns=[{'name': 'Resource', 'id': 'resource', 'editable': True}, 
+                     {'name': 'P1', 'id': 'P1', 'type': 'numeric'}, 
+                     {'name': 'P2', 'id': 'P2', 'type': 'numeric'},
+                     {'name': 'Availability', 'id': 'avail', 'type': 'numeric'}],
+            data=[{'resource': 'Labor', 'P1': 2, 'P2': 3, 'avail': 100}, {'resource': 'Machine', 'P1': 1, 'P2': 2, 'avail': 80}],
+            editable=True, row_deletable=True, style_table=table_container_style, style_header=table_header_style, style_cell=table_cell_style, css=fixed_css
+        ),
+        html.Button("＋ Add Resource", id='pm-add-res-btn', n_clicks=0, style=add_btn_style)
     ], style={'marginTop': '30px'})
 ])
 
 ui_schedule = html.Div([
     html.H4("📅 Scheduling", style={'color': '#4a4e69', 'marginBottom': '5px'}),
     html.P("Automate workforce rostering.", style={'color': '#888', 'fontSize': '13px', 'marginBottom': '25px'}),
-    html.Div([html.Label("Shifts/Day:", style={'fontWeight': 'bold'}), dcc.Input(id='sched-shifts', type='number', value=3, style=input_style)], style={'marginBottom': '20px'}),
-    html.Div(id='sched-matrix-container', children="[Matrix Input - Wired in Phase 6-2]", style={'padding': '30px', 'backgroundColor': '#f9f9f9', 'border': '1px dashed #ccc', 'textAlign': 'center', 'borderRadius':'8px'})
+    html.Div([
+        html.Div([html.Label("Min Staff per Shift:", style={'fontWeight': 'bold'}), dcc.Input(id='sched-min-staff', type='number', value=1, style=input_style)], style={'width': '100%'})
+    ], style={'marginBottom': '20px'}),
+    html.Label("Staff Availability (1: Avail, 0: N/A)", style={'fontWeight': 'bold', 'color': '#28a745'}),
+    dash_table.DataTable(
+        id='sched-matrix',
+        columns=[{'name': 'Staff', 'id': 'staff', 'editable': True}, {'name': 'Morning', 'id': 's1', 'type': 'numeric'}, {'name': 'Afternoon', 'id': 's2', 'type': 'numeric'}, {'name': 'Night', 'id': 's3', 'type': 'numeric'}],
+        data=[{'staff': 'Alice', 's1': 1, 's2': 1, 's3': 0}, {'staff': 'Bob', 's1': 0, 's2': 1, 's3': 1}],
+        editable=True, row_deletable=True, style_table=table_container_style, style_header=table_header_style, style_cell=table_cell_style, css=fixed_css
+    ),
+    html.Button("＋ Add Staff", id='btn-add-staff', n_clicks=0, style=add_btn_style)
 ])
 
 ui_transport = html.Div([
@@ -165,20 +183,23 @@ ui_transport = html.Div([
     html.P("Logistics optimization.", style={'color': '#888', 'fontSize': '13px', 'marginBottom': '25px'}),
     html.Div([
         html.Div([
-            html.Label("Supply", style={'fontWeight': 'bold', 'color': '#007bff', 'marginBottom': '10px', 'display': 'block'}),
-            dash_table.DataTable(id='trans-supply', columns=[{'name':'Source','id':'Src'},{'name':'Cap','id':'Cap'}], data=[{'Src':'F1','Cap':100},{'Src':'F2','Cap':200}], editable=True, row_deletable=True,
-                                 style_table=table_container_style, style_header=table_header_style, style_cell=table_cell_style, style_data_conditional=table_conditional_style, css=fixed_css),
+            html.Label("Supply (Capacity)", style={'fontWeight': 'bold', 'color': '#007bff'}),
+            dash_table.DataTable(id='trans-supply', columns=[{'name':'Source','id':'Src'},{'name':'Cap','id':'Cap'}], data=[{'Src':'F1','Cap':100},{'Src':'F2','Cap':200}], editable=True, row_deletable=True, style_table=table_container_style, style_header=table_header_style, style_cell=table_cell_style, css=fixed_css),
             html.Button("＋ Add Source", id='btn-add-source', n_clicks=0, style=add_btn_style)
         ], style={'flex': 1, 'marginRight': '20px'}),
         html.Div([
-            html.Label("Demand", style={'fontWeight': 'bold', 'color': '#d63384', 'marginBottom': '10px', 'display': 'block'}),
-            dash_table.DataTable(id='trans-demand', columns=[{'name':'Dest','id':'Dst'},{'name':'Dem','id':'Dem'}], data=[{'Dst':'S1','Dem':150},{'Dst':'S2','Dem':150}], editable=True, row_deletable=True,
-                                 style_table=table_container_style, style_header=table_header_style, style_cell=table_cell_style, style_data_conditional=table_conditional_style, css=fixed_css),
+            html.Label("Demand", style={'fontWeight': 'bold', 'color': '#d63384'}),
+            dash_table.DataTable(id='trans-demand', columns=[{'name':'Dest','id':'Dst'},{'name':'Dem','id':'Dem'}], data=[{'Dst':'S1','Dem':150},{'Dst':'S2','Dem':150}], editable=True, row_deletable=True, style_table=table_container_style, style_header=table_header_style, style_cell=table_cell_style, css=fixed_css),
             html.Button("＋ Add Dest", id='btn-add-dest', n_clicks=0, style=add_btn_style)
         ], style={'flex': 1})
     ], style={'display': 'flex', 'marginBottom': '30px'}),
-    html.Label("Cost Matrix", style={'fontWeight': 'bold', 'color': '#28a745'}),
-    html.Div(id='trans-matrix-container', children="[Matrix Input - Wired in Phase 6-2]", style={'padding': '30px', 'backgroundColor': '#f9f9f9', 'border': '1px dashed #ccc', 'textAlign': 'center', 'borderRadius':'8px'})
+    html.Label("Cost Matrix (Shipping Cost)", style={'fontWeight': 'bold', 'color': '#28a745'}),
+    dash_table.DataTable(
+        id='trans-cost-matrix',
+        columns=[{'name': 'Source/Dest', 'id': 'label', 'editable': False}, {'name': 'S1', 'id': 'S1', 'type': 'numeric'}, {'name': 'S2', 'id': 'S2', 'type': 'numeric'}],
+        data=[{'label': 'F1', 'S1': 10, 'S2': 20}, {'label': 'F2', 'S1': 15, 'S2': 10}],
+        editable=True, style_table=table_container_style, style_header=table_header_style, style_cell=table_cell_style, css=fixed_css
+    )
 ])
 
 # ==========================================
@@ -429,6 +450,27 @@ def sync_bridge_to_ui(n, pathname, trans_supply, trans_demand, blend_data, min_a
     }
     
     return obj, const, store_data
+@app.callback(
+    Output('pm-resource-matrix', 'data'),
+    Input('pm-add-res-btn', 'n_clicks'),
+    State('pm-resource-matrix', 'data'),
+    State('pm-resource-matrix', 'columns'),
+    prevent_initial_call=True
+)
+def add_pm_res_row(n, data, cols):
+    new_row = {c['id']: (f"Res_{len(data)+1}" if c['id'] == 'resource' else 0) for c in cols}
+    return (data or []) + [new_row]
+
+@app.callback(
+    Output('sched-matrix', 'data'),
+    Input('btn-add-staff', 'n_clicks'),
+    State('sched-matrix', 'data'),
+    State('sched-matrix', 'columns'),
+    prevent_initial_call=True
+)
+def add_sched_staff_row(n, data, cols):
+    new_row = {c['id']: (f"Staff_{len(data)+1}" if c['id'] == 'staff' else 0) for c in cols}
+    return (data or []) + [new_row]
 
 if __name__ == '__main__':
     app.run_server(debug=True)	
