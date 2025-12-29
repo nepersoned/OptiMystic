@@ -15,15 +15,16 @@ https://optimystic.onrender.com/
 
 ## 🚀 핵심 기능 (Key Features)
 
-### 1. 🏛️ 7가지 템플릿 (Template Gallery)
-현업에서 발생하는 문제의 95%를 커버하는 **6가지 정형화 모델**과 **자유 모드**를 제공합니다.
-- **✂️ 자재 절단 (Cutting Stock):** 원자재 낭비(Loss) 최소화.
-- **📦 화물 적재 (Bin Packing):** 트럭/컨테이너 적재 효율 극대화 (배낭 문제).
-- **🧪 배합 최적화 (Blending):** 최소 비용으로 최상의 품질 레시피 도출.
-- **🏭 생산 계획 (Product Mix):** 한정된 자원 내에서 이익 극대화.
-- **📅 근무표 생성 (Scheduling):** 법적 제약을 준수하는 자동 인력 배치.
-- **🚚 수송 최적화 (Transportation):** 물류비용을 최소화하는 최적 경로 산출.
-- **🔮 자유 모델링 (Custom Mode):** 나만의 수식을 직접 정의하는 마법사 모드.
+### 🏛️ 8가지 전략적 최적화 템플릿 (8 Strategic Templates)
+
+1. **✂️ 자재 절단 (Cutting Stock)**: 파이프, 철판, 목재 등 원자재의 자투리 낭비(Loss)를 최소화하는 절단 계획을 수립합니다.
+2. **📦 화물 적재 (Bin Packing)**: 트럭이나 컨테이너의 공간을 빈틈없이 활용하여 적재 효율을 극대화합니다.
+3. **🧪 배합 최적화 (Blending)**: 사료, 식품, 화학 제품 등의 품질 기준을 맞추면서 원료 비용을 최소화하는 레시피를 도출합니다.
+4. **🏭 생산 계획 (Product Mix)**: 기계 시간, 노동력 등 한정된 자원 내에서 최대 이익을 낼 수 있는 제품별 생산량을 결정합니다.
+5. **📅 근무표 생성 (Scheduling)**: 알바생 및 공장 조원의 근무 가능 시간과 법적 제약을 준수하는 자동 인력 배치표를 만듭니다.
+6. **🚚 수송 최적화 (Transportation)**: 공장에서 대리점까지 물류 비용을 최소화하는 최적의 배송 경로와 물량을 산출합니다.
+7. **📦 재고 최적화 (Inventory)**: **[신규]** 품절은 막고 과잉 재고 비용은 줄이는 적정 주문량과 시점을 제안합니다.
+8. **💰 투자 우선순위 (Investment)**: **[신규]** 한정된 예산 내에서 가성비(ROI)가 가장 높은 설비 도입이나 프로젝트 조합을 선정합니다.
 
 ### 2. 🧙‍♂️ 스마트 데이터 마법사
 - **질문형 인터페이스:** "어떤 데이터인가요?", "인덱스가 있나요?"와 같은 질문을 통해 데이터를 정의합니다.
@@ -108,15 +109,16 @@ Our goal is to empower SMEs (Small and Medium Enterprises) and researchers to bu
 
 ## 🚀 Key Features
 
-### 1. 🏛️ Template Gallery (7 Industry Patterns)
-Don't start from a blank page. We provide 7 pre-built templates that cover 95% of industrial optimization problems:
-- **✂️ Cutting Stock:** Minimize material waste (1D packing).
-- **📦 Bin Packing:** Maximize truck/container loading efficiency.
-- **🧪 Blending:** Optimize recipes for minimum cost and quality.
-- **🏭 Production Mix:** Maximize profit with limited resources and time.
-- **📅 Shift Scheduling:** Automate workforce rostering while complying with laws.
-- **🚚 Transportation:** Find the cheapest logistics routes.
-- **🔮 Custom Mode:** Build any model from scratch using our Wizard.
+### 🏛️ 8 Strategic Optimization Templates
+
+1. **✂️ Cutting Stock**: Develops cutting plans to minimize scrap waste (loss) for raw materials like pipes, steel plates, and timber.
+2. **📦 Bin Packing**: Maximizes loading efficiency by utilizing every inch of space in trucks or containers.
+3. **🧪 Blending Optimization**: Derives recipes that minimize ingredient costs while meeting quality standards for feed, food, or chemicals.
+4. **🏭 Production Mix**: Determines the optimal production volume for each product to maximize profit within limited resources like machine time and labor.
+5. **📅 Workforce Scheduling**: Automatically generates staff rosters that comply with labor laws and individual availability for part-timers or factory crews.
+6. **🚚 Transportation**: Calculates the most cost-effective shipping routes and volumes from factories to distributors.
+7. **📦 Inventory Optimization**: **[New]** Suggests optimal reorder points and quantities to prevent stockouts while reducing excess inventory costs.
+8. **💰 Investment Priority**: **[New]** Selects the best combination of equipment upgrades or projects with the highest ROI within a fixed budget.
 
 ### 2. 🧙‍♂️ Smart Data Wizard
 - **Question-Driven:** Instead of coding, answer simple questions like "What are your resources?".
