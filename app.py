@@ -9,86 +9,44 @@ import cutting_stock
 
 # --- Server Start ---
 print("\n" + "="*50)
-print("🚀 OPTIMYSTIC: MOBILE FIX APPLIED")
-print("   - Layout: Fluid Width (95% ~ 1280px)")
-print("   - Scroll: Native touch scrolling enabled")
-print("   - Grid: Converted to Flex-Wrap for stacking")
+print("🚀 OPTIMYSTIC: MODULAR ARCHITECTURE")
+print("   - UI Fix: No Overlap, No Ghost Bars")
+print("   - Module: 'cutting_stock.py' integrated")
+print("   - Layout: 4x2 Grid Home")
 print("="*50 + "\n")
 
 external_stylesheets = ['https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap']
 
-# [Mobile Fix 1] Add meta_tags for viewport scaling
-app = dash.Dash(__name__, external_stylesheets=external_stylesheets, title='OptiMystic Solver', 
-                suppress_callback_exceptions=True,
-                meta_tags=[{'name': 'viewport', 'content': 'width=device-width, initial-scale=1.0'}])
+app = dash.Dash(__name__, external_stylesheets=external_stylesheets, title='OptiMystic Solver', suppress_callback_exceptions=True)
 server = app.server
 
-# --- Global Styles (Mobile Optimized) ---
-app_wrapper_style = {
-    'minHeight': '100vh', 
-    'backgroundColor': '#eaeff2',
-    'display': 'flex', 'justifyContent': 'center', 
-    'padding': '10px 0', # Mobile padding
-    'fontFamily': 'Inter, sans-serif',
-    'overflowY': 'auto' # Allow body scroll
-}
-
-main_box_style = {
-    'width': '95%', 'maxWidth': '1280px', # [Mobile Fix 2] Fluid width
-    'minHeight': '90vh', 'height': 'auto', # Allow height to grow
-    'backgroundColor': 'white', 'borderRadius': '16px',
-    'boxShadow': '0 10px 40px rgba(0,0,0,0.05)',
-    'display': 'flex', 'flexDirection': 'column', 
-    'overflow': 'hidden',
-    'margin': '0 auto'
-}
-
-header_style = {
-    'backgroundColor': '#4a4e69',
-    'padding': '0 20px', 'height': '60px',
-    'flexShrink': 0, 'display': 'flex', 'justifyContent': 'space-between',
-    'alignItems': 'center', 'color': 'white'
-}
-
-content_area_style = {
-    'flex': 1, 
-    'padding': '20px', # Reduced padding for mobile
-    'backgroundColor': '#ffffff'
-}
-
-card_style = {
-    'backgroundColor': 'white', 'borderRadius': '12px', 'padding': '20px', 
-    'border': '1px solid #f1f5f9', 'boxShadow': '0 4px 15px rgba(0, 0, 0, 0.03)', 
-    'textAlign': 'center', 
-    'minHeight': '120px', 
-    'display': 'flex', 'flexDirection': 'column', 'justifyContent': 'center',
-    'flex': '1 1 300px' # [Mobile Fix 3] Allow cards to stack
-}
-
+# --- Global Styles ---
+app_wrapper_style = {'position': 'fixed', 'top': 0, 'left': 0, 'right': 0, 'bottom': 0, 'backgroundColor': '#eaeff2', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'fontFamily': 'Inter, sans-serif'}
+main_box_style = {'width': '1280px', 'maxWidth': '96%', 'height': '92vh', 'backgroundColor': 'white', 'borderRadius': '16px', 'boxShadow': '0 20px 60px rgba(0,0,0,0.08)', 'display': 'flex', 'flexDirection': 'column', 'overflow': 'hidden'}
+header_style = {'backgroundColor': '#4a4e69', 'padding': '0 30px', 'height': '65px', 'flexShrink': 0, 'display': 'flex', 'justifyContent': 'space-between', 'alignItems': 'center', 'color': 'white'}
+content_area_style = {'flex': 1, 'overflowY': 'auto', 'padding': '40px', 'backgroundColor': '#ffffff'}
+card_style = {'backgroundColor': 'white', 'borderRadius': '12px', 'padding': '25px', 'border': '1px solid #f1f5f9', 'boxShadow': '0 4px 15px rgba(0, 0, 0, 0.03)', 'textAlign': 'center', 'height': 'auto', 'minHeight': '140px', 'display': 'flex', 'flexDirection': 'column', 'justifyContent': 'center', 'transition': 'transform 0.2s'}
 primary_btn_style = {'width': '100%', 'padding': '16px', 'backgroundColor': '#4a4e69', 'color': 'white', 'fontSize': '16px', 'marginTop': '0', 'boxShadow': '0 4px 12px rgba(74, 78, 105, 0.3)', 'border': 'none', 'borderRadius': '8px', 'cursor': 'pointer', 'fontWeight': '600'}
-tab_selected_style = {'borderTop': '3px solid #4a4e69', 'color': '#4a4e69', 'fontWeight': 'bold', 'backgroundColor': '#f8f9fa', 'padding': '12px'}
-tab_style = {'padding': '12px', 'color': '#888', 'backgroundColor': 'white', 'borderBottom': '1px solid #dee2e6'}
-
-# Table Styles
-table_container_style = {'borderRadius': '8px', 'overflow': 'hidden', 'border': '1px solid #e9ecef', 'marginBottom': '10px', 'overflowX': 'auto', 'maxWidth': '100%'}
-table_header_style = {'backgroundColor': '#f8f9fa', 'color': '#495057', 'fontWeight': '600', 'textAlign': 'left', 'padding': '12px 15px', 'borderBottom': '2px solid #dee2e6', 'whiteSpace': 'nowrap'}
-table_cell_style = {'padding': '12px 15px', 'border': 'none', 'borderBottom': '1px solid #f1f3f5', 'fontSize': '14px', 'fontFamily': 'Inter, sans-serif', 'textAlign': 'left', 'color': '#333', 'minWidth': '80px'}
+tab_selected_style = {'borderTop': '3px solid #4a4e69', 'color': '#4a4e69', 'fontWeight': 'bold', 'backgroundColor': '#f8f9fa', 'padding': '14px'}
+tab_style = {'padding': '14px', 'color': '#888', 'backgroundColor': 'white', 'borderBottom': '1px solid #dee2e6'}
+# Table Styles for other modules
+table_container_style = {'borderRadius': '8px', 'overflow': 'hidden', 'border': '1px solid #e9ecef', 'marginBottom': '10px'}
+table_header_style = {'backgroundColor': '#f8f9fa', 'color': '#495057', 'fontWeight': '600', 'textAlign': 'left', 'padding': '12px 15px', 'borderBottom': '2px solid #dee2e6'}
+table_cell_style = {'padding': '12px 15px', 'border': 'none', 'borderBottom': '1px solid #f1f3f5', 'fontSize': '14px', 'fontFamily': 'Inter, sans-serif', 'textAlign': 'left', 'color': '#333'}
 fixed_css = [{'selector': '.dash-cell', 'rule': 'text-align: left !important;'}, {'selector': '.dash-header', 'rule': 'text-align: left !important;'}, {'selector': '.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td.focused', 'rule': 'border: 2px solid #007bff !important; outline: none !important;'}]
 add_btn_style = {'width': '100%', 'padding': '12px', 'border': '2px dashed #dee2e6', 'borderRadius': '8px', 'backgroundColor': 'transparent', 'color': '#007bff', 'fontWeight': '600', 'fontSize': '14px', 'cursor': 'pointer'}
 
 TEMPLATE_GALLERY = [{"id": "cutting", "icon": "✂️", "title": "Cutting Stock", "desc": "Minimize cost or maximize profit."}, {"id": "packing", "icon": "📦", "title": "Bin Packing", "desc": "Load trucks efficiently."}, {"id": "blending", "icon": "🧪", "title": "Blending", "desc": "Optimize mixture recipes."}, {"id": "prod_mix", "icon": "🏭", "title": "Production Mix", "desc": "Maximize profit."}, {"id": "schedule", "icon": "📅", "title": "Scheduling", "desc": "Workforce rostering."}, {"id": "transport", "icon": "🚚", "title": "Transportation", "desc": "Logistics cost min."}, {"id": "inventory", "icon": "📦", "title": "Inventory Opt", "desc": "Prevent stockouts & Reduce costs."}, {"id": "investment", "icon": "💰", "title": "Investment", "desc": "Maximize ROI within budget."}]
 
-# --- Other Templates (Wrapper added for mobile scroll) ---
-def scroll_wrapper(content):
-    return html.Div(content, style={'maxWidth': '100%', 'overflowX': 'auto'})
-
-ui_packing = html.Div([html.H4("📦 Bin Packing"), scroll_wrapper(dash_table.DataTable(id='pack-table', columns=[{'name':'Item','id':'Item'},{'name':'Weight','id':'Weight'},{'name':'Value','id':'Value'}], data=[{'Item': 'Box1', 'Weight': 30, 'Value': 50}], editable=True, row_deletable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style)), html.Button("Add", id='btn-add-pack', style=add_btn_style)])
-ui_blending = html.Div([html.H4("🧪 Blending"), scroll_wrapper(dash_table.DataTable(id='blend-table', columns=[{'name':'Ingr','id':'Ingr'},{'name':'Cost','id':'Cost'},{'name':'NutA','id':'NutA'},{'name':'NutB','id':'NutB'}], data=[{'Ingr': 'A', 'Cost': 10, 'NutA': 1, 'NutB': 2}], editable=True, row_deletable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style)), html.Button("Add", id='btn-add-blend', style=add_btn_style)])
-ui_prod_mix = html.Div([html.H4("🏭 Production Mix"), scroll_wrapper(dash_table.DataTable(id='pm-products-table', columns=[{'name':'Product','id':'Product'},{'name':'Profit','id':'Profit'}], data=[{'Product': 'P1', 'Profit': 100}], editable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style)), scroll_wrapper(dash_table.DataTable(id='pm-resource-matrix', columns=[{'name':'Resource','id':'resource'}, {'name': 'Availability', 'id': 'avail'}], data=[{'resource': 'Labor', 'avail': 100}], editable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style)), html.Button("Add Prod", id='pm-add-prod-btn', style=add_btn_style), html.Button("Add Res", id='pm-add-res-btn', style=add_btn_style)])
-ui_schedule = html.Div([html.H4("📅 Scheduling"), scroll_wrapper(dash_table.DataTable(id='sched-matrix', columns=[{'name':'Staff','id':'staff'}], data=[{'staff': 'Staff1'}], editable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style)), html.Button("Add", id='btn-add-staff', style=add_btn_style)])
-ui_transport = html.Div([html.H4("🚚 Transportation"), scroll_wrapper(dash_table.DataTable(id='trans-supply', columns=[{'name':'Src','id':'Src'}, {'name': 'Cap', 'id': 'Cap'}], data=[{'Src': 'F1', 'Cap': 100}], editable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style)), scroll_wrapper(dash_table.DataTable(id='trans-demand', columns=[{'name':'Dst','id':'Dst'}, {'name': 'Dem', 'id': 'Dem'}], data=[{'Dst': 'S1', 'Dem': 50}], editable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style)), scroll_wrapper(dash_table.DataTable(id='trans-cost-matrix', columns=[{'name':'Label','id':'label'}], data=[], editable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style)), html.Button("Add Src", id='btn-add-source', style=add_btn_style), html.Button("Add Dst", id='btn-add-dest', style=add_btn_style)])
-ui_inventory = html.Div([html.H4("📦 Inventory"), scroll_wrapper(dash_table.DataTable(id='inv-table', columns=[{'name':'Item','id':'Item'}, {'name': 'Demand', 'id': 'Demand'}, {'name': 'Cost', 'id': 'Cost'}], data=[], editable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style)), html.Button("Add", id='btn-add-inv', style=add_btn_style)])
-ui_investment = html.Div([html.H4("💰 Investment"), scroll_wrapper(dash_table.DataTable(id='invest-table', columns=[{'name':'Project','id':'Project'}, {'name': 'Cost', 'id': 'Cost'}, {'name': 'Return', 'id': 'Return'}], data=[], editable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style)), html.Button("Add", id='btn-add-invest', style=add_btn_style)])
+# --- Other Templates (Simplifed for now) ---
+# (나중에 packing_logic.py 등으로 분리 가능)
+ui_packing = html.Div([html.H4("📦 Bin Packing"), dash_table.DataTable(id='pack-table', columns=[{'name':'Item','id':'Item'},{'name':'Weight','id':'Weight'},{'name':'Value','id':'Value'}], data=[{'Item': 'Box1', 'Weight': 30, 'Value': 50}], editable=True, row_deletable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style), html.Button("Add", id='btn-add-pack', style=add_btn_style)])
+ui_blending = html.Div([html.H4("🧪 Blending"), dash_table.DataTable(id='blend-table', columns=[{'name':'Ingr','id':'Ingr'},{'name':'Cost','id':'Cost'},{'name':'NutA','id':'NutA'},{'name':'NutB','id':'NutB'}], data=[{'Ingr': 'A', 'Cost': 10, 'NutA': 1, 'NutB': 2}], editable=True, row_deletable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style), html.Button("Add", id='btn-add-blend', style=add_btn_style)])
+ui_prod_mix = html.Div([html.H4("🏭 Production Mix"), dash_table.DataTable(id='pm-products-table', columns=[{'name':'Product','id':'Product'},{'name':'Profit','id':'Profit'}], data=[{'Product': 'P1', 'Profit': 100}], editable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style), dash_table.DataTable(id='pm-resource-matrix', columns=[{'name':'Resource','id':'resource'}, {'name': 'Availability', 'id': 'avail'}], data=[{'resource': 'Labor', 'avail': 100}], editable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style), html.Button("Add Prod", id='pm-add-prod-btn', style=add_btn_style), html.Button("Add Res", id='pm-add-res-btn', style=add_btn_style)])
+ui_schedule = html.Div([html.H4("📅 Scheduling"), dash_table.DataTable(id='sched-matrix', columns=[{'name':'Staff','id':'staff'}], data=[{'staff': 'Staff1'}], editable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style), html.Button("Add", id='btn-add-staff', style=add_btn_style)])
+ui_transport = html.Div([html.H4("🚚 Transportation"), dash_table.DataTable(id='trans-supply', columns=[{'name':'Src','id':'Src'}, {'name': 'Cap', 'id': 'Cap'}], data=[{'Src': 'F1', 'Cap': 100}], editable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style), dash_table.DataTable(id='trans-demand', columns=[{'name':'Dst','id':'Dst'}, {'name': 'Dem', 'id': 'Dem'}], data=[{'Dst': 'S1', 'Dem': 50}], editable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style), dash_table.DataTable(id='trans-cost-matrix', columns=[{'name':'Label','id':'label'}], data=[], editable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style), html.Button("Add Src", id='btn-add-source', style=add_btn_style), html.Button("Add Dst", id='btn-add-dest', style=add_btn_style)])
+ui_inventory = html.Div([html.H4("📦 Inventory"), dash_table.DataTable(id='inv-table', columns=[{'name':'Item','id':'Item'}, {'name': 'Demand', 'id': 'Demand'}, {'name': 'Cost', 'id': 'Cost'}], data=[], editable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style), html.Button("Add", id='btn-add-inv', style=add_btn_style)])
+ui_investment = html.Div([html.H4("💰 Investment"), dash_table.DataTable(id='invest-table', columns=[{'name':'Project','id':'Project'}, {'name': 'Cost', 'id': 'Cost'}, {'name': 'Return', 'id': 'Return'}], data=[], editable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style), html.Button("Add", id='btn-add-invest', style=add_btn_style)])
 
 # --- 3. Modeling & Dashboard ---
 modeling_section = html.Div([
@@ -101,30 +59,27 @@ modeling_section = html.Div([
 dashboard_section = html.Div([
     html.H4("📊 Optimization Results", style={'color': '#4a4e69', 'fontWeight': '700', 'marginBottom': '25px'}),
     
-    # [Mobile Fix 4] Use Flex with Wrap instead of Grid for stacking
+    # [FIX] Overlap Fix: Use Flex Column with Gap
     html.Div([
         html.Div([ # Cards
             html.Div([html.H6("Solver Status", style={'margin':0, 'color':'#888', 'fontWeight':'600', 'fontSize': '13px', 'textTransform': 'uppercase'}), html.H3(id='res-status', children="-", style={'margin':'10px 0', 'fontWeight':'800', 'fontSize': '28px', 'color': '#333'})], style=card_style), 
             html.Div([html.H6(id='res-obj-label', children="Total Cost", style={'margin':0, 'color':'#888', 'fontWeight':'600', 'fontSize': '13px', 'textTransform': 'uppercase'}), html.H3(id='res-objective', children="-", style={'margin':'10px 0', 'fontWeight':'800', 'color':'#007bff', 'fontSize': '28px'})], style=card_style),
-        ], style={'display': 'flex', 'gap': '20px', 'flexWrap': 'wrap', 'width': '100%'}),
+        ], style={'display': 'grid', 'gridTemplateColumns': '1fr 1fr', 'gap': '20px'}),
         
-        # Insight
+        # Insight (Sky Blue)
         html.Div(id='res-insight-card', style={'backgroundColor': '#e3f2fd', 'padding': '25px', 'borderRadius': '12px', 'display': 'none'}, children=[html.H5("💡 Insight", style={'color': '#0d47a1', 'fontWeight': '700', 'marginTop': 0, 'marginBottom': '10px'}), dcc.Markdown(id='res-insight-text', style={'fontSize': '15px', 'lineHeight': '1.6', 'color': '#0d47a1', 'margin': 0})]),
         
-        # Error
+        # Error (Hidden)
         html.Div(id='solver-error-msg', style={'display': 'none'}),
         
-        html.Div(id='result-dashboard', style={'display': 'none', 'width': '100%'}, children=[
-            # [Mobile Fix 5] Result Chart Container
+        html.Div(id='result-dashboard', style={'display': 'none'}, children=[
             html.Div([html.H5("✂️ Visual Cutting Plan", style={'color': '#4a4e69', 'fontWeight':'700', 'borderBottom': '1px solid #eee', 'paddingBottom': '15px', 'marginTop': 0}), dcc.Graph(id='res-chart', style={'height': '350px'})], style={'backgroundColor': 'white', 'padding': '30px', 'borderRadius': '16px', 'border': '1px solid #f1f5f9', 'boxShadow': '0 4px 6px -1px rgba(0, 0, 0, 0.05)', 'marginBottom': '30px'}),
-            
-            # [Mobile Fix 6] Tables Stacking
             html.Div([
-                html.Div([html.H6("📋 Detailed Job Instructions", style={'fontWeight': '700', 'marginBottom': '15px', 'color': '#334155'}), dash_table.DataTable(id='res-table', columns=[{'name': 'Stock ID', 'id': 'Stock'}, {'name': 'Details', 'id': 'Plan'}, {'name': 'Usage/Value', 'id': 'Usage'}], data=[], page_size=10, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style)], style={'flex': '1 1 300px', 'marginBottom': '20px'}),
-                html.Div(id='constraints-wrapper', children=[html.H6("🚧 Constraints & Bottlenecks", style={'fontWeight': '700', 'marginBottom': '15px', 'color': '#334155'}), dash_table.DataTable(id='res-constraints-table', columns=[{'name': 'Constraint', 'id': 'Constraint'}, {'name': 'Shadow Price', 'id': 'Shadow Price'}, {'name': 'Slack', 'id': 'Slack'}], data=[], page_size=10, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style)], style={'flex': '1 1 300px'})
+                html.Div([html.H6("📋 Detailed Job Instructions", style={'fontWeight': '700', 'marginBottom': '15px', 'color': '#334155'}), dash_table.DataTable(id='res-table', columns=[{'name': 'Stock ID', 'id': 'Stock'}, {'name': 'Details', 'id': 'Plan'}, {'name': 'Usage/Value', 'id': 'Usage'}], data=[], page_size=10, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style)], style={'flex': 1}),
+                html.Div(id='constraints-wrapper', children=[html.H6("🚧 Constraints & Bottlenecks", style={'fontWeight': '700', 'marginBottom': '15px', 'color': '#334155'}), dash_table.DataTable(id='res-constraints-table', columns=[{'name': 'Constraint', 'id': 'Constraint'}, {'name': 'Shadow Price', 'id': 'Shadow Price'}, {'name': 'Slack', 'id': 'Slack'}], data=[], page_size=10, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style)], style={'flex': 1})
             ], style={'display': 'flex', 'gap': '30px', 'flexWrap': 'wrap'})
         ])
-    ], style={'display': 'flex', 'flexDirection': 'column', 'gap': '30px'}) 
+    ], style={'display': 'flex', 'flexDirection': 'column', 'gap': '30px'}) # [KEY] Forces spacing
 ])
 
 def render_landing_page():
@@ -138,8 +93,8 @@ def render_landing_page():
                 html.P(t['desc'], style={'fontSize': '13px', 'color': '#888', 'lineHeight': '1.5', 'marginBottom': '20px', 'flex': 1}),
                 html.Button("Select", id={'type': 'tmpl-btn', 'index': t['id']}, style={'width': '100%', 'padding': '10px', 'borderRadius': '6px', 'border': 'none', 'backgroundColor': '#f1f3f5', 'color': '#4a4e69', 'fontWeight': '600', 'cursor': 'pointer', 'transition': '0.2s'})
             ], style=card_style) for t in TEMPLATE_GALLERY
-        ], style={'display': 'grid', 'gridTemplateColumns': 'repeat(auto-fit, minmax(150px, 1fr))', 'gap': '20px', 'maxWidth': '1200px', 'margin': '0 auto'})
-    ], style={'padding': '20px'})
+        ], style={'display': 'grid', 'gridTemplateColumns': 'repeat(4, 1fr)', 'gap': '25px', 'maxWidth': '1200px', 'margin': '0 auto'})
+    ], style={'padding': '40px'})
 
 def render_workspace(mode):
     mode_info = next((item for item in TEMPLATE_GALLERY if item["id"] == mode), None)
@@ -158,9 +113,9 @@ def render_workspace(mode):
         dcc.Store(id='all-data-store', data={'variables': [], 'parameters': []}),
         html.Div([dcc.Link("← Back", href='/home', style={'textDecoration':'none','color':'#4a4e69','fontWeight':'bold','marginRight':'15px'}), html.Span(f"{title}", style={'backgroundColor':'#e2e6ea','padding':'6px 18px','borderRadius':'30px','fontSize':'14px','fontWeight':'bold', 'color': '#4a4e69'})], style={'marginBottom':'20px','display':'flex','alignItems':'center'}),
         dcc.Tabs(id='main-tabs', value='tab-1', children=[
-            dcc.Tab(label='1. Input', value='tab-1', children=[html.Div(ui_stack, style={'padding':'10px 0'})], selected_style=tab_selected_style, style=tab_style),
-            dcc.Tab(label='2. Solver', value='tab-2', children=[html.Div(modeling_section, style={'padding':'10px 0'})], selected_style=tab_selected_style, style=tab_style),
-            dcc.Tab(label='3. Result', value='tab-3', children=[html.Div(dashboard_section, style={'padding':'10px 0'})], selected_style=tab_selected_style, style=tab_style)
+            dcc.Tab(label='1. Input', value='tab-1', children=[html.Div(ui_stack, style={'padding':'30px'})], selected_style=tab_selected_style, style=tab_style),
+            dcc.Tab(label='2. Solver', value='tab-2', children=[html.Div(modeling_section, style={'padding':'30px'})], selected_style=tab_selected_style, style=tab_style),
+            dcc.Tab(label='3. Result', value='tab-3', children=[html.Div(dashboard_section, style={'padding':'30px'})], selected_style=tab_selected_style, style=tab_style)
         ])
     ])
 
