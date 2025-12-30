@@ -5,14 +5,16 @@ import pandas as pd
 import plotly.express as px
 import solver_engine
 import bridge_logic
-import cutting_stock
+
+# [CHANGED] Import 'analytics' instead of 'view'
+import modules.cutting.analytics as cut_analytics
+from common.styles import *
 
 # --- Server Start ---
 print("\n" + "="*50)
-print("🚀 OPTIMYSTIC: MODULAR ARCHITECTURE")
-print("   - UI Fix: No Overlap, No Ghost Bars")
-print("   - Module: 'cutting_stock.py' integrated")
-print("   - Layout: 4x2 Grid Home")
+print("🚀 OPTIMYSTIC: MODULAR ARCHITECTURE V2")
+print("   - Module: 'modules.cutting.analytics' integrated")
+print("   - Styles: 'common.styles' integrated")
 print("="*50 + "\n")
 
 external_stylesheets = ['https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap']
@@ -20,66 +22,57 @@ external_stylesheets = ['https://fonts.googleapis.com/css2?family=Inter:wght@400
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets, title='OptiMystic Solver', suppress_callback_exceptions=True)
 server = app.server
 
-# --- Global Styles ---
+# --- Global Layout Styles ---
 app_wrapper_style = {'position': 'fixed', 'top': 0, 'left': 0, 'right': 0, 'bottom': 0, 'backgroundColor': '#eaeff2', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'fontFamily': 'Inter, sans-serif'}
 main_box_style = {'width': '1280px', 'maxWidth': '96%', 'height': '92vh', 'backgroundColor': 'white', 'borderRadius': '16px', 'boxShadow': '0 20px 60px rgba(0,0,0,0.08)', 'display': 'flex', 'flexDirection': 'column', 'overflow': 'hidden'}
 header_style = {'backgroundColor': '#4a4e69', 'padding': '0 30px', 'height': '65px', 'flexShrink': 0, 'display': 'flex', 'justifyContent': 'space-between', 'alignItems': 'center', 'color': 'white'}
 content_area_style = {'flex': 1, 'overflowY': 'auto', 'padding': '40px', 'backgroundColor': '#ffffff'}
 card_style = {'backgroundColor': 'white', 'borderRadius': '12px', 'padding': '25px', 'border': '1px solid #f1f5f9', 'boxShadow': '0 4px 15px rgba(0, 0, 0, 0.03)', 'textAlign': 'center', 'height': 'auto', 'minHeight': '140px', 'display': 'flex', 'flexDirection': 'column', 'justifyContent': 'center', 'transition': 'transform 0.2s'}
-primary_btn_style = {'width': '100%', 'padding': '16px', 'backgroundColor': '#4a4e69', 'color': 'white', 'fontSize': '16px', 'marginTop': '0', 'boxShadow': '0 4px 12px rgba(74, 78, 105, 0.3)', 'border': 'none', 'borderRadius': '8px', 'cursor': 'pointer', 'fontWeight': '600'}
 tab_selected_style = {'borderTop': '3px solid #4a4e69', 'color': '#4a4e69', 'fontWeight': 'bold', 'backgroundColor': '#f8f9fa', 'padding': '14px'}
 tab_style = {'padding': '14px', 'color': '#888', 'backgroundColor': 'white', 'borderBottom': '1px solid #dee2e6'}
-# Table Styles for other modules
-table_container_style = {'borderRadius': '8px', 'overflow': 'hidden', 'border': '1px solid #e9ecef', 'marginBottom': '10px'}
-table_header_style = {'backgroundColor': '#f8f9fa', 'color': '#495057', 'fontWeight': '600', 'textAlign': 'left', 'padding': '12px 15px', 'borderBottom': '2px solid #dee2e6'}
-table_cell_style = {'padding': '12px 15px', 'border': 'none', 'borderBottom': '1px solid #f1f3f5', 'fontSize': '14px', 'fontFamily': 'Inter, sans-serif', 'textAlign': 'left', 'color': '#333'}
-fixed_css = [{'selector': '.dash-cell', 'rule': 'text-align: left !important;'}, {'selector': '.dash-header', 'rule': 'text-align: left !important;'}, {'selector': '.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td.focused', 'rule': 'border: 2px solid #007bff !important; outline: none !important;'}]
-add_btn_style = {'width': '100%', 'padding': '12px', 'border': '2px dashed #dee2e6', 'borderRadius': '8px', 'backgroundColor': 'transparent', 'color': '#007bff', 'fontWeight': '600', 'fontSize': '14px', 'cursor': 'pointer'}
 
 TEMPLATE_GALLERY = [{"id": "cutting", "icon": "✂️", "title": "Cutting Stock", "desc": "Minimize cost or maximize profit."}, {"id": "packing", "icon": "📦", "title": "Bin Packing", "desc": "Load trucks efficiently."}, {"id": "blending", "icon": "🧪", "title": "Blending", "desc": "Optimize mixture recipes."}, {"id": "prod_mix", "icon": "🏭", "title": "Production Mix", "desc": "Maximize profit."}, {"id": "schedule", "icon": "📅", "title": "Scheduling", "desc": "Workforce rostering."}, {"id": "transport", "icon": "🚚", "title": "Transportation", "desc": "Logistics cost min."}, {"id": "inventory", "icon": "📦", "title": "Inventory Opt", "desc": "Prevent stockouts & Reduce costs."}, {"id": "investment", "icon": "💰", "title": "Investment", "desc": "Maximize ROI within budget."}]
 
-# --- Other Templates (Simplifed for now) ---
-# (나중에 packing_logic.py 등으로 분리 가능)
-ui_packing = html.Div([html.H4("📦 Bin Packing"), dash_table.DataTable(id='pack-table', columns=[{'name':'Item','id':'Item'},{'name':'Weight','id':'Weight'},{'name':'Value','id':'Value'}], data=[{'Item': 'Box1', 'Weight': 30, 'Value': 50}], editable=True, row_deletable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style), html.Button("Add", id='btn-add-pack', style=add_btn_style)])
-ui_blending = html.Div([html.H4("🧪 Blending"), dash_table.DataTable(id='blend-table', columns=[{'name':'Ingr','id':'Ingr'},{'name':'Cost','id':'Cost'},{'name':'NutA','id':'NutA'},{'name':'NutB','id':'NutB'}], data=[{'Ingr': 'A', 'Cost': 10, 'NutA': 1, 'NutB': 2}], editable=True, row_deletable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style), html.Button("Add", id='btn-add-blend', style=add_btn_style)])
-ui_prod_mix = html.Div([html.H4("🏭 Production Mix"), dash_table.DataTable(id='pm-products-table', columns=[{'name':'Product','id':'Product'},{'name':'Profit','id':'Profit'}], data=[{'Product': 'P1', 'Profit': 100}], editable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style), dash_table.DataTable(id='pm-resource-matrix', columns=[{'name':'Resource','id':'resource'}, {'name': 'Availability', 'id': 'avail'}], data=[{'resource': 'Labor', 'avail': 100}], editable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style), html.Button("Add Prod", id='pm-add-prod-btn', style=add_btn_style), html.Button("Add Res", id='pm-add-res-btn', style=add_btn_style)])
-ui_schedule = html.Div([html.H4("📅 Scheduling"), dash_table.DataTable(id='sched-matrix', columns=[{'name':'Staff','id':'staff'}], data=[{'staff': 'Staff1'}], editable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style), html.Button("Add", id='btn-add-staff', style=add_btn_style)])
-ui_transport = html.Div([html.H4("🚚 Transportation"), dash_table.DataTable(id='trans-supply', columns=[{'name':'Src','id':'Src'}, {'name': 'Cap', 'id': 'Cap'}], data=[{'Src': 'F1', 'Cap': 100}], editable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style), dash_table.DataTable(id='trans-demand', columns=[{'name':'Dst','id':'Dst'}, {'name': 'Dem', 'id': 'Dem'}], data=[{'Dst': 'S1', 'Dem': 50}], editable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style), dash_table.DataTable(id='trans-cost-matrix', columns=[{'name':'Label','id':'label'}], data=[], editable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style), html.Button("Add Src", id='btn-add-source', style=add_btn_style), html.Button("Add Dst", id='btn-add-dest', style=add_btn_style)])
-ui_inventory = html.Div([html.H4("📦 Inventory"), dash_table.DataTable(id='inv-table', columns=[{'name':'Item','id':'Item'}, {'name': 'Demand', 'id': 'Demand'}, {'name': 'Cost', 'id': 'Cost'}], data=[], editable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style), html.Button("Add", id='btn-add-inv', style=add_btn_style)])
-ui_investment = html.Div([html.H4("💰 Investment"), dash_table.DataTable(id='invest-table', columns=[{'name':'Project','id':'Project'}, {'name': 'Cost', 'id': 'Cost'}, {'name': 'Return', 'id': 'Return'}], data=[], editable=True, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style), html.Button("Add", id='btn-add-invest', style=add_btn_style)])
+# --- Simple Templates (Legacy) ---
+ui_packing = html.Div([html.H4("📦 Bin Packing"), dash_table.DataTable(id='pack-table', columns=[{'name':'Item','id':'Item'},{'name':'Weight','id':'Weight'},{'name':'Value','id':'Value'}], data=[{'Item': 'Box1', 'Weight': 30, 'Value': 50}], editable=True, row_deletable=True, style_table=TABLE_CONTAINER_STYLE, css=FIXED_CSS, style_header=TABLE_HEADER_STYLE, style_cell=TABLE_CELL_STYLE), html.Button("Add", id='btn-add-pack', style=ADD_BTN_STYLE)])
+ui_blending = html.Div([html.H4("🧪 Blending"), dash_table.DataTable(id='blend-table', columns=[{'name':'Ingr','id':'Ingr'},{'name':'Cost','id':'Cost'},{'name':'NutA','id':'NutA'},{'name':'NutB','id':'NutB'}], data=[{'Ingr': 'A', 'Cost': 10, 'NutA': 1, 'NutB': 2}], editable=True, row_deletable=True, style_table=TABLE_CONTAINER_STYLE, css=FIXED_CSS, style_header=TABLE_HEADER_STYLE, style_cell=TABLE_CELL_STYLE), html.Button("Add", id='btn-add-blend', style=ADD_BTN_STYLE)])
+ui_prod_mix = html.Div([html.H4("🏭 Production Mix"), dash_table.DataTable(id='pm-products-table', columns=[{'name':'Product','id':'Product'},{'name':'Profit','id':'Profit'}], data=[{'Product': 'P1', 'Profit': 100}], editable=True, style_table=TABLE_CONTAINER_STYLE, css=FIXED_CSS, style_header=TABLE_HEADER_STYLE, style_cell=TABLE_CELL_STYLE), dash_table.DataTable(id='pm-resource-matrix', columns=[{'name':'Resource','id':'resource'}, {'name': 'Availability', 'id': 'avail'}], data=[{'resource': 'Labor', 'avail': 100}], editable=True, style_table=TABLE_CONTAINER_STYLE, css=FIXED_CSS, style_header=TABLE_HEADER_STYLE, style_cell=TABLE_CELL_STYLE), html.Button("Add Prod", id='pm-add-prod-btn', style=ADD_BTN_STYLE), html.Button("Add Res", id='pm-add-res-btn', style=ADD_BTN_STYLE)])
+ui_schedule = html.Div([html.H4("📅 Scheduling"), dash_table.DataTable(id='sched-matrix', columns=[{'name':'Staff','id':'staff'}], data=[{'staff': 'Staff1'}], editable=True, style_table=TABLE_CONTAINER_STYLE, css=FIXED_CSS, style_header=TABLE_HEADER_STYLE, style_cell=TABLE_CELL_STYLE), html.Button("Add", id='btn-add-staff', style=ADD_BTN_STYLE)])
+ui_transport = html.Div([html.H4("🚚 Transportation"), dash_table.DataTable(id='trans-supply', columns=[{'name':'Src','id':'Src'}, {'name': 'Cap', 'id': 'Cap'}], data=[{'Src': 'F1', 'Cap': 100}], editable=True, style_table=TABLE_CONTAINER_STYLE, css=FIXED_CSS, style_header=TABLE_HEADER_STYLE, style_cell=TABLE_CELL_STYLE), dash_table.DataTable(id='trans-demand', columns=[{'name':'Dst','id':'Dst'}, {'name': 'Dem', 'id': 'Dem'}], data=[{'Dst': 'S1', 'Dem': 50}], editable=True, style_table=TABLE_CONTAINER_STYLE, css=FIXED_CSS, style_header=TABLE_HEADER_STYLE, style_cell=TABLE_CELL_STYLE), dash_table.DataTable(id='trans-cost-matrix', columns=[{'name':'Label','id':'label'}], data=[], editable=True, style_table=TABLE_CONTAINER_STYLE, css=FIXED_CSS, style_header=TABLE_HEADER_STYLE, style_cell=TABLE_CELL_STYLE), html.Button("Add Src", id='btn-add-source', style=ADD_BTN_STYLE), html.Button("Add Dst", id='btn-add-dest', style=ADD_BTN_STYLE)])
+ui_inventory = html.Div([html.H4("📦 Inventory"), dash_table.DataTable(id='inv-table', columns=[{'name':'Item','id':'Item'}, {'name': 'Demand', 'id': 'Demand'}, {'name': 'Cost', 'id': 'Cost'}], data=[], editable=True, style_table=TABLE_CONTAINER_STYLE, css=FIXED_CSS, style_header=TABLE_HEADER_STYLE, style_cell=TABLE_CELL_STYLE), html.Button("Add", id='btn-add-inv', style=ADD_BTN_STYLE)])
+ui_investment = html.Div([html.H4("💰 Investment"), dash_table.DataTable(id='invest-table', columns=[{'name':'Project','id':'Project'}, {'name': 'Cost', 'id': 'Cost'}, {'name': 'Return', 'id': 'Return'}], data=[], editable=True, style_table=TABLE_CONTAINER_STYLE, css=FIXED_CSS, style_header=TABLE_HEADER_STYLE, style_cell=TABLE_CELL_STYLE), html.Button("Add", id='btn-add-invest', style=ADD_BTN_STYLE)])
 
 # --- 3. Modeling & Dashboard ---
 modeling_section = html.Div([
     html.Div([html.H4("⚙️ Solver Configuration", style={'color': '#4a4e69', 'fontWeight': '700', 'marginBottom': '8px'}), html.P("Configure how the AI solves your problem.", style={'color': '#888', 'fontSize': '13px'})], style={'marginBottom': '30px'}),
     html.Div([html.Label("Optimization Goal", style={'fontSize': '12px', 'fontWeight': '700', 'textTransform': 'uppercase', 'color': '#888', 'marginBottom': '10px', 'display': 'block', 'letterSpacing': '0.5px'}), dcc.RadioItems(id='solver-sense', options=[{'label': ' Minimize Cost', 'value': 'minimize'}, {'label': ' Maximize Profit', 'value': 'maximize'}], value='minimize', labelStyle={'display': 'block', 'marginBottom': '8px', 'fontWeight': '600', 'color': '#4a4e69', 'cursor': 'pointer'}, inputStyle={'marginRight': '10px'})], style={'backgroundColor': '#f8f9fa', 'padding': '25px', 'borderRadius': '12px', 'marginBottom': '25px', 'border': '1px solid #e9ecef'}),
     html.Details([html.Summary("🔧 Advanced: View/Edit Mathematical Model", style={'cursor': 'pointer', 'fontWeight': '600', 'color': '#007bff', 'fontSize': '14px'}), html.Div([html.Label("Objective Function:", style={'fontWeight': 'bold', 'marginTop': '15px', 'display': 'block', 'fontSize': '13px'}), dcc.Textarea(id='solver-objective', style={'width': '100%', 'height': '80px', 'border': '1px solid #ccc', 'padding': '12px', 'borderRadius': '8px', 'fontFamily': 'monospace', 'backgroundColor': '#fcfcfc', 'marginTop': '5px', 'fontSize': '12px'}), html.Label("Constraints:", style={'fontWeight': 'bold', 'marginTop': '15px', 'display': 'block', 'fontSize': '13px'}), dcc.Textarea(id='solver-constraints', style={'width': '100%', 'height': '150px', 'border': '1px solid #ccc', 'padding': '12px', 'borderRadius': '8px', 'fontFamily': 'monospace', 'backgroundColor': '#fcfcfc', 'marginTop': '5px', 'fontSize': '12px'})], style={'padding': '20px', 'border': '1px solid #eee', 'borderRadius': '12px', 'marginTop': '10px', 'backgroundColor': 'white'})], style={'marginBottom': '30px'}),
-    html.Button("🚀 Run Optimization Engine", id='btn-solve', n_clicks=0, style=primary_btn_style)
+    html.Button("🚀 Run Optimization Engine", id='btn-solve', n_clicks=0, style=PRIMARY_BTN_STYLE)
 ])
 
 dashboard_section = html.Div([
     html.H4("📊 Optimization Results", style={'color': '#4a4e69', 'fontWeight': '700', 'marginBottom': '25px'}),
     
-    # [FIX] Overlap Fix: Use Flex Column with Gap
     html.Div([
         html.Div([ # Cards
             html.Div([html.H6("Solver Status", style={'margin':0, 'color':'#888', 'fontWeight':'600', 'fontSize': '13px', 'textTransform': 'uppercase'}), html.H3(id='res-status', children="-", style={'margin':'10px 0', 'fontWeight':'800', 'fontSize': '28px', 'color': '#333'})], style=card_style), 
             html.Div([html.H6(id='res-obj-label', children="Total Cost", style={'margin':0, 'color':'#888', 'fontWeight':'600', 'fontSize': '13px', 'textTransform': 'uppercase'}), html.H3(id='res-objective', children="-", style={'margin':'10px 0', 'fontWeight':'800', 'color':'#007bff', 'fontSize': '28px'})], style=card_style),
         ], style={'display': 'grid', 'gridTemplateColumns': '1fr 1fr', 'gap': '20px'}),
         
-        # Insight (Sky Blue)
+        # Insight
         html.Div(id='res-insight-card', style={'backgroundColor': '#e3f2fd', 'padding': '25px', 'borderRadius': '12px', 'display': 'none'}, children=[html.H5("💡 Insight", style={'color': '#0d47a1', 'fontWeight': '700', 'marginTop': 0, 'marginBottom': '10px'}), dcc.Markdown(id='res-insight-text', style={'fontSize': '15px', 'lineHeight': '1.6', 'color': '#0d47a1', 'margin': 0})]),
         
-        # Error (Hidden)
+        # Error
         html.Div(id='solver-error-msg', style={'display': 'none'}),
         
         html.Div(id='result-dashboard', style={'display': 'none'}, children=[
             html.Div([html.H5("✂️ Visual Cutting Plan", style={'color': '#4a4e69', 'fontWeight':'700', 'borderBottom': '1px solid #eee', 'paddingBottom': '15px', 'marginTop': 0}), dcc.Graph(id='res-chart', style={'height': '350px'})], style={'backgroundColor': 'white', 'padding': '30px', 'borderRadius': '16px', 'border': '1px solid #f1f5f9', 'boxShadow': '0 4px 6px -1px rgba(0, 0, 0, 0.05)', 'marginBottom': '30px'}),
             html.Div([
-                html.Div([html.H6("📋 Detailed Job Instructions", style={'fontWeight': '700', 'marginBottom': '15px', 'color': '#334155'}), dash_table.DataTable(id='res-table', columns=[{'name': 'Stock ID', 'id': 'Stock'}, {'name': 'Details', 'id': 'Plan'}, {'name': 'Usage/Value', 'id': 'Usage'}], data=[], page_size=10, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style)], style={'flex': 1}),
-                html.Div(id='constraints-wrapper', children=[html.H6("🚧 Constraints & Bottlenecks", style={'fontWeight': '700', 'marginBottom': '15px', 'color': '#334155'}), dash_table.DataTable(id='res-constraints-table', columns=[{'name': 'Constraint', 'id': 'Constraint'}, {'name': 'Shadow Price', 'id': 'Shadow Price'}, {'name': 'Slack', 'id': 'Slack'}], data=[], page_size=10, style_table=table_container_style, css=fixed_css, style_header=table_header_style, style_cell=table_cell_style)], style={'flex': 1})
+                html.Div([html.H6("📋 Detailed Job Instructions", style={'fontWeight': '700', 'marginBottom': '15px', 'color': '#334155'}), dash_table.DataTable(id='res-table', columns=[{'name': 'Stock ID', 'id': 'Stock'}, {'name': 'Details', 'id': 'Plan'}, {'name': 'Usage/Value', 'id': 'Usage'}], data=[], page_size=10, style_table=TABLE_CONTAINER_STYLE, css=FIXED_CSS, style_header=TABLE_HEADER_STYLE, style_cell=TABLE_CELL_STYLE)], style={'flex': 1}),
+                html.Div(id='constraints-wrapper', children=[html.H6("🚧 Constraints & Bottlenecks", style={'fontWeight': '700', 'marginBottom': '15px', 'color': '#334155'}), dash_table.DataTable(id='res-constraints-table', columns=[{'name': 'Constraint', 'id': 'Constraint'}, {'name': 'Shadow Price', 'id': 'Shadow Price'}, {'name': 'Slack', 'id': 'Slack'}], data=[], page_size=10, style_table=TABLE_CONTAINER_STYLE, css=FIXED_CSS, style_header=TABLE_HEADER_STYLE, style_cell=TABLE_CELL_STYLE)], style={'flex': 1})
             ], style={'display': 'flex', 'gap': '30px', 'flexWrap': 'wrap'})
         ])
-    ], style={'display': 'flex', 'flexDirection': 'column', 'gap': '30px'}) # [KEY] Forces spacing
+    ], style={'display': 'flex', 'flexDirection': 'column', 'gap': '30px'})
 ])
 
 def render_landing_page():
@@ -99,12 +92,14 @@ def render_landing_page():
 def render_workspace(mode):
     mode_info = next((item for item in TEMPLATE_GALLERY if item["id"] == mode), None)
     title = mode_info['title'] if mode_info else "OptiMystic"
-    # [KEY] Use imported module for cutting
+    
+    # [CHANGED] Use 'analytics' module functions
     mapping = {
-        'cutting': cutting_stock.render(), # [IMPORTED]
+        'cutting': cut_analytics.render_input(), 
         'packing': ui_packing, 'blending': ui_blending, 'prod_mix': ui_prod_mix, 
         'schedule': ui_schedule, 'transport': ui_transport, 'inventory': ui_inventory, 'investment': ui_investment
     }
+    
     ui_stack = []
     for m_key, component in mapping.items():
         style = {'display': 'block'} if m_key == mode else {'display': 'none'}
@@ -132,7 +127,7 @@ def router(pathname, tmpl_clicks, current_path):
     if mode in valid_ids: return render_workspace(mode), pathname
     return render_landing_page(), "/home"
 
-# [Callbacks remain for simplicity in app.py]
+# --- Callbacks ---
 @app.callback(Output('cut-stock-table', 'data'), Input('btn-add-stock', 'n_clicks'), State('cut-stock-table', 'data'), prevent_initial_call=True)
 def add_stock_row(n, data): return (data or []) + [{'Name': f'Stock_{len(data or [])+1}', 'Length': 5000, 'Cost': 50, 'Limit': 100}]
 @app.callback(Output('cut-table', 'data'), Input('btn-add-cut', 'n_clicks'), State('cut-table', 'data'), prevent_initial_call=True)
@@ -167,13 +162,12 @@ def sync_bridge_data(cut_data, stock_data, pack_data, blend_data, pm_prod, pm_re
     params = {}
     param_list = []
     
-    # [IMPORTED] Use cutting_stock logic
+    # [CHANGED] Use 'analytics' module logic
     if mode == 'cutting':
-        # Pass all table data, module extracts what it needs
         data_inputs = {'cut_table': cut_data, 'cut_stock_table': stock_data}
-        params, param_list = cutting_stock.get_params(data_inputs, sense)
+        params, param_list = cut_analytics.get_params(data_inputs, sense)
     
-    # ... (Other logic remains same as previous full version) ...
+    # ... (Other templates) ...
     elif mode == 'packing':
         if not pack_data: pack_data = []
         items = [r['Item'] for r in pack_data if r.get('Item')]
@@ -265,53 +259,10 @@ def run_solver(n, sense, obj, const, store, current_tab, pathname):
     obj_label = "Total Cost ($)" if sense == 'minimize' else "Total Profit ($)"
     constraints_display = {'flex': 1} 
 
+    # [CHANGED] Use 'analytics' module result processing
     if mode == 'cutting':
-        constraints_display = {'display': 'none'} 
-        params = {p['name']: p['data'] for p in store['parameters']}
-        items_list = params.get('Items', [])
-        lens_list = params.get('ItemLens', [])
-        stock_info_list = params.get('Stocks', [])
-        stock_map = {i: s for i, s in enumerate(stock_info_list)}
-        raw_bins = {} 
-        for v in res['variables']:
-            if v['Value'] <= 1e-5: continue
-            name = v['Variable']
-            if "A_IT" in name:
-                parts = name.split('_')
-                i_idx = int(parts[1].replace('IT',''))
-                s_idx = int(parts[2].replace('ST',''))
-                b_idx = int(parts[3].replace('B',''))
-                key = (s_idx, b_idx)
-                if key not in raw_bins: raw_bins[key] = {'stock_idx': s_idx, 'items': [], 'used_len': 0}
-                count = int(v['Value'])
-                item_name = items_list[i_idx]
-                length = lens_list[i_idx]
-                raw_bins[key]['items'].append({'name': item_name, 'count': count, 'len': length})
-                raw_bins[key]['used_len'] += count * length
-        sorted_keys = sorted(raw_bins.keys())
-        chart_data = []
-        global_counter = 1
-        for key in sorted_keys:
-            b_data = raw_bins[key]
-            if b_data['used_len'] == 0: continue
-            s_idx = b_data['stock_idx']
-            stock_def = stock_map[s_idx]
-            display_id = f"Stock #{global_counter}"
-            cut_str = ", ".join([f"{i['name']} ({i['count']})" for i in b_data['items']])
-            usage_pct = (b_data['used_len'] / stock_def['Length']) * 100
-            table_rows.append({'Stock': display_id, 'Plan': f"{stock_def['Name']}: {cut_str}", 'Usage': f"{usage_pct:.1f}%"})
-            current_pos = 0
-            for item in b_data['items']:
-                for _ in range(item['count']):
-                    chart_data.append({'Stock': display_id, 'Item': item['name'], 'Length': item['len'], 'Type': 'Product'})
-                    current_pos += item['len']
-            if current_pos < stock_def['Length']:
-                chart_data.append({'Stock': display_id, 'Item': '(Waste)', 'Length': stock_def['Length'] - current_pos, 'Type': 'Waste'})
-            global_counter += 1
-        if chart_data:
-            df = pd.DataFrame(chart_data)
-            fig = px.bar(df, x='Stock', y='Length', color='Item', title='Visual Cutting Plan', labels={'Length':'Length (mm)'}, template='plotly_white', color_discrete_map={'(Waste)':'#e0e0e0'})
-            fig.update_layout(margin=dict(l=40, r=40, t=40, b=40), height=350, barmode='stack')
+        constraints_display = {'display': 'none'}
+        fig, table_rows = cut_analytics.process_results(res, store)
         insight = f"### ✅ Optimized: {obj_label}: ${res['objective']:,.2f}\n- **Used Stocks:** {len(table_rows)} EA"
     else:
         table_rows = [{'Stock': v['Variable'], 'Plan': '-', 'Usage': v['Value']} for v in res['variables'] if v['Value'] > 0]
@@ -321,7 +272,6 @@ def run_solver(n, sense, obj, const, store, current_tab, pathname):
             fig = px.bar(df, x='Variable', y='Value', title='Optimization Results')
 
     status_style = {'color':'#333'}
-    # [FIX] Sky Blue Insight Style
     insight_style = {'display':'block', 'backgroundColor': '#e3f2fd', 'padding': '25px', 'borderRadius': '12px', 'marginBottom': '40px', 'marginTop': '20px'}
     
     return {'display':'block'}, res['status'], status_style, f"${res['objective']:,.2f}", obj_label, table_rows, res['constraints'], fig, insight_style, insight, "", {'display':'none'}, constraints_display, "tab-3"
