@@ -65,7 +65,7 @@ def solve_model(store_data, sense, objective_str, constraints_str):
                 return {'status': 'Error', 'error_msg': f"Constraint Error (Line {idx+1}): {e}"}
 
         # 6. Solve
-        solver = pulp.PULP_CBC_CMD(msg=False, timeLimit=5)
+        solver = pulp.PULP_CBC_CMD(msg=False, timeLimit=60)
         prob.solve(solver)
         
         status = pulp.LpStatus[prob.status]
