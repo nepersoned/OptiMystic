@@ -179,6 +179,7 @@ class CuttingStockCG:
         final.J = pyo.Set(initialize=range(len(patterns)))
         final.I = pyo.Set(initialize=range(n_items))
         final.x = pyo.Var(final.J, domain=pyo.NonNegativeIntegers)
+        final.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
 
         def final_demand_rule(m, i):
             demand = self.demands[self.items[i]]

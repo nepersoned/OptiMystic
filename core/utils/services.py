@@ -107,10 +107,12 @@ def process_results(
         return _process_cutting_results(res, store)
     if mode == "logistics":
         mode = "packing"
-    if mode in ("resource", "it", "cloud"):
+    if mode in ("resource", "it", "cloud", "resource_allocation"):
         mode = "resource_allocation"
     if mode in ("hr", "nsp"):
         mode = "scheduling"
+    if mode == "resourcing":
+        mode = "resource_allocation"
 
     return _process_generic_results(res, store, mode)
 
@@ -386,10 +388,12 @@ def process_sensitivity(
     mode = (mode or "cutting").strip().lower()
     if mode == "logistics":
         mode = "packing"
-    if mode in ("resource", "it", "cloud"):
+    if mode in ("resource", "it", "cloud", "resource_allocation"):
         mode = "resource_allocation"
     if mode in ("hr", "nsp"):
         mode = "scheduling"
+    if mode == "resourcing":
+        mode = "resource_allocation"
 
     if not res.get("lp_sensitivity"):
         return {
@@ -452,6 +456,53 @@ def _process_cutting_sensitivity(
         "* Focus on optimizing this item to reduce overall expenditure."
     )
 
+    return {
+        "constraints": rows,
+        "top_bottleneck": top_b if not df.empty else None,
+        "insight": insight,
+    }
+
+
+def _process_sensitivity_general(res: Dict[str, Any]) -> Dict[str, Any]:
+    """Generic sensitivity processing for non-cutting domains."""
+    consts = res.get("constraints", [])
+    
+    if not consts:
+        return {
+            "constraints": [],
+            "top_bottleneck": None,
+            "insight": "No constraint sensitivity data available.",
+        }
+    
+    try:
+        import pandas as pd
+    except ImportError:
+        return {
+            "constraints": [],
+            "top_bottleneck": None,
+            "insight": "Sensitivity analysis requires pandas.",
+        }
+    
+    df = pd.DataFrame(consts)
+    df["Impact"] = df.get("Shadow Price", 0).abs() if "Shadow Price" in df.columns else 0.0
+    df = df.sort_values(by="Impact", ascending=False)
+    
+    rows: List[Dict[str, Any]] = []
+    for _, row in df.iterrows():
+        rows.append({
+            "Constraint": str(row.get("Constraint", "Unknown")),
+            "Shadow Price": f"${safe_float(row.get('Shadow Price', 0)):.2f}",
+            "Slack": safe_float(row.get("Slack", 0)),
+        })
+    
+    top_b = str(df.iloc[0]["Constraint"]) if not df.empty else "N/A"
+    top_v = abs(safe_float(df.iloc[0].get("Shadow Price", 0))) if not df.empty else 0.0
+    insight = (
+        f"### Bottleneck Analysis: **{top_b}**\n"
+        f"* Shadow Price: **${top_v:.2f}**\n"
+        f"* Relaxing this constraint would improve the objective."
+    )
+    
     return {
         "constraints": rows,
         "top_bottleneck": top_b if not df.empty else None,
