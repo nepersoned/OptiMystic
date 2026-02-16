@@ -22,4 +22,5 @@ EXPOSE 8080
 
 # 7. 실행 명령어 (Dash/Flask 앱 실행)
 # 환경 변수로 포트를 지정해주는 것이 좋습니다.
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "OptiMystic.wsgi"]
+# 반드시 소문자 'optimystic'인지 확인하세요!
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "optimystic.wsgi"]
