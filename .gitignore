@@ -1,35 +1,68 @@
-# Virtual environment
-.venv/
-venv/
-env/
-
 # Python
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
-.Python
+*$py.class
 *.so
-*.egg
-*.egg-info/
-dist/
+.Python
 build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
 
 # Django
 *.log
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
-staticfiles/
-media/
+/media
+/staticfiles
 .env
+.env.local
 
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Azure
+.azure/
+publish/
 
 # OS
-.DS_Store
 Thumbs.db
+.DS_Store
+
+# Compiled files
+*.pyc
+_legacy/__pycache__/
+__pycache__/
