@@ -160,7 +160,7 @@ Edit `core/utils/solver_engine.py` → `solve_model()` to change CBC timeout (de
 ```
 OptiMystic/
 ├── core/
-│   ├── domains/           # Input mappers
+│   ├── domains/           # Input mapper
 │   │   ├── cutting.py
 │   │   ├── packing.py
 │   │   ├── resourcing.py
