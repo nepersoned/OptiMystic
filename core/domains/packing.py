@@ -1,0 +1,53 @@
+"""
+Domain: Packing / Knapsack (Logistics)
+Maps raw packing/cargo input → common schema.
+"""
+from typing import Any, Dict, List
+
+
+def _safe_list(values: List[Any], length: int, default: float = 0.0) -> List[Any]:
+    if not isinstance(values, list):
+        return [default] * length
+    if len(values) >= length:
+        return values[:length]
+    return values + [default] * (length - len(values))
+
+
+def map_params(raw_params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Map raw packing/cargo payload to common schema.
+    Input can be:
+      - Items (list of dicts) with Weight, Value, Name
+      - Or Items (list of names) + Weights + Values lists
+    """
+    items = raw_params.get("Items", raw_params.get("Cargo", []))
+    
+    if isinstance(items, list) and items and isinstance(items[0], dict):
+        names = [x.get("Name", x.get("id", f"Item_{i}")) for i, x in enumerate(items)]
+        weights = [float(x.get("Weight", x.get("weight", 0))) for x in items]
+        values = [float(x.get("Value", x.get("Priority", x.get("priority", 1)))) for x in items]
+        demands = raw_params.get("Demands", {})
+        if not demands and names:
+            demands = {n: 1 for n in names}
+    else:
+        names = list(raw_params.get("Items", []))
+        weights = raw_params.get("Weights", raw_params.get("Volumes", [0] * len(names)))
+        values = raw_params.get("Values", raw_params.get("Priorities", [1] * len(names)))
+        demands = raw_params.get("Demands", {})
+
+    vehicles = raw_params.get("Vehicles", raw_params.get("Trucks", [{"Capacity": 5000, "Cost": 1}]))
+    if isinstance(vehicles, (int, float)):
+        vehicles = [{"Capacity": float(vehicles), "Cost": 1}]
+    capacity = vehicles[0].get("Capacity", vehicles[0].get("MaxWeight", 5000)) if vehicles else 5000
+    sense = raw_params.get("Sense", "maximize")
+
+    return {
+        "Items": names,
+        "Weights": _safe_list(weights, len(names)),
+        "Values": _safe_list(values, len(names)),
+        "Demands": demands if demands else {n: 1 for n in names},
+        "Capacity": capacity,
+        "Sense": sense,
+        "Vehicles": vehicles,
+        "Mode": "packing",
+    }

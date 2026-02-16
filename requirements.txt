@@ -1,0 +1,17 @@
+# Django
+django>=4.2,<6
+
+# Solver
+pyomo>=6.0
+pulp
+
+# Data & API
+pandas
+openpyxl
+
+# Optional: legacy Dash UI (separate app)
+# dash
+# plotly
+
+# Production
+gunicorn
