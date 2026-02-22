@@ -14,10 +14,6 @@ DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
 
 ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 
-# Azure App Service domain
-if not DEBUG:
-    ALLOWED_HOSTS += ["*.azurewebsites.net", "*.cloudapp.azure.com"]
-
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.staticfiles",
