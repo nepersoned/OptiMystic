@@ -1,0 +1,6 @@
+# Python dependencies for OptiMystic solver engine
+# Used by: python_solvers/solver_engine.py, domains/, logic/
+
+pyomo==6.7.3
+pandas==2.0.3
+numpy==1.24.3

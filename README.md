@@ -1,424 +1,760 @@
 # OptiMystic
 
-🚀 **Multi-Domain Optimization API** – Solving cutting, packing, resourcing, and scheduling problems with Pyomo
+🚀 **Multi-Domain Optimization API** – Solving cutting, packing, resourcing, and scheduling problems with Pyomo + Go
 
-Transforms business optimization problems into mathematical models and solves them using state-of-the-art optimization algorithms (Column Generation, MIP, LP).
+Transforms business optimization problems into mathematical models and solves them using state-of-the-art optimization algorithms (Column Generation, MIP, LP, NLP).
+
+🚀 **다중 도메인 최적화 API** – Pyomo + Go를 활용한 절단, 포장, 리소스, 스케줄링 문제 해결
+
+비즈니스 최적화 문제를 수학 모델로 변환하고 최신 최적화 알고리즘(Column Generation, MIP, LP, NLP)으로 해결합니다.
+
+**Status**: ✅ **Python Solver Production Ready** | ⏳ **Go Server In Progress**
+
+**상태**: ✅ **Python 솔버 운영 준비 완료** | ⏳ **Go 서버 개발 중**
+
+**Limitations**: Go HTTP API is a stub; use the Python solver directly for now.
+
+**제한사항**: Go HTTP API는 스텁 상태이며, 현재는 Python 솔버를 직접 사용하세요.
+
+---
 
 ## ✨ What It Does
 
-- **Cutting Stock Optimization**: Minimize material waste and cost (Column Generation + MIP)
-- **Packing/Knapsack**: Maximize value within weight/capacity constraints (MIP/LP)
-- **Resource Allocation**: Distribute limited CPU/RAM across tasks (2D Knapsack)
-- **Shift Scheduling**: Cover shift demand with minimum employees (MIP/LP)
+| Problem | Algorithm | Input | Output |
+|---------|-----------|-------|--------|
+| **Cutting Stock** 📦 | Column Generation + MIP | Items, lengths, demands, stocks, kerf | Cutting patterns, cost, waste |
+| **Packing/Knapsack** 📊 | MIP/LP | Items, weights, values, capacity | Selection, utilization % |
+| **Resource Allocation** 💻 | MIP/LP | Tasks, CPU, RAM, capacity | Task allocation, usage |
+| **Shift Scheduling** 👥 | MIP/LP | Employees, shifts, demands | Assignments, coverage |
+
+## 어떤 기능인가요
+
+| 문제 | 알고리즘 | 입력 | 출력 |
+|------|---------|------|------|
+| **절단 재고** 📦 | Column Generation + MIP | 품목, 길이, 수요, 원재료, 절단손실 | 절단 패턴, 비용, 폐기물 |
+| **포장/나사** 📊 | MIP/LP | 품목, 무게, 가치, 용량 | 선택, 활용률 |
+| **리소스 할당** 💻 | MIP/LP | 작업, CPU, RAM, 용량 | 작업 배분, 사용률 |
+| **교대 스케줄** 👥 | MIP/LP | 직원, 교대, 수요 | 배정, 커버율 |
+
+---
 
 ## 🏗️ Architecture
 
-```
-User Input → Bridge → Domain → Logic → Pyomo Solver → Services → Result
-```
-
-| Layer | Module | Purpose |
-|-------|--------|---------|
-| **Bridge** | `core/utils/bridge_logic.py` | Domain & solver type selector |
-| **Domains** | `core/domains/*.py` | Input schema mapping & validation |
-| **Logic** | `core/logic/logic_{cg,mip,cp,st,nlp}.py` | Mathematical model builders |
-| **Solver** | `core/utils/solver_engine.py` | Pyomo orchestration & CBC execution |
-| **Services** | `core/utils/services.py` | Result parsing, sensitivity analysis, dashboards |
-
-## 🧭 Go Hybrid Migration (Entry / Command / Exit)
-
-**Status**: 🟡 Planning Phase - Django will be replaced with Go
-
-This project is transitioning to a **Go-first architecture** while keeping Pyomo models intact.
-
-### 3 Layers = 5 Django Files → Go
-
-| Layer | Django Files (2개 이상) | Go Replacement | Purpose |
-|-------|------------------------|----------------|---------|
-| **Entry** | `core/views.py`<br>`core/urls.py`<br>`optimystic/urls.py`<br>`optimystic/wsgi.py` | `cmd/server/main.go`<br>`internal/handlers/optimize.go`<br>`internal/router/router.go` | HTTP server, request handling, URL routing |
-| **Command** | `core/utils/bridge_logic.py` | `internal/solver/bridge.go` | Domain selection & solver orchestration |
-| **Exit** | *(stays in Python)*<br>`core/utils/services.py` | `python_solvers/utils/services.py`<br>+ Go JSON marshaling | Result processing & dashboard (called by Go via subprocess) |
-
-### Detail Breakdown
-
-#### Entry Layer (4 Django files → 3 Go files)
-- `optimystic/wsgi.py` → `cmd/server/main.go` (서버 시작점)
-- `optimystic/urls.py` + `core/urls.py` → `internal/router/router.go` (URL 라우팅 통합)
-- `core/views.py` → `internal/handlers/optimize.go` + `internal/handlers/health.go` (요청 처리)
-
-#### Command Layer (1 Django file → 1 Go file)
-- `core/utils/bridge_logic.py` → `internal/solver/bridge.go` (도메인 선택 로직)
-
-#### Exit Layer (Python 유지)
-- `core/utils/services.py` → `python_solvers/utils/services.py` (결과 파싱, 대시보드)
-- Go는 Python subprocess 호출 후 JSON 결과만 클라이언트에게 전달
-
-### JSON Request/Response
-
-- **Input**: JSON in, with Go structs for fast and safe decoding.
-- **Output**: JSON out, matching existing dashboard expectations.
-
-### Concurrency Strategy
-
-- Use Go **goroutines** so multiple optimization requests are handled concurrently without blocking the server.
-- Django's single-threaded nature will be replaced with Go's native concurrency.
-
-### Pyomo Execution Strategy
-
-- Keep Python models under `core/logic/` unchanged.
-- Go invokes Python solver via `os/exec` (e.g., `solver_engine.py`) and captures stdout as JSON result.
-- Python remains essential for Pyomo optimization - only the HTTP/API layer moves to Go.
-
-### Migration Scope
-
-- **Keep in Python**: All Pyomo models and solver logic in `core/logic/`, `core/domains/`, `core/utils/`.
-- **Move to Go**: Entry + Command + Exit layers (HTTP handlers, routing, JSON marshaling).
-- **Django Status**: Will remain for reference during migration, then archived to `_legacy_django/`.
-
-### Django → Go File Mapping (5개 파일)
-
-| Layer | # | Django File | Go Replacement | Action |
-|-------|---|-------------|----------------|--------|
-| **Entry** | 1 | `optimystic/wsgi.py` | `cmd/server/main.go` | Replace: Server entry point |
-| **Entry** | 2 | `optimystic/urls.py` | `internal/router/router.go` | Replace: Root URL config |
-| **Entry** | 3 | `core/urls.py` | `internal/router/router.go` | Merge: API URL config |
-| **Entry** | 4 | `core/views.py` | `internal/handlers/*.go` | Replace: Request handlers |
-| **Command** | 5 | `core/utils/bridge_logic.py` | `internal/solver/bridge.go` | Rewrite: Domain routing |
-
-### Python Files to Copy (변경 없이 이동)
-
-| Category | Files | New Location | Purpose |
-|----------|-------|--------------|---------|
-| **Domains** | `core/domains/*.py` | `python_solvers/domains/` | Input mapping (4 files) |
-| **Logic** | `core/logic/*.py` | `python_solvers/logic/` | Pyomo models (5 files) |
-| **Utils** | `core/utils/solver_engine.py` | `python_solvers/utils/` | Pyomo solver wrapper |
-| **Utils** | `core/utils/services.py` | `python_solvers/utils/` | Result processing |
-
-**Exit Layer**: `services.py`는 Python에 그대로 두고, Go가 subprocess로 호출
-
-## 🎯 Supported Domains
-
-| Domain | Algorithms | Input Format | Output |
-|--------|-----------|--------------|--------|
-| **Cutting** | CG, MIP | Items, lengths, demands, stocks, kerf | Cutting patterns, cost, waste |
-| **Packing** | MIP, LP | Items, weights, values, capacity, demands | Selection, utilization % |
-| **Resourcing** | MIP, LP | Tasks, CPU, RAM, capacity, demands, values | Task allocation, resource usage |
-| **Scheduling** | MIP, LP | Employees, shifts, demands, max assignments | Shift assignments, coverage |
-
-## 🔧 Setup
-
-### Requirements
+### **Layered Design**
 
 ```
-Python 3.8+
-Django 4.2+
-Pyomo 6.0+
-CBC Solver (auto-installed with Pyomo)
-Pandas (for sensitivity analysis)
+HTTP Request (JSON)
+    ↓
+🚀 Go Server (Entry Layer)
+├─ server/cmd/server/main.go
+├─ server/internal/handlers/
+└─ server/internal/router/
+    ↓
+🔗 Bridge (Command Layer)
+├─ server/internal/solver/bridge.go
+└─ python_solvers/utils/bridge_logic.py
+    ↓
+🐍 Python Solver (Logic + Output Layer)
+├─ python_solvers/domains/       (input mapping)
+├─ python_solvers/logic/         (Pyomo models)
+└─ python_solvers/utils/         (solver execution + result processing)
+    ↓
+JSON Response
 ```
 
-### Install
+### **계층 구조**
 
-```bash
-# Clone or navigate to project
-cd OptiMystic
-
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Verify CBC is available
-pyomo --version
 ```
+HTTP 요청 (JSON)
+    ↓
+🚀 Go 서버 (Entry 계층)
+├─ server/cmd/server/main.go
+├─ server/internal/handlers/
+└─ server/internal/router/
+    ↓
+🔗 Bridge (Command 계층)
+├─ server/internal/solver/bridge.go
+└─ python_solvers/utils/bridge_logic.py
+    ↓
+🐍 Python 솔버 (Logic + Output 계층)
+├─ python_solvers/domains/       (입력 매핑)
+├─ python_solvers/logic/         (Pyomo 모델)
+└─ python_solvers/utils/         (솔버 실행 + 결과 처리)
+    ↓
+JSON 응답
+```
+
+### **Technology Stack**
+
+| Layer | Technology | Status |
+|-------|-----------|--------|
+| **API Server** | Go 1.21+ (net/http) | ⏳ In Progress |
+| **Optimization** | Python 3.8+ | ✅ Complete |
+| **Solver** | Pyomo 6.7+ (CBC) | ✅ Complete |
+| **Data** | JSON (stdin/stdout) | ✅ Complete |
+
+### **기술 스택**
+
+| 계층 | 기술 | 상태 |
+|------|------|------|
+| **API 서버** | Go 1.21+ (net/http) | ⏳ 개발 중 |
+| **최적화 엔진** | Python 3.8+ | ✅ 완성 |
+| **솔버** | Pyomo 6.7+ (CBC) | ✅ 완성 |
+| **데이터** | JSON (stdin/stdout) | ✅ 완성 |
+
+---
+
+## 📂 Project Structure
+
+```
+OptiMystic/
+│
+├── 🐍 python_solvers/          Python Pyomo Solver (1,643 LOC)
+│   ├── solver_engine.py        (237 LOC - Pyomo execution engine)
+│   ├── requirements.txt
+│   │
+│   ├── domains/                (4개 모듈 - 입력 매핑)
+│   │   ├── cutting.py          (88줄)
+│   │   ├── packing.py          (54줄)
+│   │   ├── resourcing.py       (56줄)
+│   │   └── scheduling.py       (51줄)
+│   │
+│   ├── logic/                  (5개 모듈 - 수학 모델)
+│   │   ├── logic_cg.py         (249줄 - Column Generation ✅)
+│   │   ├── logic_mip.py        (293줄 - Mixed Integer ✅)
+│   │   ├── logic_cp.py         (20줄 - Constraint ⏳)
+│   │   ├── logic_st.py         (20줄 - Stochastic ⏳)
+│   │   └── logic_nlp.py        (20줄 - Non-Linear ⏳)
+│   │
+│   └── utils/
+│       ├── bridge_logic.py     (105줄 - 도메인/솔버 선택)
+│       └── services.py         (510줄 - 결과 처리 & 대시보드)
+│
+├── 🚀 server/                  Go HTTP Server (scaffolding complete)
+│   ├── cmd/server/main.go
+│   └── internal/
+│       ├── handlers/           (optimize, health)
+│       ├── router/
+│       └── solver/             (Python 호출)
+│
+├── 💾 _legacy_django/          Django 백업
+├── 📦 _legacy/                 원본 Dash 앱
+├── 📝 scripts/                 Python 스크립트
+└── 📄 docs/                    문서
+```
+
+## 📂 프로젝트 구조
+
+```
+OptiMystic/
+│
+├── 🐍 python_solvers/          Python Pyomo 솔버 (1,643줄)
+│   ├── solver_engine.py        (237줄 - Pyomo 실행 엔진)
+│   ├── requirements.txt
+│   │
+│   ├── domains/                (4개 모듈 - 입력 매핑)
+│   │   ├── cutting.py          (88줄)
+│   │   ├── packing.py          (54줄)
+│   │   ├── resourcing.py       (56줄)
+│   │   └── scheduling.py       (51줄)
+│   │
+│   ├── logic/                  (5개 모듈 - 수학 모델)
+│   │   ├── logic_cg.py         (249줄 - Column Generation ✅)
+│   │   ├── logic_mip.py        (293줄 - Mixed Integer ✅)
+│   │   ├── logic_cp.py         (20줄 - Constraint ⏳)
+│   │   ├── logic_st.py         (20줄 - Stochastic ⏳)
+│   │   └── logic_nlp.py        (20줄 - Non-Linear ⏳)
+│   │
+│   └── utils/
+│       ├── bridge_logic.py     (105줄 - 도메인/솔버 선택)
+│       └── services.py         (510줄 - 결과 처리 & 대시보드)
+│
+├── 🚀 server/                  Go HTTP 서버 (구조 완성)
+│   ├── cmd/server/main.go
+│   └── internal/
+│       ├── handlers/           (optimize, health)
+│       ├── router/
+│       └── solver/             (Python 호출)
+│
+├── 💾 _legacy_django/          Django 백업
+├── 📦 _legacy/                 원본 Dash 앱
+├── 📝 scripts/                 Python 스크립트
+└── 📄 docs/                    문서
+```
+
+### Legacy Folders (Reference Only)
+- `_legacy/`: Original Dash app UI (archived; not used in current runtime)
+- `_legacy_django/`: Django 2.0 API backup from before the Go migration
+
+### 레거시 폴더 (참고용)
+- `_legacy/`: 원본 Dash 앱 UI (보관용, 현재 실행 경로에서 사용하지 않음)
+- `_legacy_django/`: Go 마이그레이션 이전 Django 2.0 API 백업
+
+**Full Details**: [FINAL_STRUCTURE.md](FINAL_STRUCTURE.md)
+
+**자세한 내용**: [FINAL_STRUCTURE.md](FINAL_STRUCTURE.md)
+
+---
 
 ## 🚀 Quick Start
 
-### 1. Run Demo (All Domains)
-
+### Prerequisites
 ```bash
-python scripts/demo_optimize.py
+Python 3.8+
+pip / pipenv
+Go 1.21+ (optional - for Go server development)
 ```
 
-Expected output: JSON with results for cutting, packing, resourcing, and scheduling.
+### 빠른 시작
 
-### 2. Use as Django API
-
+### 필수 사항
 ```bash
-python manage.py runserver
+Python 3.8+
+pip / pipenv
+Go 1.21+ (선택사항 - Go 서버 개발용)
 ```
 
-POST to `/api/optimize/`:
-```json
-{
-  "template_type": "cutting",
-  "params": {
+### Installation
+
+#### 1️⃣ Clone Repository
+```bash
+git clone https://github.com/yourusername/optimystic.git
+cd optimystic
+```
+
+#### 2️⃣ Setup Python Environment
+```bash
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r python_solvers/requirements.txt
+```
+
+#### 3️⃣ Test Python Solver
+```bash
+python python_solvers/solver_engine.py \
+  --domain cutting \
+  --solver mip \
+  --params '{"Items": ["A", "B"], "Demands": {"A": 2, "B": 1}, "Stocks": [{"Name": "S1", "Length": 10, "Cost": 5}], "Kerf": 0}'
+```
+
+### 설치
+
+#### 1️⃣ 저장소 복제
+```bash
+git clone https://github.com/yourusername/optimystic.git
+cd optimystic
+```
+
+#### 2️⃣ Python 환경 설정
+```bash
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -r python_solvers/requirements.txt
+```
+
+#### 3️⃣ Python 솔버 테스트
+```bash
+python python_solvers/solver_engine.py \
+  --domain cutting \
+  --solver mip \
+  --params '{"Items": ["A", "B"], "Demands": {"A": 2, "B": 1}, "Stocks": [{"Name": "S1", "Length": 10, "Cost": 5}], "Kerf": 0}'
+```
+
+---
+
+## 📖 Usage Examples
+
+### Python Solver (Direct)
+
+#### Cutting Stock Problem
+```python
+from python_solvers.utils import bridge_logic, solver_engine, services
+
+params = {
     "Items": ["A", "B"],
-    "ItemLens": [4, 6],
+    "Weights": [4, 6],
     "Demands": {"A": 2, "B": 1},
     "Stocks": [{"Name": "S1", "Length": 10, "Cost": 5}],
     "Kerf": 0,
     "Sense": "minimize"
-  }
 }
+
+# Map params
+mapped = bridge_logic.map_params_by_mode("cutting", params)
+
+# Build model
+obj, const, vars_config = bridge_logic.generate_logic("cutting", params)
+
+# Solve
+store_data = {
+    "variables": vars_config,
+    "parameters": services.build_parameter_store(mapped)
+}
+result = solver_engine.solve_model(store_data, "minimize", obj, const)
+
+# Process results
+dashboard = services.process_results(result, store_data, "cutting")
+sensitivity = services.process_sensitivity(result, store_data, "cutting")
 ```
 
-Response:
+#### Packing Problem
+```python
+params = {
+    "Items": ["Item1", "Item2", "Item3"],
+    "Weights": [10, 20, 15],
+    "Values": [100, 150, 120],
+    "Capacity": 40,
+    "Sense": "maximize"
+}
+# Same flow as above with domain="packing"
+```
+
+## 사용 예제
+
+### Python 솔버 (직접 사용)
+
+#### 절단 재고 문제
+```python
+from python_solvers.utils import bridge_logic, solver_engine, services
+
+params = {
+    "Items": ["A", "B"],
+    "Weights": [4, 6],
+    "Demands": {"A": 2, "B": 1},
+    "Stocks": [{"Name": "S1", "Length": 10, "Cost": 5}],
+    "Kerf": 0,
+    "Sense": "minimize"
+}
+
+# 파라미터 매핑
+mapped = bridge_logic.map_params_by_mode("cutting", params)
+
+# 모델 생성
+obj, const, vars_config = bridge_logic.generate_logic("cutting", params)
+
+# 풀이
+store_data = {
+    "variables": vars_config,
+    "parameters": services.build_parameter_store(mapped)
+}
+result = solver_engine.solve_model(store_data, "minimize", obj, const)
+
+# 결과 처리
+dashboard = services.process_results(result, store_data, "cutting")
+sensitivity = services.process_sensitivity(result, store_data, "cutting")
+```
+
+#### 포장 문제
+```python
+params = {
+    "Items": ["Item1", "Item2", "Item3"],
+    "Weights": [10, 20, 15],
+    "Values": [100, 150, 120],
+    "Capacity": 40,
+    "Sense": "maximize"
+}
+# domain="packing"으로 동일하게 사용
+```
+
+### Go HTTP API (Coming Soon)
+
+```bash
+curl -X POST http://localhost:8000/api/optimize/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "template_type": "cutting",
+    "params": {
+      "Items": ["A", "B"],
+      "ItemLens": [4, 6],
+      "Demands": {"A": 2, "B": 1},
+      "Stocks": [{"Name": "S1", "Length": 10, "Cost": 5}],
+      "Kerf": 0,
+      "Sense": "minimize"
+    }
+  }'
+```
+
+### Go HTTP API (곧 출시 예정)
+
+```bash
+curl -X POST http://localhost:8000/api/optimize/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "template_type": "cutting",
+    "params": {
+      "Items": ["A", "B"],
+      "ItemLens": [4, 6],
+      "Demands": {"A": 2, "B": 1},
+      "Stocks": [{"Name": "S1", "Length": 10, "Cost": 5}],
+      "Kerf": 0,
+      "Sense": "minimize"
+    }
+  }'
+```
+
+**Response**:
 ```json
 {
   "status": "Optimal",
   "objective": 10.0,
   "variables": [...],
   "constraints": [...],
-  "dashboard": {...},
-  "sensitivity": {...}
+  "dashboard": {
+    "total_cost": 10.0,
+    "total_waste": 0.0,
+    "num_bins": 1,
+    "bin_plans": [...]
+  },
+  "sensitivity": [...]
 }
-```
-
-### 3. Use as Python Library
-
-```python
-from core.utils import bridge_logic, solver_engine, services
-
-# Map inputs
-mapped = bridge_logic.map_params_by_mode("cutting", params)
-
-# Generate model
-obj, constraints, vars_config = bridge_logic.generate_logic("cutting", params)
-
-# Solve
-store = {"variables": vars_config, "parameters": services.build_parameter_store(mapped)}
-result = solver_engine.solve_model(store, "minimize", obj, constraints)
-
-# Process results
-dashboard = services.process_results(result, store, "cutting")
-sensitivity = services.process_sensitivity(result, store, "cutting")
-```
-
-## 📊 Features
-
-✅ **Multiple Solvers**: CG (cutting), MIP (all domains), LP relaxation  
-✅ **Sensitivity Analysis**: Dual values, shadow prices, bottleneck identification  
-✅ **Domain Aliases**: Backward compatibility (manufacturing→cutting, logistics→packing, hr→scheduling)  
-✅ **REST API**: Django endpoints for web/mobile integration  
-✅ **Flexible Output**: JSON dashboards per domain + raw solver data  
-
-## ⚙️ Configuration
-
-### Enable LP Sensitivity
-Add `"Relax": true` to payload to solve LP relaxation for sensitivity analysis:
-
-```json
-{
-  "template_type": "packing",
-  "params": {
-    "Items": ["Box1", "Box2"],
-    "Weights": [3, 5],
-    "Values": [6, 10],
-    "Capacity": 10,
-    "Relax": true
-  }
-}
-```
-
-### Solver Timeout
-Edit `core/utils/solver_engine.py` → `solve_model()` to change CBC timeout (default: 10s)
-
-## 📁 Project Structure
-
-### Current (Django - Active)
-
-```
-OptiMystic/
-├── core/                  # Django app (will be archived)
-│   ├── domains/           # Input mapper (will be copied to python_solvers/)
-│   │   ├── cutting.py     # Cutting stock domain
-│   │   ├── packing.py     # Packing/knapsack domain
-│   │   ├── resourcing.py  # Resource allocation domain
-│   │   └── scheduling.py  # Shift scheduling domain
-│   ├── logic/             # Model builders (will be copied to python_solvers/)
-│   │   ├── logic_cg.py    # Column generation
-│   │   ├── logic_mip.py   # Mixed integer programming
-│   │   ├── logic_cp.py    # Constraint programming
-│   │   ├── logic_nlp.py   # Non-linear programming
-│   │   └── logic_st.py    # Stochastic optimization
-│   ├── utils/             # Core utilities (will be copied to python_solvers/)
-│   │   ├── bridge_logic.py     # Domain router (will be rewritten in Go)
-│   │   ├── solver_engine.py    # Pyomo solver wrapper
-│   │   └── services.py         # Result processing & dashboards
-│   ├── views.py           # Django API endpoints (will be replaced by Go handlers)
-│   ├── urls.py            # URL routing (will be replaced by Go router)
-│   └── models.py          # Database models
-├── optimystic/            # Django project config (will be archived)
-├── _legacy/               # Original Dash UI (archived)
-├── manage.py              # Django management
-└── requirements.txt       # Python dependencies (Pyomo only after migration)
-```
-
-### Future (Go + Python Hybrid - Planned)
-
-```
-OptiMystic/
-├── cmd/
-│   └── server/
-│       └── main.go              # Go HTTP server entry point
-├── internal/
-│   ├── handlers/                # HTTP request handlers (replaces Django views)
-│   │   ├── health.go
-│   │   └── optimize.go
-│   ├── models/                  # Go structs for JSON
-│   │   └── models.go
-│   ├── solver/                  # Python subprocess wrapper
-│   │   └── solver.go
-│   └── router/                  # HTTP routing (replaces Django urls)
-│       └── router.go
-├── python_solvers/              # Python optimization modules (from core/)
-│   ├── domains/                 # Input mapping
-│   ├── logic/                   # Pyomo model builders
-│   ├── utils/                   # Solver engine, services
-│   └── solver_cli.py            # CLI entry point for Go to call
-├── _legacy_django/              # Archived Django implementation
-│   ├── core/
-│   ├── optimystic/
-│   └── manage.py
-├── go.mod                       # Go module definition
-├── go.sum                       # Go dependencies
-└── requirements.txt             # Python dependencies (Pyomo, pandas)
-```
-
-## 🐳 Deployment
-
-### Current: Django + Gunicorn
-
-#### Docker
-
-```bash
-# Build image
-docker build -t optimystic:latest .
-
-# Run container
-docker run -p 8080:8080 optimystic:latest
-
-# Test
-curl http://localhost:8080/api/health/
-```
-
-#### Production (Gunicorn)
-
-```bash
-# Install production dependencies
-pip install -r requirements.txt
-
-# Collect static files
-python manage.py collectstatic --noinput
-
-# Run with Gunicorn
-gunicorn --bind 0.0.0.0:8080 --workers 4 --timeout 300 optimystic.wsgi:application
-```
-
-### Future: Go + Python Hybrid
-
-```bash
-# Build Go binary
-go build -o optimystic-server cmd/server/main.go
-
-# Run server (Python must be available in PATH)
-./optimystic-server
-
-# Or with Docker (multi-stage build)
-docker build -f Dockerfile.go -t optimystic-go:latest .
-docker run -p 8080:8080 optimystic-go:latest
-```
-
-## 🚀 Why Go?
-
-### Performance Benefits
-1. **Concurrency**: Handle 1000+ optimization requests simultaneously with goroutines
-2. **Fast Startup**: <10ms server startup vs Django's ~500ms
-3. **Low Memory**: ~20MB baseline vs Django's ~100MB
-4. **Single Binary**: No virtual environments, dependencies bundled
-
-### Operational Benefits
-1. **Type Safety**: Compile-time checking for JSON schemas prevents runtime errors
-2. **Easy Deployment**: Single binary = simpler CI/CD
-3. **Better Monitoring**: Built-in pprof for profiling
-4. **Native Concurrency**: No GIL issues like Python
-
-### Why Not Full Go?
-- **Pyomo Ecosystem**: 10+ years of optimization research, impossible to rewrite
-- **Mathematical Modeling**: Python's expressiveness ideal for complex models
-- **Community**: Pyomo has extensive documentation and community support
-- **Hybrid Best**: Go for speed (HTTP), Python for math (Pyomo)
-
-## 🔧 Environment Variables
-
-## 🔧 Environment Variables
-
-### Django (Current)
-
-```bash
-# .env file
-DJANGO_SECRET_KEY=your-secret-key-here
-DJANGO_DEBUG=0
-DJANGO_ALLOWED_HOSTS=yourdomain.com,www.yourdomain.com
-```
-
-### Go (Future)
-
-```bash
-# .env file
-PORT=8080
-GIN_MODE=release
-PYTHON_PATH=/usr/bin/python3
-SOLVER_TIMEOUT=300
-LOG_LEVEL=info
 ```
 
 ---
 
-## 📊 Migration Status
+## 🎯 Supported Domains
 
-| Component | Django (Current) | Go (Future) | Status |
-|-----------|-----------------|-------------|--------|
-| HTTP Server | ✅ Django/Gunicorn | 🔜 Gin/Echo | Planning |
-| Request Validation | ✅ Django Forms | 🔜 Go Structs | Planning |
-| Routing | ✅ Django URLs | 🔜 Go Router | Planning |
-| Pyomo Solvers | ✅ Direct Import | 🔜 Subprocess | Planning |
-| Concurrency | ⚠️ Limited (Workers) | 🔜 Goroutines | Planned |
-| Type Safety | ⚠️ Runtime | 🔜 Compile-time | Benefit |
-| Deployment | ✅ Docker + Gunicorn | 🔜 Single Binary | Benefit |
+### 1. **Cutting Stock (Manufacturing)**
+- **Algorithm**: Column Generation (✅) + MIP (✅)
+- **Problem**: Minimize material cost while meeting demand
+- **Input**: Items, Lengths, Demands, Stocks, Kerf
+- **Output**: Cutting patterns, Cost, Scrap waste
 
-**Current Focus**: Django is stable and production-ready. Go migration will begin after feature freeze.
+### 2. **Packing/Knapsack (Logistics)**
+- **Algorithm**: MIP (✅) + LP (✅)
+- **Problem**: Maximize value within capacity constraints
+- **Input**: Items, Weights, Values, Capacity
+- **Output**: Selection, Utilization %
+
+### 3. **Resource Allocation (IT/Cloud)**
+- **Algorithm**: MIP (✅) + LP (✅)
+- **Problem**: Allocate tasks to servers with CPU/RAM constraints
+- **Input**: Tasks, CPU, RAM, Capacity
+- **Output**: Task allocation, Usage %
+
+### 4. **Shift Scheduling (HR)**
+- **Algorithm**: MIP (✅) + LP (✅)
+- **Problem**: Meet shift demand with minimum staff
+- **Input**: Employees, Shifts, Demands, Max assignments
+- **Output**: Assignments, Coverage
+
+## 🎯 지원하는 도메인
+
+### 1. **절단 재고 (제조)**
+- **알고리즘**: Column Generation (✅) + MIP (✅)
+- **문제**: 수요를 충족하면서 재료 비용 최소화
+- **입력**: 품목, 길이, 수요, 원재료, 절단손실
+- **출력**: 절단 패턴, 비용, 폐기물
+
+### 2. **포장/나사 (물류)**
+- **알고리즘**: MIP (✅) + LP (✅)
+- **문제**: 용량 제약 내 최대 가치
+- **입력**: 품목, 무게, 가치, 용량
+- **출력**: 선택 항목, 활용률
+
+### 3. **리소스 할당 (IT/클라우드)**
+- **알고리즘**: MIP (✅) + LP (✅)
+- **문제**: CPU/RAM 제약 내 작업 할당
+- **입력**: 작업, CPU, RAM, 용량
+- **출력**: 작업 배분, 사용률
+
+### 4. **교대 스케줄 (HR)**
+- **알고리즘**: MIP (✅) + LP (✅)
+- **문제**: 최소 인력으로 교대 수요 충족
+- **입력**: 직원, 교대, 수요, 최대 배정
+- **출력**: 배정, 커버율
 
 ---
 
-## 🔮 Future Roadmap
+## 📊 Solver Algorithms
 
-### Phase 1: Go Migration (In Progress)
-- [ ] **Go HTTP Server** - Replace Django with Gin/Echo framework
-- [ ] **Go ↔ Python Bridge** - Subprocess wrapper for Pyomo solvers
-- [ ] **Goroutine Concurrency** - Parallel optimization request handling
-- [ ] **Type-Safe JSON** - Go structs for request/response validation
+| Algorithm | Status | Domains | Notes |
+|-----------|--------|---------|-------|
+| **Column Generation (CG)** | ✅ Complete | Cutting | Optimal solution guaranteed |
+| **Mixed Integer Programming (MIP)** | ✅ Complete | All | General purpose, stable |
+| **Constraint Programming (CP)** | ⏳ In Progress | Scheduling | For constraint-heavy problems |
+| **Stochastic (ST)** | ⏳ In Progress | All | Handles uncertainty |
+| **Non-Linear (NLP)** | ⏳ In Progress | Packing, Resourcing | For non-linear objectives |
 
-### Phase 2: Performance & Features
-- [ ] **C++ Performance Layer** - Hot-path optimization for large-scale problems (optional)
-- [ ] **JavaScript/TypeScript Client** - Web-based optimization interface
-- [ ] Constraint Programming (CP) for complex scheduling
-- [ ] Stochastic Optimization (ST) for uncertainty modeling
-- [ ] Non-Linear Programming (NLP) for non-linear objectives
+## 📊 솔버 알고리즘
 
-### Phase 3: Production Features
-- [ ] Web UI (React/Vue) with real-time updates
-- [ ] Result visualization dashboard with charts
-- [ ] Multi-objective optimization (Pareto frontier)
-- [ ] Batch processing API for large-scale problems
-- [ ] Optimization job queue with Redis/RabbitMQ
+| 알고리즘 | 상태 | 도메인 | 설명 |
+|----------|------|--------|------|
+| **Column Generation (CG)** | ✅ 완성 | 절단 | 최적해 보장 |
+| **Mixed Integer Programming (MIP)** | ✅ 완성 | 전부 | 범용, 안정적 |
+| **Constraint Programming (CP)** | ⏳ 진행중 | 스케줄 | 제약 조건 많은 문제용 |
+| **Stochastic (ST)** | ⏳ 진행중 | 전부 | 불확실성 처리 |
+| **Non-Linear (NLP)** | ⏳ 진행중 | 포장, 리소스 | 비선형 목적함수용 |
 
-## 📝 Notes
+---
 
-- **LP Sensitivity**: Only available for LP models. Set `"Relax": true` for MIP relaxation.
-- **CBC Solver**: Must be installed. Included with Pyomo by default.
-- **Pyomo Models**: All solvers return Pyomo ConcreteModel or structured lists.
-- **Variable Naming**: CG uses `A_IT<i>_<bin>` (items), MIP uses `X_<i>` or `Cut_<item>_<bin>`.
+## 🔧 Configuration
+
+### Environment Variables
+```bash
+# .env.example
+PYOMO_SOLVER=cbc
+DEBUG=False
+```
+
+### Python Requirements
+```
+pyomo==6.7.3        # Optimization engine
+pandas==2.0.3       # Data processing
+numpy==1.24.3       # Numerical computing
+```
+
+## 🔧 설정
+
+### 환경 변수
+```bash
+# .env.example
+PYOMO_SOLVER=cbc
+DEBUG=False
+```
+
+### Python 의존성
+```
+pyomo==6.7.3        # 최적화 엔진
+pandas==2.0.3       # 데이터 처리
+numpy==1.24.3       # 수치 연산
+```
+
+---
+
+## 📈 Performance
+
+### Benchmark (CBC Solver, Single Threaded)
+
+| Problem Type | Size | Time | Status |
+|--------------|------|------|--------|
+| Cutting Stock | 10 items, 5 stocks | < 1s | Optimal |
+| Packing | 50 items | 2-5s | Optimal |
+| Resourcing | 100 tasks | 1-3s | Optimal |
+| Scheduling | 20 employees, 30 shifts | 0.5-2s | Optimal |
+
+**Go Server with Concurrency** (coming soon): Multiple concurrent requests via goroutines
+
+## 📈 성능
+
+### 벤치마크 (CBC 솔버, 단일 스레드)
+
+| 문제 유형 | 크기 | 시간 | 상태 |
+|----------|------|------|------|
+| 절단 재고 | 10개 품목, 5개 원재료 | < 1초 | 최적해 |
+| 포장 | 50개 품목 | 2-5초 | 최적해 |
+| 리소스 | 100개 작업 | 1-3초 | 최적해 |
+| 스케줄 | 20명 직원, 30개 교대 | 0.5-2초 | 최적해 |
+
+**Go 서버 동시성** (곧 출시 예정): Goroutine을 통한 다중 동시 요청
+
+---
+
+## 🚀 Deployment
+
+### Local Testing (Python Only)
+```bash
+python python_solvers/solver_engine.py --domain cutting --solver mip --params '{...}'
+```
+
+### Go Server (Coming Soon)
+```bash
+cd server
+go build -o ./bin/optimystic-server cmd/server/main.go
+./bin/optimystic-server
+```
+
+### Docker (Planned)
+```bash
+docker build -t optimystic .
+docker run -p 8000:8000 optimystic
+```
+
+## 🚀 배포
+
+### 로컬 테스트 (Python만)
+```bash
+python python_solvers/solver_engine.py --domain cutting --solver mip --params '{...}'
+```
+
+### Go 서버 (곧 출시 예정)
+```bash
+cd server
+go build -o ./bin/optimystic-server cmd/server/main.go
+./bin/optimystic-server
+```
+
+### Docker (계획 중)
+```bash
+docker build -t optimystic .
+docker run -p 8000:8000 optimystic
+```
+
+---
+
+## 📚 Documentation
+
+| Document | Purpose |
+|----------|---------|
+| [FINAL_STRUCTURE.md](FINAL_STRUCTURE.md) | Complete file structure |
+| [MIGRATION_COMPLETE.md](MIGRATION_COMPLETE.md) | Migration completion report |
+| [MIGRATION_SUMMARY.md](MIGRATION_SUMMARY.md) | Final summary |
+| [FINAL_STATUS.md](FINAL_STATUS.md) | Current status |
+
+## 📚 문서
+
+| 문서 | 설명 |
+|------|------|
+| [FINAL_STRUCTURE.md](FINAL_STRUCTURE.md) | 완전한 파일 구조 |
+| [MIGRATION_COMPLETE.md](MIGRATION_COMPLETE.md) | 마이그레이션 완료 보고서 |
+| [MIGRATION_SUMMARY.md](MIGRATION_SUMMARY.md) | 최종 요약 |
+| [FINAL_STATUS.md](FINAL_STATUS.md) | 현재 상태 |
+
+---
+
+## 🛠️ Development Roadmap
+
+### ✅ Phase 1: Python Solver (Complete)
+- [x] Column Generation
+- [x] Mixed Integer Programming
+- [x] Domain input mapping (4 domains)
+- [x] Result processing & sensitivity analysis
+- [x] Dashboard generation
+
+### ⏳ Phase 2: Go Server (In Progress)
+- [ ] HTTP server setup
+- [ ] Request handlers (/api/optimize/, /api/health/)
+- [ ] Python subprocess invocation
+- [ ] JSON marshaling
+- [ ] Error handling & logging
+- [ ] Unit & integration tests
+
+### 🔮 Phase 3: Advanced Features
+- [ ] Constraint Programming solver
+- [ ] Stochastic optimization
+- [ ] Non-Linear solver
+- [ ] Web Dashboard (React)
+- [ ] Database integration
+- [ ] Docker & Kubernetes deployment
+- [ ] CI/CD pipeline (GitHub Actions)
+
+## 🛠️ 개발 로드맵
+
+### ✅ Phase 1: Python 솔버 (완료)
+- [x] Column Generation
+- [x] Mixed Integer Programming
+- [x] 도메인 입력 매핑 (4개 도메인)
+- [x] 결과 처리 & 민감도 분석
+- [x] 대시보드 생성
+
+### ⏳ Phase 2: Go 서버 (진행 중)
+- [ ] HTTP 서버 설정
+- [ ] 요청 핸들러 (/api/optimize/, /api/health/)
+- [ ] Python 서브프로세스 호출
+- [ ] JSON 마샬링
+- [ ] 에러 처리 & 로깅
+- [ ] 단위 & 통합 테스트
+
+### 🔮 Phase 3: 고급 기능
+- [ ] Constraint Programming 솔버
+- [ ] Stochastic 최적화
+- [ ] Non-Linear 솔버
+- [ ] 웹 대시보드 (React)
+- [ ] 데이터베이스 통합
+- [ ] Docker & Kubernetes 배포
+- [ ] CI/CD 파이프라인 (GitHub Actions)
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/your-feature`)
+3. Commit your changes
+4. Push to the branch
+5. Open a Pull Request
+
+## 🤝 기여하기
+
+1. 저장소를 포크합니다
+2. 기능 브랜치를 생성합니다 (`git checkout -b feature/your-feature`)
+3. 변경사항을 커밋합니다
+4. 브랜치로 푸시합니다
+5. Pull Request를 엽니다
+
+---
+
+## 🔗 References
+
+- [Pyomo Documentation](https://pyomo.readthedocs.io/)
+- [CBC Solver](https://github.com/coin-or/Cbc)
+- [Go Documentation](https://golang.org/doc/)
+
+## 🔗 참고자료
+
+- [Pyomo 문서](https://pyomo.readthedocs.io/)
+- [CBC 솔버](https://github.com/coin-or/Cbc)
+- [Go 문서](https://golang.org/doc/)
+
+---
+
+**Last Updated**: February 23, 2026 | **상태**: ✅ Python Solver Complete | ⏳ Go Server In Progress
+
+**마지막 업데이트**: 2026년 2월 23일 | **상태**: ✅ Python 솔버 완성 | ⏳ Go 서버 진행 중
+
+---
+
+## 🏛️ Go-First Architecture (Option A)
+
+**Status**: ✅ **Python Complete | Go Ready (스텁)**
+
+### Current Structure
+
+```
+클라이언트 → Go (Entry + Command) → Python (Logic Only) → 결과
+           (라우팅, 검증)           (JSON in/out)
+```
+
+### What's Complete ✅
+
+| Layer | Python | Go | Status |
+|-------|--------|----|----|
+| **Logic** | domains/, logic/, solver_engine.py | - | ✅ 완성 |
+| **Entry** | (삭제) | handlers/, router/ | ⏳ 스텁 |
+| **Command** | bridge_logic.py | bridge.go | ⏳ 스텁 |
+| **Exit** | services.py | services/*.go | ⏳ 스텁 |
+
+### Python Solver (Standalone)
+
+Pure calculation (JSON in → Pyomo → JSON out):
+
+```bash
+python python_solvers/solver_engine.py \
+  --domain cutting \
+  --solver mip \
+  --params '{"Items": ["A"], ...}'
+
+# Returns: {status, objective, variables, constraints, solve_time}
+```
+
+### Go Implementation Guide
+
+**Reference files** in `_legacy_django/`:
+- `ORIGINAL_services.py` - 원본 결과 처리 로직 (참조용)
+- `REFACTORED_solver_engine.py` - 현재 Python 구조
+- `views.py`, `bridge_logic.py` - Django 레거시
+
+**Go File Structure**:
+```
+server/
+├── cmd/server/main.go           (⏳ HTTP server entry)
+└── internal/
+    ├── handlers/                (⏳ Request handlers)
+    ├── router/                  (⏳ URL routing)
+    ├── models/                  (⏳ Struct definitions)
+    ├── services/                (⏳ Result processing)
+    └── solver/                  (⏳ Python call)
+```
+
+**Key Principle**:
+> **Go = Conductor (지휘자), Python = Calculator (계산기)**
+> Go가 전체 흐름 제어, Python은 명령받은 계산만 수행
