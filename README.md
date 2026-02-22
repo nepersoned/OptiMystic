@@ -113,34 +113,34 @@ OptiMystic/
 │   ├── solver_engine.py        (237 LOC - Pyomo execution engine)
 │   ├── requirements.txt
 │   │
-│   ├── domains/                (4개 모듈 - 입력 매핑)
-│   │   ├── cutting.py          (88줄)
-│   │   ├── packing.py          (54줄)
-│   │   ├── resourcing.py       (56줄)
-│   │   └── scheduling.py       (51줄)
+│   ├── domains/                (4 modules - input mapping)
+│   │   ├── cutting.py          (88 LOC)
+│   │   ├── packing.py          (54 LOC)
+│   │   ├── resourcing.py       (56 LOC)
+│   │   └── scheduling.py       (51 LOC)
 │   │
-│   ├── logic/                  (5개 모듈 - 수학 모델)
-│   │   ├── logic_cg.py         (249줄 - Column Generation ✅)
-│   │   ├── logic_mip.py        (293줄 - Mixed Integer ✅)
-│   │   ├── logic_cp.py         (20줄 - Constraint ⏳)
-│   │   ├── logic_st.py         (20줄 - Stochastic ⏳)
-│   │   └── logic_nlp.py        (20줄 - Non-Linear ⏳)
+│   ├── logic/                  (5 modules - math models)
+│   │   ├── logic_cg.py         (249 LOC - Column Generation ✅)
+│   │   ├── logic_mip.py        (293 LOC - Mixed Integer ✅)
+│   │   ├── logic_cp.py         (20 LOC - Constraint ⏳)
+│   │   ├── logic_st.py         (20 LOC - Stochastic ⏳)
+│   │   └── logic_nlp.py        (20 LOC - Non-Linear ⏳)
 │   │
 │   └── utils/
-│       ├── bridge_logic.py     (105줄 - 도메인/솔버 선택)
-│       └── services.py         (510줄 - 결과 처리 & 대시보드)
+│       ├── bridge_logic.py     (105 LOC - domain/solver selection)
+│       └── services.py         (510 LOC - results & dashboard)
 │
 ├── 🚀 server/                  Go HTTP Server (scaffolding complete)
 │   ├── cmd/server/main.go
 │   └── internal/
 │       ├── handlers/           (optimize, health)
 │       ├── router/
-│       └── solver/             (Python 호출)
+│       └── solver/             (Python call)
 │
-├── 💾 _legacy_django/          Django 백업
-├── 📦 _legacy/                 원본 Dash 앱
-├── 📝 scripts/                 Python 스크립트
-└── 📄 docs/                    문서
+├── 💾 _legacy_django/          Django backup
+├── 📦 _legacy/                 original Dash app
+├── 📝 scripts/                 Python scripts
+└── 📄 docs/                    docs
 ```
 
 ## 📂 프로젝트 구조
@@ -697,7 +697,7 @@ docker run -p 8000:8000 optimystic
 
 ---
 
-**Last Updated**: February 23, 2026 | **상태**: ✅ Python Solver Complete | ⏳ Go Server In Progress
+**Last Updated**: February 23, 2026 | **Status**: ✅ Python Solver Complete | ⏳ Go Server In Progress
 
 **마지막 업데이트**: 2026년 2월 23일 | **상태**: ✅ Python 솔버 완성 | ⏳ Go 서버 진행 중
 
@@ -705,23 +705,23 @@ docker run -p 8000:8000 optimystic
 
 ## 🏛️ Go-First Architecture (Option A)
 
-**Status**: ✅ **Python Complete | Go Ready (스텁)**
+**Status**: ✅ **Python Complete | Go Ready (stub)**
 
 ### Current Structure
 
 ```
-클라이언트 → Go (Entry + Command) → Python (Logic Only) → 결과
-           (라우팅, 검증)           (JSON in/out)
+Client → Go (Entry + Command) → Python (Logic Only) → Result
+        (routing, validation)       (JSON in/out)
 ```
 
 ### What's Complete ✅
 
 | Layer | Python | Go | Status |
 |-------|--------|----|----|
-| **Logic** | domains/, logic/, solver_engine.py | - | ✅ 완성 |
-| **Entry** | (삭제) | handlers/, router/ | ⏳ 스텁 |
-| **Command** | bridge_logic.py | bridge.go | ⏳ 스텁 |
-| **Exit** | services.py | services/*.go | ⏳ 스텁 |
+| **Logic** | domains/, logic/, solver_engine.py | - | ✅ Complete |
+| **Entry** | (removed) | handlers/, router/ | ⏳ Stub |
+| **Command** | bridge_logic.py | bridge.go | ⏳ Stub |
+| **Exit** | services.py | services/*.go | ⏳ Stub |
 
 ### Python Solver (Standalone)
 
@@ -739,9 +739,9 @@ python python_solvers/solver_engine.py \
 ### Go Implementation Guide
 
 **Reference files** in `_legacy_django/`:
-- `ORIGINAL_services.py` - 원본 결과 처리 로직 (참조용)
-- `REFACTORED_solver_engine.py` - 현재 Python 구조
-- `views.py`, `bridge_logic.py` - Django 레거시
+- `ORIGINAL_services.py` - original result processing logic (reference)
+- `REFACTORED_solver_engine.py` - current Python layout
+- `views.py`, `bridge_logic.py` - Django legacy
 
 **Go File Structure**:
 ```
@@ -756,5 +756,63 @@ server/
 ```
 
 **Key Principle**:
+> **Go = Conductor, Python = Calculator**
+> Go orchestrates the flow; Python performs computation only
+
+---
+
+## 🏛️ Go-First 아키텍처 (옵션 A)
+
+**상태**: ✅ **Python 완성 | Go 준비(스텁)**
+
+### 현재 구조
+
+```
+클라이언트 → Go (Entry + Command) → Python (Logic Only) → 결과
+           (라우팅, 검증)           (JSON in/out)
+```
+
+### 완료된 항목 ✅
+
+| 계층 | Python | Go | 상태 |
+|-------|--------|----|------|
+| **Logic** | domains/, logic/, solver_engine.py | - | ✅ 완성 |
+| **Entry** | (삭제) | handlers/, router/ | ⏳ 스텁 |
+| **Command** | bridge_logic.py | bridge.go | ⏳ 스텁 |
+| **Exit** | services.py | services/*.go | ⏳ 스텁 |
+
+### Python 솔버 (독립 실행)
+
+순수 계산 (JSON in → Pyomo → JSON out):
+
+```bash
+python python_solvers/solver_engine.py \
+  --domain cutting \
+  --solver mip \
+  --params '{"Items": ["A"], ...}'
+
+# 결과: {status, objective, variables, constraints, solve_time}
+```
+
+### Go 구현 가이드
+
+`_legacy_django/` 참고 파일:
+- `ORIGINAL_services.py` - 원본 결과 처리 로직 (참조용)
+- `REFACTORED_solver_engine.py` - 현재 Python 구조
+- `views.py`, `bridge_logic.py` - Django 레거시
+
+**Go 파일 구조**:
+```
+server/
+├── cmd/server/main.go           (⏳ HTTP 서버 진입점)
+└── internal/
+    ├── handlers/                (⏳ 요청 핸들러)
+    ├── router/                  (⏳ 라우팅)
+    ├── models/                  (⏳ 구조체 정의)
+    ├── services/                (⏳ 결과 처리)
+    └── solver/                  (⏳ Python 호출)
+```
+
+**핵심 원칙**:
 > **Go = Conductor (지휘자), Python = Calculator (계산기)**
 > Go가 전체 흐름 제어, Python은 명령받은 계산만 수행
