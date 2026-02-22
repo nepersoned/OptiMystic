@@ -29,25 +29,34 @@ def _model_has_integer_vars(model: Any) -> bool:
 
 def _select_algorithm(store_data: Dict[str, Any], sense: str, objective: Any, constraints: List[Any]) -> str:
     """
-    Auto-Selector: data size/shape → suggested algorithm.
-    Returns one of 'MIP', 'CG', 'NLP'. Bridge already chose CG vs MIP for cutting;
-    here we only override for very large instances or special payloads.
+    Auto-Selector: data size/shape + model type → suggested algorithm.
+    Returns one of 'MIP', 'CG', 'NLP', 'CP'.
+    
+    Bridge already pre-selects solver, so this is mainly for logging/routing.
+    Can override if problem structure suggests better algorithm.
     """
+    # If already a Pyomo model, bridge already built it → stick with MIP solve
     if _is_pyomo_model(objective):
         return "MIP"
 
+    # Check store_data for hints
     vars_list = store_data.get("variables", [])
+    params = store_data.get("parameters", {})
     n_vars = len(vars_list)
     n_constraints = len(constraints) if isinstance(constraints, list) else 0
 
-    # Heuristic: many binary/integer vars and many constraints → still MIP (already built by bridge)
-    if n_vars > 500 and n_constraints > 200:
-        return "CG"  # Prefer column generation for large cutting
-    if store_data.get("parameters") and any(
-        p.get("name") == "Mode" and p.get("data") == "nlp"
-        for p in (store_data.get("parameters") or [])
-    ):
-        return "NLP"
+    # Domain-specific hints
+    if isinstance(params, dict):
+        mode = params.get("Mode") or (params.get("data") if isinstance(params.get("data"), str) else None)
+        if mode == "nlp":
+            return "NLP"
+        if mode in ("cp", "constraint_programming"):
+            return "CP"
+    
+    # Size-based heuristics
+    if n_vars > 1000 and n_constraints > 500:
+        # Very large: consider CG for cutting, but MIP is safer
+        return "MIP"
 
     return "MIP"
 

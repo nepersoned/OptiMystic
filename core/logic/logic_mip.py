@@ -47,14 +47,21 @@ def _build_cutting_mip(params: Dict[str, Any]) -> Tuple[Any, List[Any], List[Dic
     """
     Build cutting MIP as Pyomo ConcreteModel. Same math: bin use, capacity, demand.
     Returns (model, [], []) so solver_engine can solve(model).
+    
+    Now compatible with flexible input from domains.cutting.map_params().
     """
     if pyo is None:
         raise RuntimeError("Pyomo is required for logic_mip. Install: pip install pyomo")
 
-    items = params.get("Items", [])
-    item_lens = params.get("ItemLens", [])
+    items = list(params.get("Items", []))
+    # Support both "Weights" (from map_params) and "ItemLens" (legacy)
+    item_lens = _safe_list(
+        params.get("Weights", params.get("ItemLens", [])),
+        len(items),
+        1.0
+    )
     demands = params.get("Demands", {})
-    prices = params.get("Prices", {})
+    prices = params.get("Values", params.get("Prices", {}))
     stocks = params.get("Stocks", [{"Name": "Default", "Length": 1000, "Cost": 1, "Limit": 50}])
     sense = params.get("Sense", "minimize")
     kerf = float(params.get("Kerf", 0.0))

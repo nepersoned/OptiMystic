@@ -25,6 +25,33 @@ User Input → Bridge → Domain → Logic → Pyomo Solver → Services → Res
 | **Solver** | `core/utils/solver_engine.py` | Pyomo orchestration & CBC execution |
 | **Services** | `core/utils/services.py` | Result parsing, sensitivity analysis, dashboards |
 
+## 🧭 Go Hybrid Migration (Entry / Command / Exit)
+
+This project can move the request/response shell to Go while keeping the Pyomo models intact.
+
+- **Entry (Request Handling)**: Django `views.py` or `core/apps.py` HTTP entrypoints move to a Go web framework (Gin/Echo). Go receives the incoming JSON and validates it.
+- **Command (Solver Orchestration)**: `core/utils/bridge_logic.py`-style routing logic is reimplemented in Go to decide which domain engine runs (cutting, packing, resourcing, scheduling).
+- **Exit (Result Delivery)**: `core/utils/services.py` and `core/utils/solver_engine.py`-style result packaging moves to Go, returning JSON to the dashboard clients.
+
+### JSON Request/Response
+
+- **Input**: JSON in, with Go structs used for fast and safe decoding.
+- **Output**: JSON out, matching existing dashboard expectations.
+
+### Concurrency Strategy
+
+- Use Go **goroutines** so multiple optimization requests are handled concurrently without blocking the server.
+
+### Pyomo Execution Strategy
+
+- Keep Python models under `core/logic/` unchanged.
+- Have Go invoke the existing Python solver locally via `os/exec` (e.g., `solver_engine.py`) and capture stdout as the result payload.
+
+### Migration Scope
+
+- **Keep in Python**: All Pyomo models and solver logic in `core/logic/`.
+- **Move to Go**: Entry + Command + Exit layers only.
+
 ## 🎯 Supported Domains
 
 | Domain | Algorithms | Input Format | Output |
