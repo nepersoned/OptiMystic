@@ -31,14 +31,14 @@ Django에서 Go로 마이그레이션하기 전의 모든 Django 파일들을 �
 |------|---------------|-------------|
 | `bridge_logic.py` | `core/utils/bridge_logic.py` | Domain/solver routing logic |
 | `ORIGINAL_services.py` | `core/utils/services.py` | Result processing, dashboard, sensitivity |
-| `REFACTORED_solver_engine.py` | `python_solvers/solver_engine.py` | Refactored solver (pure calculator) |
+| `REFACTORED_solver_engine.py` | `python_solvers/cli_solver.py` | Refactored solver (pure calculator) |
 
 ### 유틸리티 & 솔버
 | 파일 | 원본 경로 | 설명 |
 |------|---------|------|
 | `bridge_logic.py` | `core/utils/bridge_logic.py` | 도메인/솔버 라우팅 로직 |
 | `ORIGINAL_services.py` | `core/utils/services.py` | 결과 처리, 대시보드, 민감도 분석 |
-| `REFACTORED_solver_engine.py` | `python_solvers/solver_engine.py` | 리팩토링된 솔버 (순수 계산기) |
+| `REFACTORED_solver_engine.py` | `python_solvers/cli_solver.py` | 리팩토링된 솔버 (순수 계산기) |
 
 ### Django Configuration
 | File | Original Path | Description |

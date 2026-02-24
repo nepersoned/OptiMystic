@@ -71,7 +71,7 @@ python_solvers/
 Go server calls:
 
 ```bash
-python python_solvers/solver_engine.py \
+python python_solvers/cli_solver.py \
   --domain cutting \
   --solver mip \
   --params '{"Items": ["A"], ...}'
@@ -84,7 +84,7 @@ Output: JSON (raw result, no post-processing)
 Go 서버 호출:
 
 ```bash
-python python_solvers/solver_engine.py \
+python python_solvers/cli_solver.py \
   --domain cutting \
   --solver mip \
   --params '{"Items": ["A"], ...}'

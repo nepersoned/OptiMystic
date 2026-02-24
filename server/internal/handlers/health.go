@@ -7,7 +7,7 @@ import (
 
 // health.go: HTTP handler for health check.
 // Replaces Django's core/views.py::health_view
-//
+
 // Responsibilities:
 // - Respond with {"status": "ok"} to GET /api/health/
 
@@ -22,5 +22,8 @@ func HandleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(HealthResponse{Status: "ok"})
+	err := json.NewEncoder(w).Encode(HealthResponse{Status: "ok"})
+	if err != nil {
+		return
+	}
 }

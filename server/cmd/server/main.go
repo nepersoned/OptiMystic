@@ -1,10 +1,11 @@
 package main
 
 import (
-	"net/http"
 	"log"
+	"net/http"
 	"os"
-	// "github.com/optimystic/server/internal/router"
+
+	"github.com/optimystic/server/internal/router"
 )
 
 func main() {
@@ -13,13 +14,12 @@ func main() {
 		port = "8000"
 	}
 
-	// router := router.NewRouter()
-	// http.Handle("/", router)
+	newRouter := router.NewRouter()
+	http.Handle("/", newRouter)
 
 	log.Printf("Starting OptiMystic server on :%s", port)
-	
-	// TODO: Implement full server initialization
-	err := http.ListenAndServe(":"+port, nil)
+
+	err := http.ListenAndServe(":"+port, newRouter)
 	if err != nil {
 		log.Fatal(err)
 	}
