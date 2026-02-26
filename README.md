@@ -4,8 +4,6 @@
 
 Transforms business optimization problems into mathematical models and solves them using state-of-the-art optimization algorithms (Column Generation, MIP, LP, NLP).
 
-**Status:** Python Solver Production Ready | Go Server In Progress
-**Limitations:** Go HTTP API is a stub; use the Python solver directly for now.
 
 ---
 
