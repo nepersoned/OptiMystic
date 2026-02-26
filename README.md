@@ -211,57 +211,6 @@ Below is the overall data flow and layer structure of the OptiMystic Go server a
 
 ---
 
-## Configuration
-
-### Environment Variables
-PYOMO_SOLVER=cbc
-DEBUG=False
-
-### Python Requirements
-pyomo==6.7.3        # Optimization engine
-pandas==2.0.3       # Data processing
-numpy==1.24.3       # Numerical computing
-
----
-
-## Performance
-
-| Problem Type           | Size         | Time         | Status         |
-|------------------------|--------------|--------------|---------------|
-| Cutting Stock          | 10 items, 5 stocks | < 1s        | Optimal      |
-| Packing                | 50 items     | 2-5s         | Optimal       |
-| Resourcing             | 100 tasks    | 1-3s         | Optimal       |
-| Scheduling             | 20 employees, 30 shifts | 0.5-2s      | Optimal      |
-
----
-
-## Deployment
-
-### Local Testing (Python Only)
-python python_solvers/cli_solver.py --domain cutting --solver mip --params '{...}'
-
-### Go Server (Coming Soon)
-cd server
-go build -o ./bin/optimystic-server cmd/server/main.go
-./bin/optimystic-server
-
-### Docker (Planned)
-docker build -t optimystic .
-docker run -p 8000:8000 optimystic
-
----
-
-## Documentation
-
-| Document                | Purpose         |
-|-------------------------|----------------|
-| FINAL_STRUCTURE.md      | Complete file structure |
-| MIGRATION_COMPLETE.md   | Migration completion report |
-| MIGRATION_SUMMARY.md    | Final summary   |
-| FINAL_STATUS.md         | Current status  |
-
----
-
 ## Development Roadmap
 
 ### Phase 1: Python Solver (Complete)
