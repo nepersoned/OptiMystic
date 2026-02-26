@@ -188,76 +188,6 @@ Below is the overall data flow and layer structure of the OptiMystic Go server a
 
 ---
 
-## Quick Start
-
-### Prerequisites
-Python 3.8+
-pip / pipenv
-Go 1.21+ (optional)
-
-### Installation
-
-1. Clone Repository
-   git clone https://github.com/yourusername/optimystic.git
-   cd optimystic
-2. Setup Python Environment
-   python -m venv .venv
-   source .venv/bin/activate  # Windows: .venv\Scripts\activate
-   pip install -r python_solvers/requirements.txt
-3. Test Python Solver
-   python python_solvers/cli_solver.py --domain cutting --solver mip --params '{...}'
-
----
-
-## Usage Examples
-
-### Python Solver (Direct)
-
-#### Cutting Stock Problem
-```python
-from python_solvers.utils import bridge_logic, solver_engine, services
-
-params = {
-    "Items": ["A", "B"],
-    "Weights": [4, 6],
-    "Demands": {"A": 2, "B": 1},
-    "Stocks": [{"Name": "S1", "Length": 10, "Cost": 5}],
-    "Kerf": 0,
-    "Sense": "minimize"
-}
-
-# Map params
-mapped = bridge_logic.map_params_by_mode("cutting", params)
-
-# Build model
-obj, const, vars_config = bridge_logic.generate_logic("cutting", params)
-
-# Solve
-store_data = {
-    "variables": vars_config,
-    "parameters": services.build_parameter_store(mapped)
-}
-result = solver_engine.solve_model(store_data, "minimize", obj, const)
-
-# Process results
-dashboard = services.process_results(result, store_data, "cutting")
-sensitivity = services.process_sensitivity(result, store_data, "cutting")
-```
-
-#### Packing Problem
-```python
-params = {
-    "Items": ["Item1", "Item2", "Item3"],
-    "Weights": [10, 20, 15],
-    "Values": [100, 150, 120],
-    "Capacity": 40,
-    "Sense": "maximize"
-}
-# Same flow as above with domain="packing"
-```
-
----
-
 ## Supported Domains
 
 | Domain                | Algorithm                | Input                | Output                |
@@ -360,22 +290,9 @@ docker run -p 8000:8000 optimystic
 
 ---
 
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/your-feature`)
-3. Commit your changes
-4. Push to the branch
-5. Open a Pull Request
-
----
-
 ## References
 
 - [Pyomo Documentation](https://pyomo.readthedocs.io/)
 - [CBC Solver](https://github.com/coin-or/Cbc)
 - [Go Documentation](https://golang.org/doc/)
 
----
-
-**Last Updated**: February 24, 2026 | **Status**: Python Solver Complete | Go Server In Progress
