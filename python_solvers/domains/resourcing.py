@@ -46,7 +46,7 @@ def map_params(raw_params: Dict[str, Any]) -> Dict[str, Any]:
         "Weights": _safe_list(cpu, n),
         "WeightsRAM": _safe_list(ram, n),
         "Values": _safe_list(values, n),
-        "Demands": raw_params.get("Demands", {n: 1 for n in names}),
+        "Demands": raw_params.get("Demands", {name: 1 for name in names}),
         "Capacity": capacity_cpu,
         "CapacityRAM": capacity_ram,
         "Sense": sense,

@@ -44,7 +44,7 @@ def map_params(raw_params: Dict[str, Any]) -> Dict[str, Any]:
         "Demands": demands,
         "Sense": sense,
         "Shifts": shifts,
-        "MaxShiftsPerEmployee": int(raw_params.get("MaxShiftsPerEmployee", 1)),
+        "MaxShiftsPerEmployee": int(raw_params.get("MaxShiftsPerEmployee") or 1),
         "Rules": raw_params.get("Rules", raw_params.get("Constraints", [])),
         "Mode": "scheduling",
     }
