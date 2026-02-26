@@ -2,31 +2,15 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
-	"os/exec"
 
 	"github.com/optimystic/server/internal/solver"
+
+	"github.com/optimystic/server/internal/services"
 )
 
-// OptimizeRequest represents the incoming JSON payload
-type OptimizeRequest struct {
-	TemplateType string                 `json:"template_type"`
-	Params       map[string]interface{} `json:"params"`
-	Sense        string                 `json:"sense,omitempty"`
-}
-
-// OptimizeResponse represents the solver output
-type OptimizeResponse struct {
-	Status      string                 `json:"status"`
-	Objective   float64                `json:"objective"`
-	Variables   map[string]interface{} `json:"variables"`
-	Constraints []interface{}          `json:"constraints,omitempty"`
-	Dashboard   map[string]interface{} `json:"dashboard,omitempty"`
-	Sensitivity map[string]interface{} `json:"sensitivity,omitempty"`
-}
-
+// HandleOptimize manages the full optimization flow: request parsing, solver execution, and result dispatching.
 func HandleOptimize(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -45,71 +29,42 @@ func HandleOptimize(w http.ResponseWriter, r *http.Request) {
 		}
 	}(r.Body)
 
-	var req OptimizeRequest
+	// 1. Unmarshal request into solver-compatible structure
+	var req solver.OptimizeRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
-	solverName, err := solver.SelectSolver(req)
+	// 2. Execute solver bridge (CLI execution & raw parsing)
+	result, err := solver.RunSolver(req)
 	if err != nil {
-		http.Error(w, "Solver selection failed", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	if solverName == "python_solver" {
-		domain := req.TemplateType
-		paramsJson, err := json.Marshal(req.Params)
-		if err != nil {
-			http.Error(w, "Failed to marshal params", http.StatusInternalServerError)
-			return
-		}
-		cmd := exec.Command("python", "python_solvers/cli_solver.py",
-			"--domain", domain,
-			"--solver", solverName,
-			"--params", string(paramsJson),
-		)
-		output, err := cmd.Output()
-		if err != nil {
-			http.Error(w, "Python solver execution failed", http.StatusInternalServerError)
-			return
-		}
-		var pyResult map[string]interface{}
-		if err := json.Unmarshal(output, &pyResult); err != nil {
-			http.Error(w, "Failed to parse Python solver output", http.StatusInternalServerError)
-			return
-		}
+	// 3. Dispatch raw details to domain-specific output models
+	finalDetails, err := services.DispatchResults(result, req.TemplateType)
+	if err != nil {
+		http.Error(w, "Result processing failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-		var result OptimizeResponse
-		if status, ok := pyResult["status"].(string); ok {
-			result.Status = status
-		}
-		if obj, ok := pyResult["objective"].(float64); ok {
-			result.Objective = obj
-		}
-		if vars, ok := pyResult["variables"].(map[string]interface{}); ok {
-			result.Variables = vars
-		} else if varsArr, ok := pyResult["variables"].([]interface{}); ok {
-			result.Variables = make(map[string]interface{})
-			for i, v := range varsArr {
-				result.Variables[fmt.Sprintf("var_%d", i)] = v
-			}
-		}
-		if cons, ok := pyResult["constraints"].([]interface{}); ok {
-			result.Constraints = cons
-		}
-		if dash, ok := pyResult["dashboard"].(map[string]interface{}); ok {
-			result.Dashboard = dash
-		}
-		if sens, ok := pyResult["lp_sensitivity"].(map[string]interface{}); ok {
-			result.Sensitivity = sens
-		}
+	// 4. Map raw sensitivity data if available
+	sensitivity, _ := services.MapSensitivity(result.Sensitivity)
 
-		w.Header().Set("Content-Type", "application/json")
-		err = json.NewEncoder(w).Encode(result)
-		if err != nil {
-			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-			return
-		}
+	// 5. Construct final unified response
+	response := map[string]interface{}{
+		"status":      result.Status,
+		"objective":   result.Objective,
+		"solve_time":  result.SolveTime,
+		"details":     finalDetails,
+		"sensitivity": sensitivity,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
 	}
 }
