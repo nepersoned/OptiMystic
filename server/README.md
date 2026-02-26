@@ -1,5 +1,7 @@
 # OptiMystic Go Server
 
+**v1.0 (2026-02-26) – Go 서버 완성**
+
 Go HTTP server for OptiMystic optimization API.
 Replaces Django's HTTP layer while Python Pyomo solvers remain unchanged.
 

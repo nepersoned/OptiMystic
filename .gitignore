@@ -66,3 +66,9 @@ Thumbs.db
 *.pyc
 _legacy/__pycache__/
 __pycache__/
+
+# Ignore legacy folders except README.md
+_legacy/*
+!_legacy/README.md
+_legacy_django/*
+!_legacy_django/README.md

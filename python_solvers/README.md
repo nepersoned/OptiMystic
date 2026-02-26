@@ -1,5 +1,7 @@
 # python_solvers/
 
+**v1.0 (2026-02-26) – Python Solver 엔진 완성**
+
 Pure Python Pyomo optimization solver.
 
 This is a standalone optimization engine called by Go.
