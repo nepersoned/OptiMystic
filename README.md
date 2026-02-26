@@ -46,7 +46,7 @@ JSON Response
 
 | Layer         | Technology         | Status         |
 |---------------|--------------------|---------------|
-| API Server    | Go 1.21+ (net/http)| In Progress   |
+| API Server    | Go 1.21+ (net/http)| Complete      |
 | Optimization  | Python 3.8+        | Complete      |
 | Solver        | Pyomo 6.7+ (CBC)   | Complete      |
 | Data          | JSON (stdin/stdout)| Complete      |
