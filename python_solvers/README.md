@@ -28,7 +28,7 @@ python_solvers/
 │   ├── logic_mip.py          ✅ Mixed Integer
 │   ├── logic_cp.py           ⏳ Constraint (stub)
 │   ├── logic_st.py           ⏳ Stochastic (stub)
-│   └── logic_nlp.py          ⏳ Non-Linear (stub)
+│   └── logic_ga.py           ⏳ Genetic Algorithm (stub)
 │
 └── utils/                    Internal utilities
     ├── bridge_logic.py       Domain + solver selection

@@ -2,7 +2,7 @@
 
 **Multi-Domain Optimization API**
 
-Transforms business optimization problems into mathematical models and solves them using state-of-the-art optimization algorithms (Column Generation, MIP, LP, NLP).
+Transforms business optimization problems into mathematical models and solves them using state-of-the-art optimization algorithms (Column Generation, MIP, LP, GA).
 
 
 ---
@@ -72,7 +72,7 @@ OptiMystic/
 │   │   ├── logic_mip.py     Mixed Integer
 │   │   ├── logic_cp.py      Constraint
 │   │   ├── logic_st.py      Stochastic
-│   │   └── logic_nlp.py     Non-Linear
+│   │   └── logic_ga.py      Genetic Algorithm
 │   │
 │   └── utils/
 │       ├── bridge_logic.py  domain/solver selection
@@ -207,7 +207,7 @@ Below is the overall data flow and layer structure of the OptiMystic Go server a
 | Mixed Integer Programming (MIP) | Complete      | All            | General purpose, stable |
 | Constraint Programming (CP) | In Progress   | Scheduling     | For constraint-heavy problems |
 | Stochastic (ST)         | In Progress   | All            | Handles uncertainty |
-| Non-Linear (NLP)        | In Progress   | Packing, Resourcing | For non-linear objectives |
+| Genetic Algorithm (GA)  | In Progress   | Packing, Resourcing | For evolutionary/metaheuristic objectives |
 
 ---
 

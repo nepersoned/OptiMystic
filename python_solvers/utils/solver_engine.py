@@ -30,7 +30,7 @@ def _model_has_integer_vars(model: Any) -> bool:
 def _select_algorithm(store_data: Dict[str, Any], sense: str, objective: Any, constraints: List[Any]) -> str:
     """
     Auto-Selector: data size/shape + model type → suggested algorithm.
-    Returns one of 'MIP', 'CG', 'NLP', 'CP'.
+    Returns one of 'MIP', 'CG', 'GA', 'CP'.
     """
     if _is_pyomo_model(objective):
         return "MIP"
@@ -42,8 +42,8 @@ def _select_algorithm(store_data: Dict[str, Any], sense: str, objective: Any, co
 
     if isinstance(params, dict):
         mode = params.get("Mode") or (params.get("data") if isinstance(params.get("data"), str) else None)
-        if mode == "nlp":
-            return "NLP"
+        if mode == "ga":
+            return "GA"
         if mode in ("cp", "constraint_programming"):
             return "CP"
     

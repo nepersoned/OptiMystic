@@ -34,7 +34,7 @@ server/
 
 ### Command Layer (Bridge)
 - Normalize domain (template_type)
-- Select solver type (cg, mip, cp, st, nlp)
+- Select solver type (cg, mip, cp, st, ga)
 - Execute Python solver via subprocess
 
 ### Exit Layer (Processing)

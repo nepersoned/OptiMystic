@@ -24,7 +24,7 @@ MODES = {
     "nsp": "scheduling",
 }
 
-SOLVER_TYPES = ["cg", "mip", "cp", "st", "nlp"]
+SOLVER_TYPES = ["cg", "mip", "cp", "st", "ga"]
 
 
 def map_params_by_mode(mode: str, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -63,7 +63,7 @@ def generate_logic(
     Args:
       template_type: cutting | packing | resourcing | scheduling
       params: Raw or pre-mapped params (domain.map_params assumed)
-      solver_type: "cg", "mip", "cp", "st", "nlp" (defaults by mode)
+      solver_type: "cg", "mip", "cp", "st", "ga" (defaults by mode)
     
     Returns:
       (objective_or_model, constraints, variables)
@@ -98,8 +98,8 @@ def generate_logic(
         from python_solvers.logic import logic_st
         return logic_st.build_model(normalized_mode, mapped)
     
-    if solver_type == "nlp":
-        from python_solvers.logic import logic_nlp
-        return logic_nlp.build_model(normalized_mode, mapped)
+    if solver_type == "ga":
+        from python_solvers.logic import logic_ga
+        return logic_ga.build_model(normalized_mode, mapped)
 
     return [], [], []
