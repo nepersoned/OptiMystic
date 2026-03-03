@@ -1,6 +1,7 @@
 """
 Solver engine: Auto-Selector + Pyomo. Builds/solves from (objective, constraints, variables)
 or solves a pre-built Pyomo model.
+All comments are in English only.
 """
 import time
 from typing import Any, Dict, List
@@ -32,36 +33,36 @@ def _select_algorithm(store_data: Dict[str, Any], sense: str, objective: Any, co
     Auto-Selector: data size/shape + model type → suggested algorithm.
     Returns one of 'MIP', 'CG', 'GA', 'CP'.
     """
+    # Algorithm selection is based on external parameters, default is MIP
+    params = store_data.get("parameters", {})
+    algo = params.get("algorithm") or params.get("Algorithm")
+    if algo:
+        return algo.upper()
     if _is_pyomo_model(objective):
         return "MIP"
-
     vars_list = store_data.get("variables", [])
-    params = store_data.get("parameters", {})
     n_vars = len(vars_list)
     n_constraints = len(constraints) if isinstance(constraints, list) else 0
-
     if isinstance(params, dict):
         mode = params.get("Mode") or (params.get("data") if isinstance(params.get("data"), str) else None)
-        if mode == "ga":
+        if mode and mode.lower() == "ga":
             return "GA"
-        if mode in ("cp", "constraint_programming"):
+        if mode and mode.lower() in ("cp", "constraint_programming"):
             return "CP"
-    
     if n_vars > 1000 and n_constraints > 500:
         return "MIP"
-
     return "MIP"
 
 
-def _solve_pyomo_model(model: Any) -> Dict[str, Any]:
-    """Solve a Pyomo ConcreteModel and return standard result dict."""
+def _solve_pyomo_model(model: Any, solver_name: str = "cbc") -> Dict[str, Any]:
+    """Solve a Pyomo ConcreteModel and return a standard result dictionary."""
     start = time.time()
     try:
         is_mip = _model_has_integer_vars(model)
         if not is_mip and not hasattr(model, "dual"):
             model.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
 
-        opt = pyo.SolverFactory("cbc")
+        opt = pyo.SolverFactory(solver_name)
         res = opt.solve(model, tee=False, options={"seconds": 10})
 
         status = "Optimal"
@@ -121,10 +122,8 @@ def _build_and_solve_from_lists(
 
     start = time.time()
     model = pyo.ConcreteModel()
-
     vars_list = store_data.get("variables", [])
     is_mip = any(v.get("type") in ("Binary", "Integer") for v in vars_list)
-
     model._v = {}
     for v in vars_list:
         name = v.get("name", "")
@@ -137,11 +136,9 @@ def _build_and_solve_from_lists(
             domain = pyo.NonNegativeReals
         setattr(model, name.replace("-", "_"), pyo.Var(domain=domain, bounds=(0, None)))
         model._v[name] = getattr(model, name.replace("-", "_"))
-
     if not is_mip:
         model.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
-
-    # Objective
+    # Build objective
     if isinstance(objective, list) and objective:
         obj_expr = sum(
             term.get("coef", 0) * getattr(model, term["var"].replace("-", "_"))
@@ -151,8 +148,7 @@ def _build_and_solve_from_lists(
         model.OBJ = pyo.Objective(expr=obj_expr, sense=pyo.minimize if sense == "minimize" else pyo.maximize)
     else:
         model.OBJ = pyo.Objective(expr=0, sense=pyo.minimize)
-
-    # Constraints
+    # Build constraints
     for idx, c in enumerate(constraints or []):
         ctype = c.get("type", "linear")
         if ctype == "fix":
@@ -174,14 +170,13 @@ def _build_and_solve_from_lists(
                 model.add_component(f"C_{idx}", pyo.Constraint(expr=lhs >= rhs))
             else:
                 model.add_component(f"C_{idx}", pyo.Constraint(expr=lhs == rhs))
-
-    opt = pyo.SolverFactory("cbc")
+    # Support for solver_name parameter
+    solver_name = store_data.get("parameters", {}).get("solver_name", "cbc")
+    opt = pyo.SolverFactory(solver_name)
     res = opt.solve(model, tee=False, options={"seconds": 10})
-
     status = "Optimal"
     if res.solver.termination_condition != pyo.TerminationCondition.optimal:
         status = str(res.solver.termination_condition) if res.solver else "Unknown"
-
     objective_val = float(pyo.value(model.OBJ)) if model.OBJ else None
     variables = [{"Variable": name, "Value": pyo.value(v)} for name, v in model._v.items()]
     constraints_data = []
@@ -195,7 +190,6 @@ def _build_and_solve_from_lists(
                 constraints_data.append({"Constraint": cname, "Shadow Price": 0.0, "Slack": 0.0})
         except Exception:
             constraints_data.append({"Constraint": cname, "Shadow Price": 0.0, "Slack": 0.0})
-
     return {
         "status": status,
         "objective": objective_val,
@@ -211,15 +205,17 @@ def solve_model(
     sense: str,
     objective: Any,
     constraints: Any,
+    solver_name: str = None,
 ) -> Dict[str, Any]:
     """
     Solve: if objective is a Pyomo model, solve it; else build from (objective, constraints, variables) with Pyomo.
     """
     algo = _select_algorithm(store_data, sense, objective, constraints)
-
+    # solver_name priority: function argument > store_data.parameters > default value
+    if not solver_name:
+        solver_name = store_data.get("parameters", {}).get("solver_name", "cbc")
     if _is_pyomo_model(objective):
-        return _solve_pyomo_model(objective)
-
+        return _solve_pyomo_model(objective, solver_name=solver_name)
     return _build_and_solve_from_lists(
         store_data,
         sense,
