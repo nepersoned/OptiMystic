@@ -15,11 +15,8 @@ def main():
     try:
         params = json.loads(args.params)
 
+        objective, constraints, variables = bridge_logic.generate_logic(args.domain, params, args.solver)
         mapped_params = bridge_logic.map_params_by_mode(args.domain, params)
-
-        objective, constraints, variables = bridge_logic.generate_logic(
-            args.domain, mapped_params, args.solver
-        )
 
         store_data = {
             "variables": variables,

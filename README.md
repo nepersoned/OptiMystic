@@ -1,247 +1,108 @@
 # OptiMystic
 
-**Multi-Domain Optimization API**
+Multi-domain optimization service with a Go HTTP layer and Python solver back end.
 
-Transforms business optimization problems into mathematical models and solves them using state-of-the-art optimization algorithms (Column Generation, MIP, LP, GA).
+## Current status
 
-
----
-
-## What It Does
-
-| Problem                | Algorithm                | Input                | Output                |
-|------------------------|-------------------------|----------------------|-----------------------|
-| Cutting Stock          | Column Generation + MIP | Items, lengths, demands, stocks, kerf | Cutting patterns, cost, waste |
-| Packing/Knapsack       | MIP/LP                  | Items, weights, values, capacity | Selection, utilization % |
-| Resource Allocation    | MIP/LP                  | Tasks, CPU, RAM, capacity | Task allocation, usage |
-| Shift Scheduling       | MIP/LP                  | Employees, shifts, demands | Assignments, coverage |
-
----
+- `MIP`: implemented through a domain-to-IR flow
+- `CG`: available for cutting
+- `CP`, `ST`, `GA`: present but not implemented end-to-end
 
 ## Architecture
 
-```
-HTTP Request (JSON)
-    ↓
-Go Server (Entry Layer)
-├─ server/cmd/server/main.go
-├─ server/internal/handlers/
-└─ server/internal/router/
-    ↓
-Bridge (Command Layer)
-├─ server/internal/solver/bridge.go
-└─ python_solvers/utils/bridge_logic.py
-    ↓
-Python Solver (Logic + Output Layer)
-├─ python_solvers/domains/       (input mapping)
-├─ python_solvers/logic/         (Pyomo models)
-└─ python_solvers/utils/         (solver execution + result processing)
-    ↓
-JSON Response
+```text
+HTTP request
+  -> Go server (`server/internal/handlers`)
+  -> Go/Python bridge (`server/internal/solver/bridge.go`)
+  -> Python CLI (`python_solvers/cli_solver.py`)
+  -> Domain mapper (`python_solvers/domains/*.py`)
+  -> IR-based MIP input (`params["IR"]`)
+  -> Solver engine (`python_solvers/utils/solver_engine.py`)
+  -> Python result processing (`python_solvers/utils/services.py`)
+  -> Go result mapping (`server/internal/services/*.go`)
+  -> HTTP response
 ```
 
----
+## Key idea
 
-## Technology Stack
+Each domain builds a shared optimization IR.
 
-| Layer         | Technology         | Status         |
-|---------------|--------------------|---------------|
-| API Server    | Go 1.21+ (net/http)| Complete      |
-| Optimization  | Python 3.8+        | Complete      |
-| Solver        | Pyomo 6.7+ (CBC)   | Complete      |
-| Data          | JSON (stdin/stdout)| Complete      |
+- Domain layer: normalize input and build IR
+- Logic layer: consume IR
+- Solver engine: assemble and solve Pyomo model
+- Bridge layer: move JSON between Go and Python
 
----
+## Main folders
 
-## Project Structure
-
-```
+```text
 OptiMystic/
-├── python_solvers/          Python Pyomo Solver
-│   ├── solver_engine.py     Pyomo execution engine
-│   ├── requirements.txt
-│   │
-│   ├── domains/             input mapping
-│   │   ├── cutting.py
-│   │   ├── packing.py
-│   │   ├── resourcing.py
-│   │   └── scheduling.py
-│   │
-│   ├── logic/               mathematical models
-│   │   ├── logic_cg.py      Column Generation
-│   │   ├── logic_mip.py     Mixed Integer
-│   │   ├── logic_cp.py      Constraint
-│   │   ├── logic_st.py      Stochastic
-│   │   └── logic_ga.py      Genetic Algorithm
-│   │
+├── python_solvers/
+│   ├── cli_solver.py
+│   ├── domains/
+│   ├── logic/
 │   └── utils/
-│       ├── bridge_logic.py  domain/solver selection
-│       └── services.py      result processing
-│
-├── server/                  Go HTTP Server
+├── server/
 │   ├── cmd/server/main.go
 │   └── internal/
-│       ├── handlers/        optimize, health
-│       ├── router/
-│       ├── services/        results_cutting, results_packing, results_resourcing, results_scheduling
-│       └── solver/          Python call
-│
-├── _legacy_django/          Django backup
-├── _legacy/                 Original Dash app
-├── scripts/                 Python scripts
-└── docs/                    Documentation
+├── _legacy/
+└── _legacy_django/
 ```
 
----
+## API endpoints
 
-## System Architecture
+- `GET /api/health`
+- `GET /api/health/`
+- `POST /api/optimize`
+- `POST /api/optimize/`
 
-Below is the overall data flow and layer structure of the OptiMystic Go server and Python solver. All domains (cutting, packing, resourcing, scheduling) are handled at the same domain layer.
+## Request shape
 
-```
-+-------------------------------+
-| server/cmd/server/main.go     |  # Server entry point
-+---------------+---------------+
-                |
-                v
-+-------------------------------+
-| server/internal/router/router |  # Route registration
-+---------------+---------------+
-                |
-        +-------+-------------------+
-        |                           |
-        v                           v
-+------------------------+   +----------------------------+
-| handlers/health.go     |   | handlers/optimize.go       |  # HTTP handlers
-+------------------------+   +-------------+--------------+
-                                          |
-                                          v
-                               +----------------------------+
-                               | models/optimization.go     |  # Data structures
-                               +-------------+--------------+
-                                          |
-                                          v
-                               +----------------------------+
-                               | solver/bridge.go           |  # Go ↔ Python bridge
-                               +-------------+--------------+
-                                          |
-                                          v
-                               +----------------------------+
-                               | python_solvers/cli_solver  |  # Python solver CLI
-                               +-------------+--------------+
-                                          |
-                                          v
-                               +----------------------------+
-                               | utils/bridge_logic.py      |  # Bridge logic
-                               +-------------+--------------+
-                                          |
-        +----------------------+----------+----------+----------+
-        |                      |          |          |          |
-        v                      v          v          v          v
-+------------------+  +------------------+  +------------------+  +------------------+
-| domains/cutting  |  | domains/packing  |  | domains/resourcing|  | domains/scheduling|  # Domain logic
-+------------------+  +------------------+  +------------------+  +------------------+
-        |                      |                     |                      |
-        +-----------+----------+----------+----------+----------+-----------+
-                    |                     |                     |
-                    v                     v                     v
-          +------------------+   +------------------+   +------------------+
-          | logic/logic_cg   |   | logic/logic_mip  |   | logic/logic_cp   |  # Solver logic
-          +------------------+   +------------------+   +------------------+
-                    |                     |                     |
-                    +-----------+---------+---------+-----------+
-                                |
-                                v
-                   +----------------------------+
-                   | utils/solver_engine.py     |  # Solver engine
-                   +-------------+--------------+
-                                 |
-                                 v
-                   +----------------------------+
-                   | utils/services.py          |  # Service utilities
-                   +-------------+--------------+
-                                 |
-                                 v
-                   +----------------------------+
-                   | solver/bridge.go (result)  |  # Bridge result
-                   +-------------+--------------+
-                                 |
-                                 v
-                   +----------------------------+
-                   | services/results.go        |  # Result processing
-                   +------+------+------+-------+
-                          |      |      |      |
-                          v      v      v      v
-          +----------------+ +----------------+ +---------------------+ +---------------------+
-          | results_cutting| | results_packing| | results_resourcing  | | results_scheduling  |  # Domain-specific results
-          +----------------+ +----------------+ +---------------------+ +---------------------+
+```json
+{
+  "template_type": "packing",
+  "solver_type": "mip",
+  "sense": "maximize",
+  "params": {
+    "Items": [
+      {"Name": "A", "Weight": 2, "Value": 10, "Demand": 2},
+      {"Name": "B", "Weight": 3, "Value": 12, "Demand": 1}
+    ],
+    "Vehicles": [
+      {"Capacity": 5}
+    ]
+  }
+}
 ```
 
-- main.go: Server entry point, router initialization
-- router.go: Endpoint routing
-- handlers: Request handling (health, optimize, etc.)
-- models: Data structure definitions
-- bridge.go: Go ↔ Python bridge
-- python_solvers: Actual optimization and domain logic
-- services/results.go: Result processing and domain dispatch
-- results_*.go: Final domain-specific result generation
+## Response shape
 
----
+```json
+{
+  "status": "Optimal",
+  "objective": 22,
+  "solve_time": 0.02,
+  "variables": [],
+  "constraints": [],
+  "details": {},
+  "sensitivity": null
+}
+```
 
-## Supported Domains
+## Local run
 
-| Domain                | Algorithm                | Input                | Output                |
-|-----------------------|-------------------------|----------------------|-----------------------|
-| Cutting Stock         | Column Generation + MIP | Items, lengths, demands, stocks, kerf | Cutting patterns, cost, waste |
-| Packing/Knapsack      | MIP/LP                  | Items, weights, values, capacity | Selection, utilization % |
-| Resource Allocation   | MIP/LP                  | Tasks, CPU, RAM, capacity | Task allocation, usage |
-| Shift Scheduling      | MIP/LP                  | Employees, shifts, demands | Assignments, coverage |
+```cmd
+cd /d c:\Users\kevin\OneDrive\Desktop\OptiMystic\server
+go run .\cmd\server\main.go
+```
 
----
+## Python CLI example
 
-## Solver Algorithms
+```cmd
+cd /d c:\Users\kevin\OneDrive\Desktop\OptiMystic
+python python_solvers\cli_solver.py --domain packing --solver mip --params "{\"Items\":[{\"Name\":\"A\",\"Weight\":2,\"Value\":10,\"Demand\":2},{\"Name\":\"B\",\"Weight\":3,\"Value\":12,\"Demand\":1}],\"Vehicles\":[{\"Capacity\":5}],\"Sense\":\"maximize\"}"
+```
 
-| Algorithm                | Status         | Domains         | Notes         |
-|-------------------------|---------------|----------------|--------------|
-| Column Generation (CG)  | Complete      | Cutting        | Optimal solution guaranteed |
-| Mixed Integer Programming (MIP) | Complete      | All            | General purpose, stable |
-| Constraint Programming (CP) | In Progress   | Scheduling     | For constraint-heavy problems |
-| Stochastic (ST)         | In Progress   | All            | Handles uncertainty |
-| Genetic Algorithm (GA)  | In Progress   | Packing, Resourcing | For evolutionary/metaheuristic objectives |
+## Notes
 
----
-
-## Development Roadmap
-
-### Phase 1: Python Solver (Complete)
-- [x] Column Generation
-- [x] Mixed Integer Programming
-- [x] Domain input mapping (4 domains)
-- [x] Result processing & sensitivity analysis
-- [x] Dashboard generation
-
-### Phase 2: Go Server (Complete)
-- [x] HTTP server setup
-- [x] Request handlers (/api/optimize/, /api/health/)
-- [x] Python subprocess invocation
-- [x] JSON marshaling
-- [x] Error handling & logging
-- [x] Unit & integration tests
-
-### Phase 3: Advanced Features
-- [ ] Constraint Programming solver
-- [ ] Stochastic optimization
-- [ ] Non-Linear solver
-- [ ] Web Dashboard (React)
-- [ ] Database integration
-- [ ] Docker & Kubernetes deployment
-- [ ] CI/CD pipeline (GitHub Actions)
-
----
-
-## References
-
-- [Pyomo Documentation](https://pyomo.readthedocs.io/)
-- [CBC Solver](https://github.com/coin-or/Cbc)
-- [Go Documentation](https://golang.org/doc/)
-
+- Runtime success still depends on local Python environment and a working MILP solver such as CBC.
+- The legacy folders are kept as references and are not the active runtime path.

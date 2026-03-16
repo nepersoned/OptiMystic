@@ -1,57 +1,68 @@
-# python_solvers/
+# python_solvers
 
-Pure Python Pyomo optimization solver.
+Python optimization runtime used by the Go server.
 
-This is a standalone optimization engine called by Go.
+## Current role
 
-## Role
-
-**Pure Calculator**: JSON in → Pyomo execution → JSON out
-
-Go handles all routing, validation, and result processing.
-
-## Structure
-
+```text
+raw params -> domain mapping -> logic model build (IR / CP / ST) -> solver engine -> result processing -> JSON stdout
 ```
+
+## Important files
+
+```text
 python_solvers/
-├── solver_engine.py          Entry point (called by Go)
-├── requirements.txt          Dependencies (Pyomo, Pandas)
-│
-├── domains/                  Input mapping (4 modules)
+├── cli_solver.py
+├── domains/
 │   ├── cutting.py
 │   ├── packing.py
 │   ├── resourcing.py
 │   └── scheduling.py
-│
-├── logic/                    Pyomo models (5 modules)
-│   ├── logic_cg.py           ✅ Column Generation
-│   ├── logic_mip.py          ✅ Mixed Integer
-│   ├── logic_cp.py           ⏳ Constraint (stub)
-│   ├── logic_st.py           ⏳ Stochastic (stub)
-│   └── logic_ga.py           ⏳ Genetic Algorithm (stub)
-│
-└── utils/                    Internal utilities
-    ├── bridge_logic.py       Domain + solver selection
-    ├── services.py           Result processing (Go calls this)
-    └── solver_engine.py      Pyomo execution engine
+├── logic/
+│   ├── logic_cg.py
+│   ├── logic_mip.py
+│   ├── logic_cp.py
+│   ├── logic_st.py
+│   └── logic_ga.py
+└── utils/
+    ├── bridge_logic.py
+    ├── services.py
+    └── solver_engine.py
 ```
 
-## Usage
+## Runtime flow
 
-Go server calls:
+- domain modules normalize inputs
+- each domain builds `IR` and, when needed, solver-specific specs such as `CP` or `ST`
+- `logic/logic_mip.py` reads the `IR` only
+- `logic/logic_cp.py` builds a scheduling CP model for `solver=cp`
+- `logic/logic_st.py` builds a stochastic resourcing model for `solver=st`
+- `generic` domain accepts expert-provided `IR` directly for custom optimization models
+- `utils/solver_engine.py` solves list IR, Pyomo models, and OR-Tools CP wrappers
+- `utils/services.py` shapes domain-friendly result payloads
 
-```bash
-python python_solvers/cli_solver.py \
-  --domain cutting \
-  --solver mip \
-  --params '{"Items": ["A"], ...}'
+## CLI example
+
+```cmd
+cd /d c:\Users\kevin\OneDrive\Desktop\OptiMystic
+python python_solvers\cli_solver.py --domain packing --solver mip --params "{\"Items\":[{\"Name\":\"A\",\"Weight\":2,\"Value\":10,\"Demand\":2},{\"Name\":\"B\",\"Weight\":3,\"Value\":12,\"Demand\":1}],\"Vehicles\":[{\"Capacity\":5}],\"Sense\":\"maximize\"}"
 ```
 
-Output: JSON (raw result, no post-processing)
+## Output
+
+The CLI prints JSON with fields such as:
+
+- `status`
+- `objective`
+- `variables`
+- `constraints`
+- `solve_time`
+- `details`
+- `sensitivity`
 
 ## Notes
 
-- Go handles routing, validation, result processing
-- Python only performs pure calculation
-- No Django dependency (pure Python)
-- Reference original code: `_legacy_django/ORIGINAL_services.py`
+- `CP` for scheduling uses OR-Tools CP-SAT.
+- `ST` for resourcing uses a scenario-based Pyomo model.
+- `generic` is intended for frontends that transform formula or natural-language inputs into structured IR.
+- Runtime success depends on installed Python dependencies and an available Pyomo solver backend for MIP/ST flows.

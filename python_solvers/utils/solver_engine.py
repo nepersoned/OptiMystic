@@ -11,9 +11,58 @@ try:
 except ImportError:
     pyo = None
 
+try:
+    from ortools.sat.python import cp_model
+except ImportError:
+    cp_model = None
+
+
+def _parameter_map(parameters: Any) -> Dict[str, Any]:
+    if isinstance(parameters, dict):
+        return parameters
+    if isinstance(parameters, list):
+        mapped = {}
+        for item in parameters:
+            if isinstance(item, dict) and "name" in item:
+                mapped[item["name"]] = item.get("data")
+        return mapped
+    return {}
+
+
+def _normalize_symbol(name: str) -> str:
+    return str(name or "").replace("-", "_")
+
+
+def _solver_options(parameters: Dict[str, Any]) -> Dict[str, Any]:
+    time_limit = parameters.get("time_limit", parameters.get("TimeLimit", 10))
+    try:
+        seconds = max(1, int(float(time_limit)))
+    except (TypeError, ValueError):
+        seconds = 10
+    return {"seconds": seconds}
+
+
+def _build_solver(parameters: Dict[str, Any], solver_name: str | None = None) -> Any:
+    if pyo is None:
+        return None
+    selected = solver_name or parameters.get("solver_name", "cbc")
+    return pyo.SolverFactory(selected)
+
+
+def _variable_domain(vtype: str) -> Any:
+    if vtype == "Binary":
+        return pyo.Binary
+    if vtype == "Integer":
+        return pyo.NonNegativeIntegers
+    return pyo.NonNegativeReals
+
 
 def _is_pyomo_model(obj: Any) -> bool:
     return pyo is not None and hasattr(pyo, "ConcreteModel") and type(obj).__name__ == "ConcreteModel"
+
+
+def _is_cp_sat_wrapper(obj: Any) -> bool:
+    return isinstance(obj, dict) and obj.get("engine") == "ortools_cp_sat"
 
 
 def _model_has_integer_vars(model: Any) -> bool:
@@ -34,10 +83,12 @@ def _select_algorithm(store_data: Dict[str, Any], sense: str, objective: Any, co
     Returns one of 'MIP', 'CG', 'GA', 'CP'.
     """
     # Algorithm selection is based on external parameters, default is MIP
-    params = store_data.get("parameters", {})
+    params = _parameter_map(store_data.get("parameters", {}))
     algo = params.get("algorithm") or params.get("Algorithm")
     if algo:
         return algo.upper()
+    if _is_cp_sat_wrapper(objective):
+        return "CP"
     if _is_pyomo_model(objective):
         return "MIP"
     vars_list = store_data.get("variables", [])
@@ -54,6 +105,104 @@ def _select_algorithm(store_data: Dict[str, Any], sense: str, objective: Any, co
     return "MIP"
 
 
+def _flatten_var_name(base_name: str, idx: Any) -> str:
+    if idx is None:
+        return base_name
+    if isinstance(idx, tuple):
+        return f"{base_name}_" + "_".join(str(i) for i in idx)
+    return f"{base_name}_{idx}"
+
+
+def _solve_cp_sat_model(wrapper: Dict[str, Any], parameters: Dict[str, Any]) -> Dict[str, Any]:
+    start = time.time()
+    if cp_model is None:
+        return {"status": "Error", "error_msg": "OR-Tools required. pip install ortools", "solve_time": time.time() - start}
+
+    spec = wrapper.get("spec") if isinstance(wrapper, dict) else None
+    if not isinstance(spec, dict):
+        return {"status": "Error", "error_msg": "Invalid CP wrapper spec", "solve_time": time.time() - start}
+
+    employees = list(spec.get("employees", []))
+    shifts = list(spec.get("shifts", []))
+    demands = spec.get("demands", {}) or {}
+    values = spec.get("values", {}) or {}
+    rules = spec.get("rules", []) or []
+    max_shifts = int(spec.get("max_shifts_per_employee", 1))
+    sense = str((spec.get("meta") or {}).get("sense", "maximize")).lower()
+
+    model = cp_model.CpModel()
+    assign = {}
+    for e_idx, employee in enumerate(employees):
+        for s_idx, shift in enumerate(shifts):
+            assign[(e_idx, s_idx)] = model.NewBoolVar(f"Assign_{e_idx}_{s_idx}")
+
+    for s_idx, shift in enumerate(shifts):
+        model.Add(sum(assign[(e_idx, s_idx)] for e_idx in range(len(employees))) >= int(round(float(demands.get(shift, 1)))))
+
+    for e_idx, _ in enumerate(employees):
+        model.Add(sum(assign[(e_idx, s_idx)] for s_idx in range(len(shifts))) <= max_shifts)
+
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        employee = rule.get("Employee", rule.get("employee"))
+        shift = rule.get("Shift", rule.get("shift"))
+        if employee not in employees or shift not in shifts:
+            continue
+        var = assign[(employees.index(employee), shifts.index(shift))]
+        kind = str(rule.get("Type", rule.get("type", ""))).lower()
+        value = int(round(float(rule.get("Value", rule.get("value", 1)))))
+        if kind in ("forbid", "blocked", "ban", "unavailable"):
+            model.Add(var == 0)
+        elif kind in ("require", "forced", "must"):
+            model.Add(var == value)
+
+    objective_expr = sum(int(round(float(values.get(employee, 1.0)) * 1000)) * assign[(e_idx, s_idx)] for e_idx, employee in enumerate(employees) for s_idx in range(len(shifts)))
+    if sense == "minimize":
+        model.Minimize(-objective_expr)
+    else:
+        model.Maximize(objective_expr)
+
+    solver = cp_model.CpSolver()
+    solver.parameters.max_time_in_seconds = float(_solver_options(parameters).get("seconds", 10))
+    status = solver.Solve(model)
+    status_map = {
+        cp_model.OPTIMAL: "Optimal",
+        cp_model.FEASIBLE: "Feasible",
+        cp_model.INFEASIBLE: "Infeasible",
+        cp_model.MODEL_INVALID: "ModelInvalid",
+        cp_model.UNKNOWN: "Unknown",
+    }
+
+    variables = []
+    feasible_statuses = (cp_model.OPTIMAL, cp_model.FEASIBLE)
+    for e_idx, _ in enumerate(employees):
+        for s_idx, _ in enumerate(shifts):
+            name = f"Assign_{e_idx}_{s_idx}"
+            variables.append({"Variable": name, "Value": float(solver.Value(assign[(e_idx, s_idx)])) if status in feasible_statuses else 0.0})
+
+    constraints_data = []
+    for s_idx, _ in enumerate(shifts):
+        constraints_data.append({"Constraint": f"coverage_{s_idx}", "Shadow Price": 0.0, "Slack": 0.0})
+    for e_idx, _ in enumerate(employees):
+        constraints_data.append({"Constraint": f"employee_load_{e_idx}", "Shadow Price": 0.0, "Slack": 0.0})
+
+    objective_val = None
+    if status in feasible_statuses:
+        objective_val = solver.ObjectiveValue() / 1000.0
+        if sense == "minimize":
+            objective_val = -objective_val
+
+    return {
+        "status": status_map.get(status, "Unknown"),
+        "objective": objective_val,
+        "variables": variables,
+        "constraints": constraints_data,
+        "solve_time": time.time() - start,
+        "lp_sensitivity": False,
+    }
+
+
 def _solve_pyomo_model(model: Any, solver_name: str = "cbc") -> Dict[str, Any]:
     """Solve a Pyomo ConcreteModel and return a standard result dictionary."""
     start = time.time()
@@ -62,7 +211,9 @@ def _solve_pyomo_model(model: Any, solver_name: str = "cbc") -> Dict[str, Any]:
         if not is_mip and not hasattr(model, "dual"):
             model.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
 
-        opt = pyo.SolverFactory(solver_name)
+        opt = _build_solver({}, solver_name)
+        if opt is None:
+            return {"status": "Error", "error_msg": "Pyomo required. pip install pyomo", "solve_time": time.time() - start}
         res = opt.solve(model, tee=False, options={"seconds": 10})
 
         status = "Optimal"
@@ -77,11 +228,7 @@ def _solve_pyomo_model(model: Any, solver_name: str = "cbc") -> Dict[str, Any]:
         for v in model.component_objects(pyo.Var, active=True):
             for idx in v:
                 try:
-                    name = v.name
-                    if isinstance(idx, tuple):
-                        name += "_" + "_".join(str(i) for i in idx)
-                    else:
-                        name += f"_{idx}"
+                    name = _flatten_var_name(v.name, idx)
                     variables.append({"Variable": name, "Value": pyo.value(v[idx])})
                 except Exception:
                     pass
@@ -123,19 +270,20 @@ def _build_and_solve_from_lists(
     start = time.time()
     model = pyo.ConcreteModel()
     vars_list = store_data.get("variables", [])
+    parameters = _parameter_map(store_data.get("parameters", {}))
     is_mip = any(v.get("type") in ("Binary", "Integer") for v in vars_list)
     model._v = {}
     for v in vars_list:
         name = v.get("name", "")
+        if not name:
+            continue
         vtype = v.get("type", "Continuous")
-        if vtype == "Binary":
-            domain = pyo.Binary
-        elif vtype == "Integer":
-            domain = pyo.NonNegativeIntegers
-        else:
-            domain = pyo.NonNegativeReals
-        setattr(model, name.replace("-", "_"), pyo.Var(domain=domain, bounds=(0, None)))
-        model._v[name] = getattr(model, name.replace("-", "_"))
+        domain = _variable_domain(vtype)
+        lb = v.get("lb", 0)
+        ub = v.get("ub", None)
+        normalized_name = _normalize_symbol(name)
+        setattr(model, normalized_name, pyo.Var(domain=domain, bounds=(lb, ub)))
+        model._v[name] = getattr(model, normalized_name)
     if not is_mip:
         model.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
     # Build objective
@@ -171,9 +319,11 @@ def _build_and_solve_from_lists(
             else:
                 model.add_component(f"C_{idx}", pyo.Constraint(expr=lhs == rhs))
     # Support for solver_name parameter
-    solver_name = store_data.get("parameters", {}).get("solver_name", "cbc")
-    opt = pyo.SolverFactory(solver_name)
-    res = opt.solve(model, tee=False, options={"seconds": 10})
+    solver_name = parameters.get("solver_name", "cbc")
+    opt = _build_solver(parameters, solver_name)
+    if opt is None:
+        return {"status": "Error", "error_msg": "Pyomo required. pip install pyomo", "solve_time": time.time() - start}
+    res = opt.solve(model, tee=False, options=_solver_options(parameters))
     status = "Optimal"
     if res.solver.termination_condition != pyo.TerminationCondition.optimal:
         status = str(res.solver.termination_condition) if res.solver else "Unknown"
@@ -210,10 +360,12 @@ def solve_model(
     """
     Solve: if objective is a Pyomo model, solve it; else build from (objective, constraints, variables) with Pyomo.
     """
-    algo = _select_algorithm(store_data, sense, objective, constraints)
-    # solver_name priority: function argument > store_data.parameters > default value
+    _select_algorithm(store_data, sense, objective, constraints)
+    parameters = _parameter_map(store_data.get("parameters", {}))
     if not solver_name:
-        solver_name = store_data.get("parameters", {}).get("solver_name", "cbc")
+        solver_name = parameters.get("solver_name", "cbc")
+    if _is_cp_sat_wrapper(objective):
+        return _solve_cp_sat_model(objective, parameters)
     if _is_pyomo_model(objective):
         return _solve_pyomo_model(objective, solver_name=solver_name)
     return _build_and_solve_from_lists(

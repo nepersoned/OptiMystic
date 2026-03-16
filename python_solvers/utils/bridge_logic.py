@@ -14,6 +14,9 @@ MODES = {
     "packing": "packing",
     "resourcing": "resourcing",
     "scheduling": "scheduling",
+    "generic": "generic",
+    "formula": "generic",
+    "custom": "generic",
     # Backward compat aliases
     "manufacturing": "cutting",
     "logistics": "packing",
@@ -47,6 +50,9 @@ def map_params_by_mode(mode: str, params: Dict[str, Any]) -> Dict[str, Any]:
     if normalized_mode == "scheduling":
         from python_solvers.domains import scheduling
         return scheduling.map_params(params)
+    if normalized_mode == "generic":
+        from python_solvers.domains import generic
+        return generic.map_params(params)
     
     return params
 
@@ -59,12 +65,12 @@ def generate_logic(
     """
     Generate (objective_or_model, constraints, variables) for the solver.
     Routes domain-mapped params to logic module based on solver_type.
-    
+
     Args:
-      template_type: cutting | packing | resourcing | scheduling
+      template_type: cutting | packing | resourcing | scheduling | generic
       params: Raw or pre-mapped params (domain.map_params assumed)
       solver_type: "cg", "mip", "cp", "st", "ga" (defaults by mode)
-    
+
     Returns:
       (objective_or_model, constraints, variables)
     """

@@ -1,86 +1,60 @@
 # OptiMystic Go Server
 
-Go HTTP server for OptiMystic optimization API.
-Replaces Django's HTTP layer while Python Pyomo solvers remain unchanged.
-
-## Structure
-
-```
-server/
-├── cmd/server/
-│   └── main.go              # Server entry point
-├── internal/
-│   ├── handlers/            # HTTP handlers
-│   │   ├── optimize.go      # POST /api/optimize/
-│   │   └── health.go        # GET /api/health/
-│   ├── router/
-│   │   └── router.go        # Route registration
-│   ├── models/
-│   │   └── optimization.go  # Data structures (structs)
-│   ├── services/
-│   │   └── results.go       # Result processing
-│   └── solver/
-│       └── bridge.go        # Domain/solver selector + Python invocation
-├── go.mod                   # Go module file
-└── README.md                # This file
-```
+Go HTTP layer for the OptiMystic optimization service.
 
 ## Responsibilities
 
-### Entry Layer (HTTP)
-- Listen on port (default 8000)
-- Parse JSON requests
-- Route to appropriate handlers
+- expose HTTP endpoints
+- decode request JSON
+- call the Python solver bridge
+- map Python details into typed Go outputs
+- return a stable API response
 
-### Command Layer (Bridge)
-- Normalize domain (template_type)
-- Select solver type (cg, mip, cp, st, ga)
-- Execute Python solver via subprocess
+## Endpoints
 
-### Exit Layer (Processing)
-- Process Python solver results
-- Transform to domain-specific output
-- Return JSON response
+- `GET /api/health`
+- `GET /api/health/`
+- `POST /api/optimize`
+- `POST /api/optimize/`
 
-## Usage
+## Request shape
 
-### Run Server
-```bash
-cd server
-go run cmd/server/main.go
+```json
+{
+  "template_type": "cutting",
+  "solver_type": "mip",
+  "sense": "minimize",
+  "params": {
+    "Items": [],
+    "Stocks": []
+  }
+}
 ```
 
-### Make Request
-```bash
-curl -X POST http://localhost:8000/api/optimize/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "template_type": "cutting",
-    "params": { "Items": [...], "ItemLens": [...], ... }
-  }'
+## Run
+
+```cmd
+cd /d c:\Users\kevin\OneDrive\Desktop\OptiMystic\server
+go run .\cmd\server\main.go
 ```
-
-## Integration with Python Solver
-
-Bridge calls:
-```bash
-python python_solvers/cli_solver.py \
-  --domain cutting \
-  --solver mip \
-  --params '{"Items": [...], ...}'
-```
-
-Expects JSON stdout with `{status, objective, variables, constraints, ...}`.
 
 ## Build
 
-```bash
-cd server
-go build -o ./bin/optimystic-server cmd/server/main.go
+```cmd
+cd /d c:\Users\kevin\OneDrive\Desktop\OptiMystic\server
+go build -o .\bin\optimystic-server .\cmd\server\main.go
+```
+
+## Internal flow
+
+```text
+handler -> solver bridge -> python cli -> python result -> result dispatcher -> response
 ```
 
 ## Notes
 
-- No Django or Python dependencies in Go code
-- All Python logic lives in `python_solvers/`
-- Standard library used for HTTP (can upgrade to chi/gin if needed)
+- The bridge executes `python_solvers/cli_solver.py` from the workspace root.
+- The response keeps raw `variables` and `constraints` plus domain-shaped `details`.
+- Domain aliases are normalized before result mapping.
+- Python solver execution is time-limited via `OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS` (default: 30 seconds).
+- `template_type = generic` is supported for expert IR-driven optimization requests.

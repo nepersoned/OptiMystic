@@ -41,7 +41,7 @@ def map_params(raw_params: Dict[str, Any]) -> Dict[str, Any]:
     capacity = vehicles[0].get("Capacity", vehicles[0].get("MaxWeight", 5000)) if vehicles else 5000
     sense = raw_params.get("Sense", "maximize")
 
-    return {
+    mapped = {
         "Items": names,
         "Weights": _safe_list(weights, len(names)),
         "Values": _safe_list(values, len(names)),
@@ -50,4 +50,45 @@ def map_params(raw_params: Dict[str, Any]) -> Dict[str, Any]:
         "Sense": sense,
         "Vehicles": vehicles,
         "Mode": "packing",
+    }
+    mapped["IR"] = build_ir(mapped)
+    return mapped
+
+
+def build_ir(params: Dict[str, Any]) -> Dict[str, Any]:
+    items = list(params.get("Items", []))
+    weights = _safe_list(params.get("Weights", []), len(items), 0.0)
+    values = _safe_list(params.get("Values", []), len(items), 0.0)
+    demands = params.get("Demands", {}) or {}
+    capacity = float(params.get("Capacity", 0))
+    relax = bool(params.get("Relax") or params.get("LP") or params.get("lp_relaxation"))
+
+    variables = []
+    objective = []
+    constraints = [{
+        "name": "capacity",
+        "type": "linear",
+        "terms": [],
+        "sense": "<=",
+        "rhs": capacity,
+    }]
+
+    for idx, item in enumerate(items):
+        name = f"X_{idx}"
+        variables.append({"name": name, "type": "Continuous" if relax else "Integer", "lb": 0})
+        objective.append({"var": name, "coef": float(values[idx])})
+        constraints[0]["terms"].append({"var": name, "coef": float(weights[idx])})
+        constraints.append({
+            "name": f"demand_{idx}",
+            "type": "linear",
+            "terms": [{"var": name, "coef": 1}],
+            "sense": "<=",
+            "rhs": float(demands.get(item, 1)),
+        })
+
+    return {
+        "meta": {"domain": "packing", "sense": str(params.get("Sense", "maximize")).lower()},
+        "variables": variables,
+        "objective": objective,
+        "constraints": constraints,
     }

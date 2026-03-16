@@ -1,12 +1,30 @@
 package models
 
-// ------------------------------------------
-// Shared structs
-// ------------------------------------------
+type OptimizeRequest struct {
+	TemplateType string                 `json:"template_type"`
+	SolverType   string                 `json:"solver_type,omitempty"`
+	Sense        string                 `json:"sense,omitempty"`
+	Params       map[string]interface{} `json:"params"`
+}
+
+type OptimizeResponse struct {
+	Status      string              `json:"status"`
+	Objective   *float64            `json:"objective,omitempty"`
+	SolveTime   float64             `json:"solve_time,omitempty"`
+	Variables   []RawVariable       `json:"variables,omitempty"`
+	Constraints []RawConstraint     `json:"constraints,omitempty"`
+	Details     interface{}         `json:"details,omitempty"`
+	Sensitivity *SensitivityOutput  `json:"sensitivity,omitempty"`
+	Error       string              `json:"error,omitempty"`
+}
+
+type RawVariable map[string]interface{}
+
+type RawConstraint map[string]interface{}
 
 type SensitivityOutput struct {
 	Constraints   []SensitivityConstraint `json:"constraints"`
-	TopBottleneck string                  `json:"top_bottleneck"`
+	TopBottleneck string                  `json:"top_bottleneck,omitempty"`
 	Insight       string                  `json:"insight"`
 }
 
@@ -166,4 +184,23 @@ type SchedulingAssignment struct {
 	Employee string  `json:"employee"`
 	Shift    string  `json:"shift"`
 	Value    float64 `json:"value"`
+}
+
+// ------------------------------------------
+// Domain: Generic
+// ------------------------------------------
+
+type GenericActiveVariable struct {
+	Name  string  `json:"name"`
+	Value float64 `json:"value"`
+}
+
+type GenericOutput struct {
+	Mode            string                  `json:"mode"`
+	Status          string                  `json:"status"`
+	Report          string                  `json:"report"`
+	ObjectiveValue  float64                 `json:"objective_value"`
+	VariableCount   int                     `json:"variable_count"`
+	ConstraintCount int                     `json:"constraint_count"`
+	ActiveVariables []GenericActiveVariable `json:"active_variables,omitempty"`
 }

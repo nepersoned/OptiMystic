@@ -75,8 +75,9 @@ def map_params(raw_params: Dict[str, Any]) -> Dict[str, Any]:
                 "Limit": 50,
             })
 
-    return {
+    mapped = {
         "Items": names,
+        "ItemLens": _safe_list(item_lens, n, 1.0),
         "Weights": _safe_list(item_lens, n, 1.0),
         "Values": prices if prices else {n: 0 for n in names},
         "Demands": demands if demands else {n: 1 for n in names},
@@ -84,4 +85,69 @@ def map_params(raw_params: Dict[str, Any]) -> Dict[str, Any]:
         "Stocks": normalized_stocks,
         "Kerf": kerf,
         "Mode": "cutting",
+    }
+    mapped["IR"] = build_ir(mapped)
+    return mapped
+
+
+def build_ir(params: Dict[str, Any]) -> Dict[str, Any]:
+    items = list(params.get("Items", []))
+    item_lens = _safe_list(params.get("Weights", []), len(items), 1.0)
+    demands = params.get("Demands", {}) or {}
+    prices = params.get("Values", {}) or {}
+    stocks = list(params.get("Stocks", [])) or [{"Name": "Default", "Length": 1000, "Cost": 1, "Limit": 50}]
+    kerf = float(params.get("Kerf", 0.0))
+    sense = str(params.get("Sense", "minimize")).lower()
+    max_bins = min(30, max(int(float(stock.get("Limit", 30))) for stock in stocks)) if stocks else 30
+
+    variables = []
+    objective = []
+    constraints = []
+
+    for s_idx, stock in enumerate(stocks):
+        for b_idx in range(max_bins):
+            use_name = f"Use_{s_idx}_{b_idx}"
+            variables.append({"name": use_name, "type": "Binary", "lb": 0, "ub": 1})
+            if sense == "minimize":
+                objective.append({"var": use_name, "coef": float(stock.get("Cost", 0))})
+
+    for i_idx, item in enumerate(items):
+        for s_idx, stock in enumerate(stocks):
+            for b_idx in range(max_bins):
+                cut_name = f"Cut_{i_idx}_{s_idx}_{b_idx}"
+                variables.append({"name": cut_name, "type": "Integer", "lb": 0})
+                if sense != "minimize":
+                    objective.append({"var": cut_name, "coef": float(prices.get(item, 0))})
+                if i_idx == 0:
+                    terms = [
+                        {"var": f"Cut_{item_idx}_{s_idx}_{b_idx}", "coef": float(item_lens[item_idx]) + kerf}
+                        for item_idx in range(len(items))
+                    ]
+                    terms.append({"var": f"Use_{s_idx}_{b_idx}", "coef": -(float(stock.get("Length", 0)) + kerf)})
+                    constraints.append({
+                        "name": f"capacity_{s_idx}_{b_idx}",
+                        "type": "linear",
+                        "terms": terms,
+                        "sense": "<=",
+                        "rhs": 0,
+                    })
+
+    for i_idx, item in enumerate(items):
+        constraints.append({
+            "name": f"demand_{i_idx}",
+            "type": "linear",
+            "terms": [
+                {"var": f"Cut_{i_idx}_{s_idx}_{b_idx}", "coef": 1}
+                for s_idx in range(len(stocks))
+                for b_idx in range(max_bins)
+            ],
+            "sense": ">=",
+            "rhs": float(demands.get(item, 0)),
+        })
+
+    return {
+        "meta": {"domain": "cutting", "sense": sense},
+        "variables": variables,
+        "objective": objective,
+        "constraints": constraints,
     }

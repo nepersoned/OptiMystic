@@ -4,3 +4,4 @@
 pyomo==6.7.3
 pandas==2.0.3
 numpy==1.24.3
+ortools==9.11.4210

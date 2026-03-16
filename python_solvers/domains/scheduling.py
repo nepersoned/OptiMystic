@@ -37,7 +37,7 @@ def map_params(raw_params: Dict[str, Any]) -> Dict[str, Any]:
     if not shifts:
         shifts = list(demands.keys()) if demands else []
 
-    return {
+    mapped = {
         "Items": names,
         "Weights": _safe_list(durations, n),
         "Values": raw_params.get("Values", raw_params.get("Satisfaction", [1] * n)),
@@ -47,4 +47,124 @@ def map_params(raw_params: Dict[str, Any]) -> Dict[str, Any]:
         "MaxShiftsPerEmployee": int(raw_params.get("MaxShiftsPerEmployee") or 1),
         "Rules": raw_params.get("Rules", raw_params.get("Constraints", [])),
         "Mode": "scheduling",
+    }
+    mapped["IR"] = build_ir(mapped)
+    mapped["CP"] = build_cp_spec(mapped)
+    return mapped
+
+
+def build_ir(params: Dict[str, Any]) -> Dict[str, Any]:
+    employees = list(params.get("Items", []))
+    shifts = list(params.get("Shifts", []))
+    demands = params.get("Demands", {}) or {}
+    values = _safe_list(params.get("Values", []), len(employees), 1.0)
+    relax = bool(params.get("Relax") or params.get("LP") or params.get("lp_relaxation"))
+    max_shifts = int(params.get("MaxShiftsPerEmployee", 1))
+    if not shifts:
+        shifts = list(demands.keys())
+
+    variables = []
+    objective = []
+    constraints = []
+
+    for e_idx, _ in enumerate(employees):
+        for s_idx, _ in enumerate(shifts):
+            name = f"Assign_{e_idx}_{s_idx}"
+            variables.append({"name": name, "type": "Continuous" if relax else "Binary", "lb": 0, "ub": 1})
+            objective.append({"var": name, "coef": float(values[e_idx])})
+
+    for s_idx, shift in enumerate(shifts):
+        constraints.append({
+            "name": f"shift_{s_idx}",
+            "type": "linear",
+            "terms": [{"var": f"Assign_{e_idx}_{s_idx}", "coef": 1} for e_idx in range(len(employees))],
+            "sense": ">=",
+            "rhs": float(demands.get(shift, 1)),
+        })
+
+    for e_idx, _ in enumerate(employees):
+        constraints.append({
+            "name": f"employee_{e_idx}",
+            "type": "linear",
+            "terms": [{"var": f"Assign_{e_idx}_{s_idx}", "coef": 1} for s_idx in range(len(shifts))],
+            "sense": "<=",
+            "rhs": max_shifts,
+        })
+
+    return {
+        "meta": {"domain": "scheduling", "sense": str(params.get("Sense", "maximize")).lower()},
+        "variables": variables,
+        "objective": objective,
+        "constraints": constraints,
+    }
+
+
+def build_cp_spec(params: Dict[str, Any]) -> Dict[str, Any]:
+    employees = list(params.get("Items", []))
+    shifts = list(params.get("Shifts", []))
+    demands = params.get("Demands", {}) or {}
+    values = _safe_list(params.get("Values", []), len(employees), 1.0)
+    max_shifts = int(params.get("MaxShiftsPerEmployee", 1))
+    rules = params.get("Rules", []) or []
+    if not shifts:
+        shifts = list(demands.keys())
+
+    variables = []
+    objective = []
+    constraints = []
+
+    for e_idx, _ in enumerate(employees):
+        for s_idx, _ in enumerate(shifts):
+            name = f"Assign_{e_idx}_{s_idx}"
+            variables.append({"name": name, "type": "Binary", "lb": 0, "ub": 1})
+            objective.append({"var": name, "coef": float(values[e_idx])})
+
+    for s_idx, shift in enumerate(shifts):
+        constraints.append({
+            "name": f"coverage_{s_idx}",
+            "type": "linear",
+            "terms": [{"var": f"Assign_{e_idx}_{s_idx}", "coef": 1} for e_idx in range(len(employees))],
+            "sense": ">=",
+            "rhs": float(demands.get(shift, 1)),
+        })
+
+    for e_idx, _ in enumerate(employees):
+        constraints.append({
+            "name": f"employee_load_{e_idx}",
+            "type": "linear",
+            "terms": [{"var": f"Assign_{e_idx}_{s_idx}", "coef": 1} for s_idx in range(len(shifts))],
+            "sense": "<=",
+            "rhs": float(max_shifts),
+        })
+
+    for r_idx, rule in enumerate(rules):
+        if not isinstance(rule, dict):
+            continue
+        employee = rule.get("Employee", rule.get("employee"))
+        shift = rule.get("Shift", rule.get("shift"))
+        kind = str(rule.get("Type", rule.get("type", ""))).lower()
+        value = float(rule.get("Value", rule.get("value", 1)))
+        if employee not in employees or shift not in shifts:
+            continue
+        var_name = f"Assign_{employees.index(employee)}_{shifts.index(shift)}"
+        if kind in ("forbid", "blocked", "ban", "unavailable"):
+            constraints.append({"name": f"rule_forbid_{r_idx}", "type": "fix", "var": var_name, "value": 0})
+        elif kind in ("require", "forced", "must"):
+            constraints.append({"name": f"rule_require_{r_idx}", "type": "fix", "var": var_name, "value": value})
+
+    return {
+        "meta": {
+            "domain": "scheduling",
+            "solver": "cp",
+            "sense": str(params.get("Sense", "maximize")).lower(),
+        },
+        "employees": employees,
+        "shifts": shifts,
+        "demands": {str(k): float(v) for k, v in demands.items()},
+        "values": {employees[i]: float(values[i]) for i in range(len(employees))},
+        "max_shifts_per_employee": max_shifts,
+        "rules": [rule for rule in rules if isinstance(rule, dict)],
+        "variables": variables,
+        "objective": objective,
+        "constraints": constraints,
     }

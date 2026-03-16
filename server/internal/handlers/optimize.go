@@ -2,69 +2,69 @@ package handlers
 
 import (
 	"encoding/json"
-	"io"
 	"net/http"
+	"strings"
 
+	"github.com/optimystic/server/internal/models"
 	"github.com/optimystic/server/internal/solver"
-
 	"github.com/optimystic/server/internal/services"
 )
 
-// HandleOptimize manages the full optimization flow: request parsing, solver execution, and result dispatching.
+func writeJSON(w http.ResponseWriter, statusCode int, payload interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	_ = json.NewEncoder(w).Encode(payload)
+}
+
 func HandleOptimize(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method_not_allowed"})
+		return
+	}
+	defer r.Body.Close()
+
+	var req models.OptimizeRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_json"})
+		return
+	}
+	if strings.TrimSpace(req.TemplateType) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "template_type_required"})
+		return
+	}
+	if req.Params == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "params_required"})
 		return
 	}
 
-	body, err := io.ReadAll(r.Body)
+	result, err := solver.RunSolver(solver.OptimizeRequest{
+		TemplateType: req.TemplateType,
+		Params:       req.Params,
+		Sense:        req.Sense,
+		SolverType:   req.SolverType,
+	})
 	if err != nil {
-		http.Error(w, "Failed to read request body", http.StatusBadRequest)
-		return
-	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-
-		}
-	}(r.Body)
-
-	// 1. Unmarshal request into solver-compatible structure
-	var req solver.OptimizeRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 
-	// 2. Execute solver bridge (CLI execution & raw parsing)
-	result, err := solver.RunSolver(req)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// 3. Dispatch raw details to domain-specific output models
 	finalDetails, err := services.DispatchResults(result, req.TemplateType)
 	if err != nil {
-		http.Error(w, "Result processing failed: "+err.Error(), http.StatusInternalServerError)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "result_processing_failed", "detail": err.Error()})
 		return
 	}
 
-	// 4. Map raw sensitivity data if available
 	sensitivity, _ := services.MapSensitivity(result.Sensitivity)
 
-	// 5. Construct final unified response
-	response := map[string]interface{}{
-		"status":      result.Status,
-		"objective":   result.Objective,
-		"solve_time":  result.SolveTime,
-		"details":     finalDetails,
-		"sensitivity": sensitivity,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-		return
-	}
+	writeJSON(w, http.StatusOK, models.OptimizeResponse{
+		Status:      result.Status,
+		Objective:   result.Objective,
+		SolveTime:   result.SolveTime,
+		Variables:   result.Variables,
+		Constraints: result.Constraints,
+		Details:     finalDetails,
+		Sensitivity: sensitivity,
+	})
 }

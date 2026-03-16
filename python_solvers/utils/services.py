@@ -5,11 +5,47 @@ Migrated from analytics_cutting.py: UI (Dash/Plotly) removed; logic only.
 import re
 from typing import Any, Dict, List, Tuple
 
+
+MODE_ALIASES = {
+    "manufacturing": "cutting",
+    "cutting": "cutting",
+    "logistics": "packing",
+    "packing": "packing",
+    "resource": "resource_allocation",
+    "it": "resource_allocation",
+    "cloud": "resource_allocation",
+    "resource_allocation": "resource_allocation",
+    "resourcing": "resource_allocation",
+    "hr": "scheduling",
+    "nsp": "scheduling",
+    "scheduling": "scheduling",
+    "generic": "generic",
+    "formula": "generic",
+    "custom": "generic",
+}
+
 def safe_float(v: Any, default: float = 0.0) -> float:
     try:
         return float(v) if v is not None else default
     except (TypeError, ValueError):
         return default
+
+
+def normalize_mode(mode: str | None) -> str:
+    return MODE_ALIASES.get((mode or "cutting").strip().lower(), (mode or "cutting").strip().lower())
+
+
+def parameter_map(store: Dict[str, Any]) -> Dict[str, Any]:
+    parameters = store.get("parameters", {}) if isinstance(store, dict) else {}
+    if isinstance(parameters, dict):
+        return parameters
+    if isinstance(parameters, list):
+        mapped: Dict[str, Any] = {}
+        for item in parameters:
+            if isinstance(item, dict) and "name" in item:
+                mapped[item["name"]] = item.get("data")
+        return mapped
+    return {}
 
 
 def get_params(data_inputs: Dict[str, Any], sense: str = "minimize") -> Dict[str, Any]:
@@ -56,9 +92,9 @@ def get_params(data_inputs: Dict[str, Any], sense: str = "minimize") -> Dict[str
     }
 
 
-def build_parameter_store(params: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Turn params dict into list of {name, data} for store."""
-    return [{"name": k, "data": v} for k, v in params.items()]
+def build_parameter_store(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Keep solver parameters as a plain dict."""
+    return dict(params or {})
 
 
 def normalize_solver_response(result: Dict[str, Any]) -> Dict[str, Any]:
@@ -86,18 +122,9 @@ def process_results(
     """
     Parse solver variables into bin plans and summary.
     """
-    mode = (mode or "cutting").strip().lower()
-    if mode in ("manufacturing", "cutting"):
+    mode = normalize_mode(mode)
+    if mode == "cutting":
         return _process_cutting_results(res, store)
-    if mode == "logistics":
-        mode = "packing"
-    if mode in ("resource", "it", "cloud", "resource_allocation"):
-        mode = "resource_allocation"
-    if mode in ("hr", "nsp"):
-        mode = "scheduling"
-    if mode == "resourcing":
-        mode = "resource_allocation"
-
     return _process_generic_results(res, store, mode)
 
 
@@ -106,8 +133,7 @@ def _process_cutting_results(
     store: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Process cutting results."""
-    params_list = store.get("parameters", [])
-    p = {x["name"]: x["data"] for x in params_list}
+    p = parameter_map(store)
     items: List[str] = p.get("Items", [])
     lens: List[float] = p.get("ItemLens", [])
     stocks: List[Dict[str, Any]] = p.get("Stocks", [])
@@ -234,8 +260,7 @@ def _process_generic_results(
     mode: str,
 ) -> Dict[str, Any]:
     """Process generic results for all modes."""
-    params_list = store.get("parameters", [])
-    p = {x["name"]: x["data"] for x in params_list}
+    p = parameter_map(store)
     items: List[str] = p.get("Items", [])
     var_values = {v.get("Variable", ""): safe_float(v.get("Value", 0)) for v in res.get("variables", [])}
 
@@ -331,6 +356,35 @@ def _process_generic_results(
             "status": "ok",
         }
 
+    if mode == "generic":
+        active_variables = []
+        for variable in res.get("variables", []):
+            value = safe_float(variable.get("Value", 0))
+            if abs(value) <= 0.000001:
+                continue
+            active_variables.append({
+                "name": str(variable.get("Variable", "")),
+                "value": value,
+            })
+
+        objective_terms = ((p.get("IR") or {}).get("objective", []) if isinstance(p.get("IR"), dict) else [])
+        constraints = ((p.get("IR") or {}).get("constraints", []) if isinstance(p.get("IR"), dict) else [])
+        report = (
+            "### Generic Optimization Summary\n"
+            f"- **Objective Terms:** {len(objective_terms)}\n"
+            f"- **Constraints:** {len(constraints)}\n"
+            f"- **Active Variables:** {len(active_variables)}"
+        )
+        return {
+            "mode": "generic",
+            "status": "ok" if str(res.get("status", "")).lower() not in ("error", "infeasible") else str(res.get("status", "error")).lower(),
+            "report": report,
+            "objective_value": safe_float(res.get("objective", 0)),
+            "variable_count": len(res.get("variables", [])),
+            "constraint_count": len(constraints),
+            "active_variables": active_variables,
+        }
+
     return {
         "mode": mode,
         "report": "No dashboard available for this mode.",
@@ -344,7 +398,7 @@ def process_sensitivity(
     mode: str | None = None,
 ) -> Dict[str, Any]:
     """Build constraint/sensitivity summary from solver duals."""
-    mode = (mode or "cutting").strip().lower()
+    mode = normalize_mode(mode)
     
     if not res.get("lp_sensitivity"):
         return {
@@ -353,7 +407,7 @@ def process_sensitivity(
             "insight": "Sensitivity is available only for LP/CG models.",
         }
 
-    if mode in ("manufacturing", "cutting"):
+    if mode == "cutting":
         return _process_cutting_sensitivity(res, store)
 
     return _process_sensitivity_general(res)
@@ -365,8 +419,7 @@ def _process_cutting_sensitivity(
 ) -> Dict[str, Any]:
     """Process cutting sensitivity."""
     consts = res.get("constraints", [])
-    params_list = store.get("parameters", [])
-    p = {x["name"]: x["data"] for x in params_list}
+    p = parameter_map(store)
     items: List[str] = p.get("Items", [])
 
     if not consts:
