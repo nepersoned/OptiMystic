@@ -1,14 +1,15 @@
 # OptiMystic Go Server
 
-Go HTTP layer for the OptiMystic optimization service.
+Go API layer for reliability-focused orchestration between HTTP clients and the Python optimization runtime.
 
-## Responsibilities
+It is responsible for subprocess execution safety, domain-aware response typing, and stable API behavior across solver paths.
 
-- expose HTTP endpoints
-- decode request JSON
-- call the Python solver bridge
-- map Python details into typed Go outputs
-- return a stable API response
+## Why This Layer Exists
+
+- Orchestrates Python solver subprocess calls from a typed Go API surface.
+- Enforces timeout safety for long-running optimization workloads.
+- Dispatches domain results into typed outputs for predictable client handling.
+- Supports generic/raw passthrough for IR-driven advanced use cases.
 
 ## Endpoints
 
@@ -17,44 +18,142 @@ Go HTTP layer for the OptiMystic optimization service.
 - `POST /api/optimize`
 - `POST /api/optimize/`
 
-## Request shape
-
-```json
-{
-  "template_type": "cutting",
-  "solver_type": "mip",
-  "sense": "minimize",
-  "params": {
-    "Items": [],
-    "Stocks": []
-  }
-}
-```
-
-## Run
+## Run (cmd.exe)
 
 ```cmd
 cd /d c:\Users\kevin\OneDrive\Desktop\OptiMystic\server
 go run .\cmd\server\main.go
 ```
 
-## Build
+## Build (cmd.exe)
 
 ```cmd
 cd /d c:\Users\kevin\OneDrive\Desktop\OptiMystic\server
 go build -o .\bin\optimystic-server .\cmd\server\main.go
 ```
 
-## Internal flow
+## Request/Response Examples
+
+### 1) Domain flow example (`scheduling` + `cp`)
+
+Request:
+
+```json
+{
+  "template_type": "scheduling",
+  "solver_type": "cp",
+  "sense": "minimize",
+  "params": {
+    "Jobs": [
+      { "Name": "J1", "Duration": 3 },
+      { "Name": "J2", "Duration": 2 }
+    ],
+    "Machines": [
+      { "Name": "M1" }
+    ]
+  }
+}
+```
+
+Response (shape example):
+
+```json
+{
+  "status": "ok",
+  "objective": 5,
+  "solve_time": 0.02,
+  "details": {
+    "schedule": []
+  },
+  "variables": {},
+  "constraints": []
+}
+```
+
+### 2) Generic flow example (`generic` + `mip`, IR passthrough)
+
+Request:
+
+```json
+{
+  "template_type": "generic",
+  "solver_type": "mip",
+  "sense": "maximize",
+  "params": {
+    "IR": [
+      { "type": "var", "name": "x", "lb": 0 },
+      { "type": "objective", "sense": "maximize", "expr": [[1, "x"]] }
+    ]
+  }
+}
+```
+
+Response (shape example):
+
+```json
+{
+  "status": "ok",
+  "objective": 1,
+  "details": {
+    "kind": "generic"
+  },
+  "variables": {
+    "x": 1
+  },
+  "constraints": []
+}
+```
+
+## Timeout Safety
+
+Python subprocess execution timeout is controlled by environment variable:
+
+- `OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS`
+- default: `30`
+
+If timeout is reached, the API returns an error response indicating solver execution exceeded allowed time.
+
+Example (cmd.exe):
+
+```cmd
+set OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS=45
+go run .\cmd\server\main.go
+```
+
+## Result Dispatch
+
+`internal/services/results.go` coordinates domain-aware mapping.
+
+- Typed outputs: `cutting`, `packing`, `resourcing`, `scheduling`
+- Generic outputs: `GenericOutput`
+- Fallback behavior: if typed mapping is unavailable, raw-compatible fields are preserved for client-side handling
+
+This keeps API responses stable while allowing domain-specific detail structures.
+
+## Internal Flow
 
 ```text
-handler -> solver bridge -> python cli -> python result -> result dispatcher -> response
+HTTP handler
+  -> solver bridge (`internal/solver/bridge.go`)
+  -> python_solvers/cli_solver.py subprocess
+  -> raw python result JSON
+  -> result dispatch (`DispatchResults`)
+  -> API response
 ```
+
+## Troubleshooting
+
+- `python not found`  
+  Ensure Python is installed and available in PATH for the server process.
+- `solver backend not installed`  
+  Install required Python dependencies and a compatible Pyomo backend solver.
+- `timeout too short`  
+  Increase `OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS` for heavier models.
+- `details empty` or raw-only response  
+  Check `template_type`/`solver_type` combination and whether typed mapping exists for that path.
 
 ## Notes
 
-- The bridge executes `python_solvers/cli_solver.py` from the workspace root.
-- The response keeps raw `variables` and `constraints` plus domain-shaped `details`.
-- Domain aliases are normalized before result mapping.
-- Python solver execution is time-limited via `OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS` (default: 30 seconds).
-- `template_type = generic` is supported for expert IR-driven optimization requests.
+- Bridge execution targets `python_solvers/cli_solver.py` from workspace context.
+- Domain aliases are normalized before dispatch.
+- Generic IR requests are first-class for contract-based frontend integration.
