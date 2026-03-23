@@ -49,6 +49,7 @@ result = solve_mip_from_ir(ir, opts)
 - `_repair_candidate!()` — Constraint violation repair
 - `_mutate_value()` — Perturbation operator
 - `_crossover()` — Parent combination
+- `_crossover_with_library()` — Optional external crossover operator (with native fallback)
 - `_ga_options()` — Parameter configuration (seed, generations, population, elite_k, mutation_rate)
 
 **Hotspot-Based Warmstart Flow:**
@@ -79,10 +80,15 @@ candidates, hotspots = solve_ga_hotspots(ir, opts)
     "population": 50,
     "elite_k": 5,
     "mutation_rate": 0.1,
-    "hotspot_threshold": 0.95
+    "hotspot_threshold": 0.95,
+    "library_ops": true
   }
 }
 ```
+
+`library_ops=true` enables phase-1 hybrid GA behavior: if `Evolutionary.jl` is installed,
+the crossover step tries a library operator first; otherwise it automatically falls back to
+the built-in crossover.
 
 ---
 

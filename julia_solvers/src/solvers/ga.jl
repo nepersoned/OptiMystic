@@ -1,5 +1,37 @@
 using Random
 
+const _GA_LIB_TRIED = Ref(false)
+const _GA_LIB_MODULE = Ref{Any}(nothing)
+
+function _bool_from_any(value::Any, default::Bool=false)
+    if value isa Bool
+        return value
+    end
+    s = lowercase(strip(string(value)))
+    if s in ("1", "true", "yes", "y", "on")
+        return true
+    end
+    if s in ("0", "false", "no", "n", "off")
+        return false
+    end
+    return default
+end
+
+function _get_ga_library_module()
+    if _GA_LIB_TRIED[]
+        return _GA_LIB_MODULE[]
+    end
+
+    _GA_LIB_TRIED[] = true
+    try
+        @eval import Evolutionary
+        _GA_LIB_MODULE[] = Evolutionary
+    catch
+        _GA_LIB_MODULE[] = nothing
+    end
+    return _GA_LIB_MODULE[]
+end
+
 function _random_value_for_var(var_def::Dict{String, Any})
     vtype = string(get(var_def, "type", "Continuous"))
     lb = _to_float(get(var_def, "lb", 0.0), 0.0)
@@ -88,6 +120,36 @@ function _crossover(parent_a::Dict{String, Float64}, parent_b::Dict{String, Floa
     return child
 end
 
+function _crossover_with_library(parent_a::Dict{String, Float64}, parent_b::Dict{String, Float64}, var_names::Vector{String})
+    lib = _get_ga_library_module()
+    if lib === nothing
+        return _crossover(parent_a, parent_b, var_names)
+    end
+
+    a = [get(parent_a, vn, 0.0) for vn in var_names]
+    b = [get(parent_b, vn, 0.0) for vn in var_names]
+
+    child_vec = nothing
+    try
+        # Phase-1 integration: use an external crossover operator when available.
+        if hasproperty(lib, :uniformbin)
+            child_vec = getproperty(lib, :uniformbin)(a, b)
+        end
+    catch
+        child_vec = nothing
+    end
+
+    if !(child_vec isa AbstractVector) || length(child_vec) != length(var_names)
+        return _crossover(parent_a, parent_b, var_names)
+    end
+
+    child = Dict{String, Float64}()
+    for i in 1:length(var_names)
+        child[var_names[i]] = _to_float(child_vec[i], get(a, i, 0.0))
+    end
+    return child
+end
+
 function _make_initial_population(vars::Vector{Dict{String, Any}}, population::Int)
     result = Vector{Dict{String, Float64}}()
     for _ in 1:max(1, population)
@@ -113,6 +175,7 @@ function _ga_options(params::Dict{String, Any})
         "hotspot_threshold" => max(0.5, min(0.99, _to_float(get(ga_cfg, "hotspot_threshold", 0.85), 0.85))),
         "mutation_rate" => max(0.01, min(0.8, _to_float(get(ga_cfg, "mutation_rate", 0.15), 0.15))),
         "seed" => _to_int(get(ga_cfg, "seed", 0), 0),
+        "library_ops" => _bool_from_any(get(ga_cfg, "library_ops", false), false),
     )
 end
 
@@ -163,6 +226,7 @@ function solve_ga_hotspots(ir::Dict{String, Any}, sense::String;
     elite_k::Int=8,
     hotspot_threshold::Float64=0.85,
     mutation_rate::Float64=0.15,
+    library_ops::Bool=false,
 )
     started = time()
     if population <= 0
@@ -224,7 +288,7 @@ function solve_ga_hotspots(ir::Dict{String, Any}, sense::String;
         while length(next_population) < population
             p1 = elites[rand(1:length(elites))]
             p2 = elites[rand(1:length(elites))]
-            child = _crossover(p1, p2, var_names)
+            child = library_ops ? _crossover_with_library(p1, p2, var_names) : _crossover(p1, p2, var_names)
             for vn in var_names
                 if rand() < mutation_rate
                     child[vn] = _mutate_value(get(child, vn, 0.0), get(var_map, vn, Dict{String, Any}()))
@@ -289,5 +353,6 @@ function solve_ga_only(payload::Dict{String, Any})
         elite_k=_to_int(get(opts, "elite_k", 8), 8),
         hotspot_threshold=_to_float(get(opts, "hotspot_threshold", 0.85), 0.85),
         mutation_rate=_to_float(get(opts, "mutation_rate", 0.15), 0.15),
+        library_ops=_bool_from_any(get(opts, "library_ops", false), false),
     )
 end

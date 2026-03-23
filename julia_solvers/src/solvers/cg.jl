@@ -216,6 +216,7 @@ function solve_cg(payload::Dict{String, Any})
         elite_k=_to_int(get(opts, "elite_k", 6), 6),
         hotspot_threshold=_to_float(get(opts, "hotspot_threshold", 0.85), 0.85),
         mutation_rate=_to_float(get(opts, "mutation_rate", 0.15), 0.15),
+        library_ops=_bool_from_any(get(opts, "library_ops", false), false),
     )
     start_values = Dict{String, Float64}()
     fixed_values = Dict{String, Float64}()
