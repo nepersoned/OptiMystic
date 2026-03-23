@@ -4,6 +4,8 @@ Accepts expert-provided IR directly with minimal normalization.
 """
 from typing import Any, Dict, List
 
+from python_solvers.domains.ir_utils import finalize_ir
+
 
 VALID_VAR_TYPES = {"Continuous", "Integer", "Binary"}
 VALID_SENSES = {"minimize", "maximize"}
@@ -94,11 +96,15 @@ def map_params(raw_params: Dict[str, Any]) -> Dict[str, Any]:
     mapped.update({
         "Mode": "generic",
         "Sense": sense,
-        "IR": {
-            "meta": {"domain": "generic", "sense": sense},
-            "variables": variables,
-            "objective": objective,
-            "constraints": constraints,
-        },
+        "IR": finalize_ir(
+            {
+                "meta": {"domain": "generic", "sense": sense},
+                "variables": variables,
+                "objective": objective,
+                "constraints": constraints,
+            },
+            domain="generic",
+            sense=sense,
+        ),
     })
     return mapped

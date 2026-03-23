@@ -4,6 +4,8 @@ Maps raw cutting input → common schema.
 """
 from typing import Any, Dict, List
 
+from python_solvers.domains.ir_utils import finalize_ir
+
 
 def _safe_list(values: List[Any], length: int, default: float = 0.0) -> List[Any]:
     """Ensure list has exact length, padding or truncating as needed."""
@@ -145,9 +147,13 @@ def build_ir(params: Dict[str, Any]) -> Dict[str, Any]:
             "rhs": float(demands.get(item, 0)),
         })
 
-    return {
-        "meta": {"domain": "cutting", "sense": sense},
-        "variables": variables,
-        "objective": objective,
-        "constraints": constraints,
-    }
+    return finalize_ir(
+        {
+            "meta": {"domain": "cutting", "sense": sense},
+            "variables": variables,
+            "objective": objective,
+            "constraints": constraints,
+        },
+        domain="cutting",
+        sense=sense,
+    )

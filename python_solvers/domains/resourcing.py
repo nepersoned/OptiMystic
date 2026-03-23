@@ -4,6 +4,8 @@ Maps raw resource/task input → common schema with CPU/RAM dimensions.
 """
 from typing import Any, Dict, List
 
+from python_solvers.domains.ir_utils import finalize_ir
+
 
 def _safe_list(values: List[Any], length: int, default: float = 0.0) -> List[Any]:
     if not isinstance(values, list):
@@ -89,12 +91,17 @@ def build_ir(params: Dict[str, Any]) -> Dict[str, Any]:
             "rhs": float(demands.get(item, 1)),
         })
 
-    return {
-        "meta": {"domain": "resourcing", "sense": str(params.get("Sense", "minimize")).lower()},
-        "variables": variables,
-        "objective": objective,
-        "constraints": constraints,
-    }
+    sense = str(params.get("Sense", "minimize")).lower()
+    return finalize_ir(
+        {
+            "meta": {"domain": "resourcing", "sense": sense},
+            "variables": variables,
+            "objective": objective,
+            "constraints": constraints,
+        },
+        domain="resourcing",
+        sense=sense,
+    )
 
 
 def build_st_spec(params: Dict[str, Any], raw_params: Dict[str, Any] | None = None) -> Dict[str, Any]:
@@ -184,12 +191,30 @@ def build_st_spec(params: Dict[str, Any], raw_params: Dict[str, Any] | None = No
             "rhs": expected_limit,
         })
 
+    sense = str(params.get("Sense", "minimize")).lower()
+    st_ir = finalize_ir(
+        {
+            "meta": {
+                "domain": "resourcing",
+                "solver": "st",
+                "sense": sense,
+                "scenario_count": len(normalized_scenarios),
+            },
+            "variables": variables,
+            "objective": objective,
+            "constraints": constraints,
+        },
+        domain="resourcing",
+        sense=sense,
+    )
+
     return {
         "meta": {
             "domain": "resourcing",
             "solver": "st",
-            "sense": str(params.get("Sense", "minimize")).lower(),
+            "sense": sense,
             "scenario_count": len(normalized_scenarios),
+            "ir_stats": st_ir.get("meta", {}).get("stats", {}),
         },
         "items": items,
         "cpu": {items[i]: float(cpu[i]) for i in range(len(items))},
@@ -200,7 +225,7 @@ def build_st_spec(params: Dict[str, Any], raw_params: Dict[str, Any] | None = No
         "capacity_ram": cap_ram,
         "shortfall_penalty": penalty,
         "scenarios": normalized_scenarios,
-        "variables": variables,
-        "objective": objective,
-        "constraints": constraints,
+        "variables": st_ir.get("variables", []),
+        "objective": st_ir.get("objective", []),
+        "constraints": st_ir.get("constraints", []),
     }

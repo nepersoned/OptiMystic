@@ -27,7 +27,7 @@ MODES = {
     "nsp": "scheduling",
 }
 
-SOLVER_TYPES = ["cg", "mip", "cp", "st", "ga"]
+SOLVER_TYPES = ["cp"]
 
 
 def map_params_by_mode(mode: str, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -63,13 +63,13 @@ def generate_logic(
     solver_type: str | None = None,
 ) -> Tuple[Union[Any, List], List[Any], List[Dict[str, Any]]]:
     """
-    Generate (objective_or_model, constraints, variables) for the solver.
-    Routes domain-mapped params to logic module based on solver_type.
+    Generate (objective_or_model, constraints, variables) for the Python solver path.
+    Python runtime is CP-only after Julia migration for non-CP solvers.
 
     Args:
       template_type: cutting | packing | resourcing | scheduling | generic
       params: Raw or pre-mapped params (domain.map_params assumed)
-      solver_type: "cg", "mip", "cp", "st", "ga" (defaults by mode)
+    solver_type: "cp" only
 
     Returns:
       (objective_or_model, constraints, variables)
@@ -78,34 +78,15 @@ def generate_logic(
     mode = (template_type or "").strip().lower()
     normalized_mode = MODES.get(mode, mode)
 
-    # Auto-select solver_type if not provided
+    # Auto-select solver_type if not provided for backward compatibility.
     if solver_type is None:
-        if normalized_mode == "cutting":
-            solver_type = "cg" if mapped.get("Sense", "minimize") == "minimize" else "mip"
-        else:
-            solver_type = "mip"
+        solver_type = "cp"
 
     solver_type = (solver_type or "").strip().lower()
 
-    # Route to logic module
-    if solver_type == "cg":
-        from python_solvers.logic import logic_cg
-        return logic_cg.build_model(normalized_mode, mapped)
-    
-    if solver_type == "mip":
-        from python_solvers.logic import logic_mip
-        return logic_mip.build_model(normalized_mode, mapped)
-    
+    # Route to CP logic module only.
     if solver_type == "cp":
         from python_solvers.logic import logic_cp
         return logic_cp.build_model(normalized_mode, mapped)
-    
-    if solver_type == "st":
-        from python_solvers.logic import logic_st
-        return logic_st.build_model(normalized_mode, mapped)
-    
-    if solver_type == "ga":
-        from python_solvers.logic import logic_ga
-        return logic_ga.build_model(normalized_mode, mapped)
 
-    return [], [], []
+    raise ValueError("Python bridge only supports solver_type='cp'. Use Julia runtime for non-CP solvers.")

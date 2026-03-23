@@ -4,6 +4,8 @@ Maps raw packing/cargo input → common schema.
 """
 from typing import Any, Dict, List
 
+from python_solvers.domains.ir_utils import finalize_ir
+
 
 def _safe_list(values: List[Any], length: int, default: float = 0.0) -> List[Any]:
     if not isinstance(values, list):
@@ -86,9 +88,14 @@ def build_ir(params: Dict[str, Any]) -> Dict[str, Any]:
             "rhs": float(demands.get(item, 1)),
         })
 
-    return {
-        "meta": {"domain": "packing", "sense": str(params.get("Sense", "maximize")).lower()},
-        "variables": variables,
-        "objective": objective,
-        "constraints": constraints,
-    }
+    sense = str(params.get("Sense", "maximize")).lower()
+    return finalize_ir(
+        {
+            "meta": {"domain": "packing", "sense": sense},
+            "variables": variables,
+            "objective": objective,
+            "constraints": constraints,
+        },
+        domain="packing",
+        sense=sense,
+    )

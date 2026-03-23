@@ -1,45 +1,53 @@
 # Python Solvers Runtime
 
-Python optimization runtime for OptiMystic. It receives structured optimization inputs, builds solver models, executes them, and returns standardized JSON outputs.
+Python optimization runtime for OptiMystic. 
 
-Core design: domain-based mapping + solver-specific logic + shared execution engine.
+**Architecture Split (Python/Julia Hybrid):**
+- **Python-only**: CP scheduling solver (OR-Tools CP-SAT)
+- **Julia-delegated**: All other domains (MIP, GA, CG, ST)
 
-Recent strengths: CP via OR-Tools (scheduling), ST via Pyomo scenario modeling (resourcing), and `generic` IR-direct solving for extensible custom models.
+See [julia_solvers/README.md](../julia_solvers/README.md) for Julia solver documentation.
 
-## Capabilities Matrix
+## Capabilities: Python-Only (CP/Scheduling)
 
-| Domain      | Solver | Status        | Notes |
-|-------------|--------|---------------|-------|
-| cutting     | mip    | implemented   | IR-driven MIP flow via Pyomo backend |
-| packing     | mip    | implemented   | IR-driven MIP flow via Pyomo backend |
-| resourcing  | st     | implemented   | Scenario-based stochastic model in `logic/logic_st.py` |
-| scheduling  | cp     | implemented   | OR-Tools CP-SAT model in `logic/logic_cp.py` |
-| generic     | mip    | implemented   | Direct IR solve path for expert/front-end transformed inputs |
-| cutting     | cg     | partial       | Column-generation logic exists; integration depends on use case |
-| scheduling  | mip    | partial       | MIP path can be modeled via IR, but CP is the primary path |
+| Domain | Solver | Backend | Status | Role |
+|--------|--------|---------|--------|------|
+| **scheduling** | cp | OR-Tools CP-SAT | ✅ Stable | Primary solver for employee shift allocation |
 
-## Architecture by Layer
+> All other domains are handled by Julia runtime. See [julia_solvers/](../julia_solvers/) for MIP, GA, CG, ST implementations.
 
-1. `domains/*`  
-   Normalize incoming params and produce IR or solver-specific specs (CP/ST).
-2. `logic/*`  
-   Build solver models by strategy (`logic_mip.py`, `logic_cp.py`, `logic_st.py`, ...).
-3. `utils/solver_engine.py`  
-   Shared execution engine for IR lists, Pyomo models, and CP wrappers.
-4. `utils/services.py`  
-   Post-process raw solver output into domain-friendly result payloads.
+## Architecture by Layer (Python-Only)
 
-Routing and orchestration between domain/solver combinations are coordinated in `utils/bridge_logic.py`.
+1. **`cli_solver.py`** (Entry point)
+   - Routes by `solver_type` parameter
+   - If `solver_type=="cp"`: calls `logic_cp.solve_cp_model()`
+   - Else: subprocess call to Julia runtime
 
-## Runtime Flow
+2. **`domains/scheduling.py`** (Domain normalization)
+   - Converts domain params → CP spec (Employees, Shifts, Demands, MaxShifts, etc.)
 
-```text
-raw params
-  -> domain normalization (`domains/*`)
-  -> model build (`logic/*`: IR / CP / ST)
-  -> solve (`utils/solver_engine.py`)
-  -> result shaping (`utils/services.py`)
-  -> JSON stdout
+3. **`logic/logic_cp.py`** (Solver model)
+   - Builds OR-Tools CP-SAT model
+   - Applies coverage constraints, per-employee shift limits, rules
+   - Configures solver options (seed, workers, time_limit)
+
+4. **`utils/services.py`** (Post-processing)
+   - Extracts assignment matrix, shadow prices
+   - Returns standardized JSON
+
+## Runtime Flow (Python-Only: CP Scheduling)
+
+```
+raw params (scheduling domain)
+  -> cli_solver.py: route by solver_type
+     ├─ if solver_type == "cp"
+     │   -> domains/scheduling.py: normalize params → CP spec
+     │   -> logic/logic_cp.py: build_model() → solve_cp_model()
+     │   -> utils/services.py: post-process results
+     │   -> return JSON (status, objective, variables, constraints)
+     │
+     └─ else (non-scheduling or non-cp)
+         -> subprocess call to julia_solvers/
 ```
 
 ## Quick Start (cmd.exe)
@@ -49,52 +57,59 @@ cd /d c:\Users\kevin\OneDrive\Desktop\OptiMystic
 pip install -r python_solvers\requirements.txt
 ```
 
-### 1) MIP example (packing)
+### CP Example: Scheduling (Employee Shift Allocation)
 
 ```cmd
-python python_solvers\cli_solver.py --domain packing --solver mip --params "{\"Items\":[{\"Name\":\"A\",\"Weight\":2,\"Value\":10,\"Demand\":2},{\"Name\":\"B\",\"Weight\":3,\"Value\":12,\"Demand\":1}],\"Vehicles\":[{\"Capacity\":5}],\"Sense\":\"maximize\"}"
+python python_solvers\cli_solver.py --domain scheduling --solver cp --params "{\"Employees\":[{\"Name\":\"E1\",\"MaxShifts\":5},{\"Name\":\"E2\",\"MaxShifts\":4}],\"Shifts\":[{\"Name\":\"Morning\",\"Demand\":1},{\"Name\":\"Evening\",\"Demand\":1}],\"Values\":{\"E1\":{\"Morning\":1,\"Evening\":0.5},\"E2\":{\"Morning\":0.8,\"Evening\":1}},\"MaxShiftsPerEmployee\":5}"
 ```
 
-### 2) CP example (scheduling, OR-Tools)
-
-```cmd
-python python_solvers\cli_solver.py --domain scheduling --solver cp --params "{\"Jobs\":[{\"Name\":\"J1\",\"Duration\":3},{\"Name\":\"J2\",\"Duration\":2}],\"Machines\":[{\"Name\":\"M1\"}],\"Sense\":\"minimize\"}"
+**Output:**
+```json
+{
+  "status": "Optimal",
+  "objective": 3.3,
+  "variables": { "Assign_E1_Morning": 1, "Assign_E1_Evening": 0, ... },
+  "constraints": { "coverage_Morning": 1, "coverage_Evening": 1, ... },
+  "solve_time": 0.042
+}
 ```
 
-### 3) ST example (resourcing, scenario model)
+> For other domains (cutting, packing, resourcing, generic), the request is delegated to Julia runtime. See [julia_solvers/README.md](../julia_solvers/README.md)).
 
-```cmd
-python python_solvers\cli_solver.py --domain resourcing --solver st --params "{\"Resources\":[{\"Name\":\"R1\",\"Capacity\":10}],\"Tasks\":[{\"Name\":\"T1\",\"Demand\":4}],\"Scenarios\":[{\"Name\":\"S1\",\"Probability\":1.0}],\"Sense\":\"minimize\"}"
-```
+## Input Contract (Python CP / Julia Delegation)
 
-### 4) Generic example (IR direct, mip)
-
-```cmd
-python python_solvers\cli_solver.py --domain generic --solver mip --params "{\"IR\":[{\"type\":\"var\",\"name\":\"x\",\"lb\":0},{\"type\":\"objective\",\"sense\":\"maximize\",\"expr\":[[1,\"x\"]]}],\"Sense\":\"maximize\"}"
-```
-
-## Input Contract
-
-This runtime consumes structured input, not raw natural language.
-
-- Frontends can provide formula/constraint UI and transform user intent into IR.
-- `generic` domain exists for this contract-first flow.
-- Domain-specific paths (`cutting`, `packing`, `resourcing`, `scheduling`) map typed params into internal IR/specs.
-
-Minimal contract example:
+### For Scheduling (CP-only path)
 
 ```json
 {
-  "template_type": "generic",
-  "solver_type": "mip",
+  "template_type": "scheduling",
+  "solver_type": "cp",
   "params": {
-    "IR": [
-      { "type": "var", "name": "x", "lb": 0 },
-      { "type": "objective", "sense": "maximize", "expr": [[1, "x"]] }
-    ]
+    "Employees": [
+      { "Name": "E1", "MaxShifts": 5, "MinShifts": 1 }
+    ],
+    "Shifts": [
+      { "Name": "Morning", "Demand": 2 },
+      { "Name": "Evening", "Demand": 1 }
+    ],
+    "Values": {
+      "E1": { "Morning": 1.0, "Evening": 0.5 }
+    },
+    "MaxShiftsPerEmployee": 5,
+    "MinShiftsPerEmployee": 1,
+    "Rules": [],
+    "Seed": 42,
+    "Workers": 1,
+    "TimeLimit": 10
   }
 }
 ```
+
+### For Other Domains (Delegated to Julia)
+
+Other domains should use `"template_type"` matching the domain (`cutting`, `packing`, `resourcing`, `generic`) and solver from {`mip`, `ga`, `cg`, `st`}. Python will spawn a subprocess to Julia runtime.
+
+See [julia_solvers/README.md](../julia_solvers/README.md) for full Julia solver contract and examples.
 
 ## Failure & Safety
 
@@ -120,11 +135,30 @@ CLI prints JSON fields such as:
 
 Exact populated fields depend on solver/domain path and failure mode.
 
+## Domain Reference (Python-checked Domains)
+
+### scheduling
+- **Python Handler**: [domains/scheduling.py](domains/scheduling.py)
+- **Solver (Primary)**: CP (OR-Tools)
+- **Solver (Fallback)**: MIP (Julia)
+- **Expected Input**: Employees, Shifts, Demands, Values, MaxShiftsPerEmployee, MinShiftsPerEmployee, Rules, Seed, Workers, TimeLimit
+- **Model**: Binary assignment (Assign_e_s) with coverage and per-employee shift constraints
+- **Output**: Assignment matrix, coverage shadow prices, per-employee loads
+- **Example**: `/api/optimize?domain=scheduling&solver_type=cp`
+
+### cutting, packing, resourcing, generic
+- **Handled by**: Julia runtime
+- **Reference**: See [julia_solvers/README.md](../julia_solvers/README.md)
+- **Routing**: cli_solver.py detects `solver_type != "cp"` → subprocess to Julia
+- **Output Format**: Standardized JSON with status, objective, variables
+
+> Python performs **no optimization** for non-scheduling domains. It only normalizes input and delegates to Julia.
+
 ## How to Extend
 
 1. Add a new domain mapper in `domains/new_domain.py`.
-2. Add solver logic in `logic/logic_xx.py`.
-3. Register routing in `utils/bridge_logic.py`.
-4. Add result summarization in `utils/services.py`.
+2. For CP domains: add solver logic in `logic/logic_cp_yourdomain.py`.
+3. For other domains: register in `utils/bridge_logic.py` and Julia will handle via subprocess.
+4. Add result summarization in `utils/services.py` if domain-specific post-processing needed.
 
 This separation keeps new optimization types additive without rewriting the full runtime.

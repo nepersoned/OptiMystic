@@ -1,7 +1,7 @@
 from typing import Any, Dict
 
+from python_solvers.logic import logic_cp
 from python_solvers.utils import bridge_logic
-from python_solvers.utils import solver_engine as solver_core
 from python_solvers.utils import services
 
 
@@ -14,9 +14,7 @@ def run_optimization(domain: str, solver: str, params: Dict[str, Any]) -> Dict[s
         "parameters": services.build_parameter_store(mapped_params),
     }
 
-    sense = str(mapped_params.get("Sense", "minimize")).lower()
-
-    result = solver_core.solve_model(store_data, sense, objective, constraints)
+    result = logic_cp.solve_cp_model(store_data, objective)
 
     processed_data = services.process_results(result, store_data, domain)
     sensitivity_data = services.process_sensitivity(result, store_data, domain)

@@ -4,6 +4,8 @@ Maps raw employee/shift input → common schema.
 """
 from typing import Any, Dict, List
 
+from python_solvers.domains.ir_utils import finalize_ir
+
 
 def _safe_list(values: List[Any], length: int, default: float = 0.0) -> List[Any]:
     if not isinstance(values, list):
@@ -91,12 +93,17 @@ def build_ir(params: Dict[str, Any]) -> Dict[str, Any]:
             "rhs": max_shifts,
         })
 
-    return {
-        "meta": {"domain": "scheduling", "sense": str(params.get("Sense", "maximize")).lower()},
-        "variables": variables,
-        "objective": objective,
-        "constraints": constraints,
-    }
+    sense = str(params.get("Sense", "maximize")).lower()
+    return finalize_ir(
+        {
+            "meta": {"domain": "scheduling", "sense": sense},
+            "variables": variables,
+            "objective": objective,
+            "constraints": constraints,
+        },
+        domain="scheduling",
+        sense=sense,
+    )
 
 
 def build_cp_spec(params: Dict[str, Any]) -> Dict[str, Any]:
@@ -152,11 +159,28 @@ def build_cp_spec(params: Dict[str, Any]) -> Dict[str, Any]:
         elif kind in ("require", "forced", "must"):
             constraints.append({"name": f"rule_require_{r_idx}", "type": "fix", "var": var_name, "value": value})
 
+    sense = str(params.get("Sense", "maximize")).lower()
+    cp_ir = finalize_ir(
+        {
+            "meta": {
+                "domain": "scheduling",
+                "solver": "cp",
+                "sense": sense,
+            },
+            "variables": variables,
+            "objective": objective,
+            "constraints": constraints,
+        },
+        domain="scheduling",
+        sense=sense,
+    )
+
     return {
         "meta": {
             "domain": "scheduling",
             "solver": "cp",
-            "sense": str(params.get("Sense", "maximize")).lower(),
+            "sense": sense,
+            "ir_stats": cp_ir.get("meta", {}).get("stats", {}),
         },
         "employees": employees,
         "shifts": shifts,
@@ -164,7 +188,7 @@ def build_cp_spec(params: Dict[str, Any]) -> Dict[str, Any]:
         "values": {employees[i]: float(values[i]) for i in range(len(employees))},
         "max_shifts_per_employee": max_shifts,
         "rules": [rule for rule in rules if isinstance(rule, dict)],
-        "variables": variables,
-        "objective": objective,
-        "constraints": constraints,
+        "variables": cp_ir.get("variables", []),
+        "objective": cp_ir.get("objective", []),
+        "constraints": cp_ir.get("constraints", []),
     }
