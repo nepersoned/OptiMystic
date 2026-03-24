@@ -2,7 +2,7 @@
 
 julia_version = "1.12.5"
 manifest_format = "2.0"
-project_hash = "b88effbe1de12af237bab4a2f89db954fb61bf56"
+project_hash = "3248beb50a79a11fadd4a17fc1a68e7ceace9c15"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
@@ -250,7 +250,7 @@ uuid = "efe28fd5-8261-553b-a9e1-b2916fc3738e"
 version = "0.5.6+0"
 
 [[deps.OptiMysticJuliaSolvers]]
-deps = ["HiGHS", "JSON", "JSON3", "JuMP"]
+deps = ["HiGHS", "JSON", "JSON3", "JuMP", "MathOptInterface"]
 path = "."
 uuid = "7f608bb4-f3b3-4ce1-b6f6-2f24ce18c0f2"
 version = "0.1.0"
