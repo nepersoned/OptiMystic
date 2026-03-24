@@ -1,13 +1,29 @@
 package services
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
+	"github.com/mitchellh/mapstructure"
 	"github.com/optimystic/server/internal/models"
 	"github.com/optimystic/server/internal/solver"
 )
+
+func mapToStruct[T any](details map[string]interface{}) (*T, error) {
+	var output T
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		TagName:          "json",
+		Result:           &output,
+		WeaklyTypedInput: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if err := decoder.Decode(details); err != nil {
+		return nil, err
+	}
+	return &output, nil
+}
 
 func normalizeDomain(domain string) string {
 	switch strings.TrimSpace(strings.ToLower(domain)) {
@@ -43,15 +59,15 @@ func DispatchResults(res *solver.OptimizeResponse, domain string) (interface{}, 
 
 	switch normalizeDomain(domain) {
 	case "cutting":
-		return ProcessCuttingResults(res.Details)
+		return mapToStruct[models.CuttingOutput](res.Details)
 	case "packing":
-		return ProcessPackingResults(res.Details)
+		return mapToStruct[models.PackingOutput](res.Details)
 	case "resourcing":
-		return ProcessResourcingResults(res.Details)
+		return mapToStruct[models.ResourcingOutput](res.Details)
 	case "scheduling":
-		return ProcessSchedulingResults(res.Details)
+		return mapToStruct[models.SchedulingOutput](res.Details)
 	case "generic":
-		return ProcessGenericResults(res.Details)
+		return mapToStruct[models.GenericOutput](res.Details)
 	default:
 		return res.Details, nil
 	}
@@ -62,10 +78,5 @@ func MapSensitivity(raw map[string]interface{}) (*models.SensitivityOutput, erro
 		return nil, nil
 	}
 
-	jsonBytes, _ := json.Marshal(raw)
-	var output models.SensitivityOutput
-	if err := json.Unmarshal(jsonBytes, &output); err != nil {
-		return nil, err
-	}
-	return &output, nil
+	return mapToStruct[models.SensitivityOutput](raw)
 }

@@ -12,10 +12,10 @@ type Router struct {
 
 func NewRouter() *Router {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/health", handlers.HandleHealth)
-	mux.HandleFunc("/api/health/", handlers.HandleHealth)
-	mux.HandleFunc("/api/optimize", handlers.HandleOptimize)
-	mux.HandleFunc("/api/optimize/", handlers.HandleOptimize)
+	mux.HandleFunc("GET /api/health", handlers.HandleHealth)
+	mux.HandleFunc("GET /api/health/", handlers.HandleHealth)
+	mux.HandleFunc("POST /api/optimize", handlers.HandleOptimize)
+	mux.HandleFunc("POST /api/optimize/", handlers.HandleOptimize)
 
 	return &Router{mux: mux}
 }

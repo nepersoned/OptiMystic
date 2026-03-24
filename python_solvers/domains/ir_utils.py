@@ -112,12 +112,12 @@ def finalize_ir(
     raw = ir if isinstance(ir, dict) else {}
     normalized_sense = _normalize_sense(sense, default="minimize")
 
-    variables = [
-        v
-        for i, v in enumerate(raw.get("variables", []) if isinstance(raw.get("variables", []), list) else [])
-        for v in [_normalize_var(v, i)]
-        if v is not None
-    ]
+    variables: List[Dict[str, Any]] = []
+    raw_variables = raw.get("variables", []) if isinstance(raw.get("variables", []), list) else []
+    for index, raw_var in enumerate(raw_variables):
+        normalized_var = _normalize_var(raw_var, index)
+        if normalized_var is not None:
+            variables.append(normalized_var)
 
     variable_names = {v["name"] for v in variables}
 

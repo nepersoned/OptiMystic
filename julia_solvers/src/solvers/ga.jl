@@ -2,6 +2,8 @@ using Random
 
 const _GA_LIB_TRIED = Ref(false)
 const _GA_LIB_MODULE = Ref{Any}(nothing)
+const _GA_UNIFORMBIN_TRIED = Ref(false)
+const _GA_UNIFORMBIN_FN = Ref{Any}(nothing)
 
 function _bool_from_any(value::Any, default::Bool=false)
     if value isa Bool
@@ -30,6 +32,21 @@ function _get_ga_library_module()
         _GA_LIB_MODULE[] = nothing
     end
     return _GA_LIB_MODULE[]
+end
+
+function _get_uniformbin_fn()
+    if _GA_UNIFORMBIN_TRIED[]
+        return _GA_UNIFORMBIN_FN[]
+    end
+    _GA_UNIFORMBIN_TRIED[] = true
+
+    lib = _get_ga_library_module()
+    if lib !== nothing && hasproperty(lib, :uniformbin)
+        _GA_UNIFORMBIN_FN[] = getproperty(lib, :uniformbin)
+    else
+        _GA_UNIFORMBIN_FN[] = nothing
+    end
+    return _GA_UNIFORMBIN_FN[]
 end
 
 function _random_value_for_var(var_def::Dict{String, Any})
@@ -121,8 +138,8 @@ function _crossover(parent_a::Dict{String, Float64}, parent_b::Dict{String, Floa
 end
 
 function _crossover_with_library(parent_a::Dict{String, Float64}, parent_b::Dict{String, Float64}, var_names::Vector{String})
-    lib = _get_ga_library_module()
-    if lib === nothing
+    uniformbin_fn = _get_uniformbin_fn()
+    if uniformbin_fn === nothing
         return _crossover(parent_a, parent_b, var_names)
     end
 
@@ -132,9 +149,7 @@ function _crossover_with_library(parent_a::Dict{String, Float64}, parent_b::Dict
     child_vec = nothing
     try
         # Phase-1 integration: use an external crossover operator when available.
-        if hasproperty(lib, :uniformbin)
-            child_vec = getproperty(lib, :uniformbin)(a, b)
-        end
+        child_vec = uniformbin_fn(a, b)
     catch
         child_vec = nothing
     end
@@ -151,8 +166,9 @@ function _crossover_with_library(parent_a::Dict{String, Float64}, parent_b::Dict
 end
 
 function _make_initial_population(vars::Vector{Dict{String, Any}}, population::Int)
-    result = Vector{Dict{String, Float64}}()
-    for _ in 1:max(1, population)
+    population_size = max(1, population)
+    result = Vector{Dict{String, Float64}}(undef, population_size)
+    for idx in 1:population_size
         cand = Dict{String, Float64}()
         for v in vars
             vn = string(get(v, "name", ""))
@@ -161,7 +177,7 @@ function _make_initial_population(vars::Vector{Dict{String, Any}}, population::I
             end
             cand[vn] = _random_value_for_var(v)
         end
-        push!(result, cand)
+        result[idx] = cand
     end
     return result
 end
@@ -261,21 +277,24 @@ function solve_ga_hotspots(ir::Dict{String, Any}, sense::String;
     best_candidate = Dict{String, Float64}()
     best_score = -Inf
     best_obj = 0.0
-    elites = Vector{Dict{String, Float64}}()
+    elites = Vector{Dict{String, Float64}}(undef, 0)
 
     pool_candidates = _make_initial_population(vars, population)
 
     for _ in 1:generations
-        pool = Vector{Tuple{Float64, Float64, Dict{String, Float64}}}()
-        for cand_raw in pool_candidates
-            cand = _repair_candidate!(copy(cand_raw), vars, ir)
+        pool = Vector{Tuple{Float64, Float64, Dict{String, Float64}}}(undef, length(pool_candidates))
+        for idx in eachindex(pool_candidates)
+            cand = _repair_candidate!(pool_candidates[idx], vars, ir)
             score, obj = _eval_candidate(ir, cand, sense)
-            push!(pool, (score, obj, cand))
+            pool[idx] = (score, obj, cand)
         end
 
         sort!(pool, by=x -> x[1], rev=true)
         take_n = min(elite_k, length(pool))
-        elites = [pool[i][3] for i in 1:take_n]
+        elites = Vector{Dict{String, Float64}}(undef, take_n)
+        for i in 1:take_n
+            elites[i] = pool[i][3]
+        end
 
         if !isempty(pool) && pool[1][1] > best_score
             best_score = pool[1][1]
@@ -283,9 +302,12 @@ function solve_ga_hotspots(ir::Dict{String, Any}, sense::String;
             best_candidate = copy(pool[1][3])
         end
 
-        next_population = Vector{Dict{String, Float64}}()
-        append!(next_population, [copy(e) for e in elites])
-        while length(next_population) < population
+        next_population = Vector{Dict{String, Float64}}(undef, population)
+        for i in 1:take_n
+            next_population[i] = copy(elites[i])
+        end
+        idx = take_n + 1
+        while idx <= population
             p1 = elites[rand(1:length(elites))]
             p2 = elites[rand(1:length(elites))]
             child = library_ops ? _crossover_with_library(p1, p2, var_names) : _crossover(p1, p2, var_names)
@@ -294,7 +316,8 @@ function solve_ga_hotspots(ir::Dict{String, Any}, sense::String;
                     child[vn] = _mutate_value(get(child, vn, 0.0), get(var_map, vn, Dict{String, Any}()))
                 end
             end
-            push!(next_population, child)
+            next_population[idx] = child
+            idx += 1
         end
         pool_candidates = next_population
     end

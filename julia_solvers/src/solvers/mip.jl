@@ -33,11 +33,13 @@ function _build_mip_model(ir::Dict{String, Any};
     set_silent(model)
     try
         set_attribute(model, "time_limit", max(1.0, time_limit_seconds))
-    catch
+    catch err
+        @warn "Failed to set MIP time_limit" value=max(1.0, time_limit_seconds) error=err
     end
     try
         set_attribute(model, "output_flag", false)
-    catch
+    catch err
+        @warn "Failed to set MIP output_flag" error=err
     end
 
     vars = Dict{String, VariableRef}()
@@ -76,14 +78,16 @@ function _build_mip_model(ir::Dict{String, Any};
         if haskey(warm_start, name)
             try
                 set_start_value(v, warm_start[name])
-            catch
+            catch err
+                @warn "Failed to set start value" variable=name value=warm_start[name] error=err
             end
         end
 
         if haskey(fixed_values, name)
             try
                 fix(v, fixed_values[name]; force=true)
-            catch
+            catch err
+                @warn "Failed to fix variable" variable=name value=fixed_values[name] error=err
             end
         end
 

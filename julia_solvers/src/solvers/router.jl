@@ -1,5 +1,19 @@
 using Random
 
+struct SolverPayload
+    domain::String
+    solver::String
+    params::Dict{String, Any}
+end
+
+function _to_solver_payload(payload::Dict{String, Any})
+    domain = lowercase(string(get(payload, "domain", "generic")))
+    solver = lowercase(string(get(payload, "solver", "mip")))
+    params_any = get(payload, "params", Dict{String, Any}())
+    params = params_any isa Dict{String, Any} ? params_any : _as_dict(params_any)
+    return SolverPayload(domain, solver, params)
+end
+
 function solve_mip(payload::Dict{String, Any})
     params = _as_dict(get(payload, "params", Dict{String, Any}()))
     ir = _extract_ir(params)
@@ -36,7 +50,16 @@ function solve_mip(payload::Dict{String, Any})
 end
 
 function route_solver(payload::Dict{String, Any})
-    solver = lowercase(string(get(payload, "solver", "mip")))
+    return route_solver(_to_solver_payload(payload))
+end
+
+function route_solver(payload::SolverPayload)
+    solver = payload.solver
+    typed_payload = Dict{String, Any}(
+        "domain" => payload.domain,
+        "solver" => payload.solver,
+        "params" => payload.params,
+    )
 
     if solver == "cp"
         return Dict{String, Any}(
@@ -50,13 +73,13 @@ function route_solver(payload::Dict{String, Any})
         )
     end
     if solver == "ga"
-        return solve_ga_only(payload)
+        return solve_ga_only(typed_payload)
     end
     if solver == "cg"
-        return solve_cg(payload)
+        return solve_cg(typed_payload)
     end
     if solver == "st"
-        return solve_st(payload)
+        return solve_st(typed_payload)
     end
-    return solve_mip(payload)
+    return solve_mip(typed_payload)
 end

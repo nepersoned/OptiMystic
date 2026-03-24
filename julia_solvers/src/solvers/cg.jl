@@ -2,45 +2,63 @@ using Random
 using JuMP
 using HiGHS
 
-function _cg_solve_master_lp(patterns::Vector{Vector{Int}}, demands::Vector{Float64}, stock_cost::Float64)
+function _cg_build_master_model(patterns::Vector{Vector{Int}}, demands::Vector{Float64}, stock_cost::Float64)
     m = Model(HiGHS.Optimizer)
     set_silent(m)
     try
         set_attribute(m, "output_flag", false)
-    catch
+    catch err
+        @warn "Failed to set CG master output_flag" error=err
     end
 
+    θ = VariableRef[]
     p_count = length(patterns)
     n = length(demands)
-    @variable(m, θ[1:p_count] >= 0)
+    for p in 1:p_count
+        v = @variable(m, lower_bound=0.0, base_name="theta_$(p)")
+        push!(θ, v)
+    end
 
-    demand_cons = Dict{Int, ConstraintRef}()
+    demand_cons = Vector{ConstraintRef}(undef, n)
     for i in 1:n
         demand_cons[i] = @constraint(m, sum(patterns[p][i] * θ[p] for p in 1:p_count) >= demands[i])
     end
-    @objective(m, Min, stock_cost * sum(θ[p] for p in 1:p_count))
-
-    optimize!(m)
-    status = _status_from_model(m)
-    feasible = primal_status(m) == MOI.FEASIBLE_POINT
-    duals = [feasible ? dual(demand_cons[i]) : 0.0 for i in 1:n]
-    theta_vals = [feasible ? value(θ[p]) : 0.0 for p in 1:p_count]
-    obj = feasible ? objective_value(m) : Inf
-    return status, obj, duals, theta_vals
+    @objective(m, Min, stock_cost * sum(v for v in θ))
+    return m, θ, demand_cons
 end
 
-function _cg_pricing_knapsack(duals::Vector{Float64}, item_lens::Vector{Float64}, kerf::Float64, stock_len::Float64)
-    n = length(duals)
+function _cg_add_pattern!(m::Model, θ::Vector{VariableRef}, demand_cons::Vector{ConstraintRef}, pattern::Vector{Int}, stock_cost::Float64)
+    new_idx = length(θ) + 1
+    new_var = @variable(m, lower_bound=0.0, base_name="theta_$(new_idx)")
+    push!(θ, new_var)
+    for i in eachindex(demand_cons)
+        set_normalized_coefficient(demand_cons[i], new_var, pattern[i])
+    end
+    set_objective_coefficient(m, new_var, stock_cost)
+    return nothing
+end
+
+function _cg_build_pricing_model(item_lens::Vector{Float64}, kerf::Float64, stock_len::Float64)
+    n = length(item_lens)
     m = Model(HiGHS.Optimizer)
     set_silent(m)
     try
         set_attribute(m, "output_flag", false)
-    catch
+    catch err
+        @warn "Failed to set CG pricing output_flag" error=err
     end
 
     @variable(m, a[1:n] >= 0, Int)
     @constraint(m, sum((item_lens[i] + kerf) * a[i] for i in 1:n) <= stock_len + kerf)
-    @objective(m, Max, sum(duals[i] * a[i] for i in 1:n))
+    @objective(m, Max, 0.0)
+    return m, a
+end
+
+function _cg_pricing_knapsack!(m::Model, a, duals::Vector{Float64})
+    n = length(duals)
+    for i in 1:n
+        set_objective_coefficient(m, a[i], duals[i])
+    end
 
     optimize!(m)
     feasible = primal_status(m) == MOI.FEASIBLE_POINT
@@ -110,15 +128,24 @@ function _solve_cg_cutting(params::Dict{String, Any}, opts::Dict{String, Any})
     iterations = 0
     master_status = "Unknown"
     master_duals = [0.0 for _ in 1:length(items)]
+    master_model, master_theta, demand_cons = _cg_build_master_model(patterns, demands, stock_cost)
+    pricing_model, pricing_a = _cg_build_pricing_model(item_lens, kerf, stock_len)
 
     while iterations < max_iterations
         iterations += 1
-        master_status, _, master_duals, _ = _cg_solve_master_lp(patterns, demands, stock_cost)
+        optimize!(master_model)
+        master_status = _status_from_model(master_model)
+        feasible_master = primal_status(master_model) == MOI.FEASIBLE_POINT
+        if feasible_master
+            master_duals = [dual(demand_cons[i]) for i in eachindex(demand_cons)]
+        else
+            master_duals = [0.0 for _ in eachindex(demand_cons)]
+        end
         if master_status == "Infeasible" || master_status == "ModelInvalid"
             break
         end
 
-        pricing_obj, new_pattern = _cg_pricing_knapsack(master_duals, item_lens, kerf, stock_len)
+        pricing_obj, new_pattern = _cg_pricing_knapsack!(pricing_model, pricing_a, master_duals)
         if pricing_obj <= stock_cost + 1e-6
             break
         end
@@ -126,6 +153,7 @@ function _solve_cg_cutting(params::Dict{String, Any}, opts::Dict{String, Any})
             break
         end
         push!(patterns, new_pattern)
+        _cg_add_pattern!(master_model, master_theta, demand_cons, new_pattern, stock_cost)
     end
 
     # Integer master problem with generated columns.
@@ -133,7 +161,8 @@ function _solve_cg_cutting(params::Dict{String, Any}, opts::Dict{String, Any})
     set_silent(m)
     try
         set_attribute(m, "output_flag", false)
-    catch
+    catch err
+        @warn "Failed to set CG integer-master output_flag" error=err
     end
 
     p_count = length(patterns)

@@ -3,13 +3,23 @@ import sys
 import argparse
 import os
 import subprocess
+import threading
 from python_solvers.logic import logic_cp
 from python_solvers.utils import bridge_logic
 from python_solvers.utils import services
 
 
+_JULIA_MAIN = None
+_JULIA_INCLUDE_DONE = False
+_JULIA_LOCK = threading.Lock()
+
+
 def _julia_command() -> str:
     return os.getenv("OPTIMYSTIC_JULIA", "julia")
+
+
+def _julia_bridge_mode() -> str:
+    return (os.getenv("OPTIMYSTIC_JULIA_BRIDGE", "subprocess") or "subprocess").strip().lower()
 
 
 def _julia_timeout_seconds() -> int:
@@ -33,6 +43,9 @@ def _build_julia_payload(mapped_params: dict) -> dict:
 
 
 def _run_julia_solver(domain: str, solver: str, julia_params: dict) -> dict:
+    if _julia_bridge_mode() == "juliacall":
+        return _run_julia_solver_juliacall(domain, solver, julia_params)
+
     cmd = [
         _julia_command(),
         "--project=julia_solvers",
@@ -65,6 +78,39 @@ def _run_julia_solver(domain: str, solver: str, julia_params: dict) -> dict:
     if isinstance(result, dict) and str(result.get("status", "")).lower() == "error":
         raise RuntimeError(result.get("error_msg") or result.get("error") or "Julia solver returned error")
     return result if isinstance(result, dict) else {}
+
+
+def _run_julia_solver_juliacall(domain: str, solver: str, julia_params: dict) -> dict:
+    global _JULIA_MAIN, _JULIA_INCLUDE_DONE
+
+    try:
+        from juliacall import Main as jl_main
+    except Exception as exc:
+        raise RuntimeError(f"juliacall bridge unavailable: {exc}") from exc
+
+    with _JULIA_LOCK:
+        if _JULIA_MAIN is None:
+            _JULIA_MAIN = jl_main
+        if not _JULIA_INCLUDE_DONE:
+            _JULIA_MAIN.seval('include("julia_solvers/src/main.jl")')
+            _JULIA_INCLUDE_DONE = True
+
+    payload = {
+        "domain": domain,
+        "solver": solver,
+        "params": julia_params,
+    }
+    try:
+        result = _JULIA_MAIN.route_solver(payload)
+        py_result = dict(result) if isinstance(result, dict) else result
+    except Exception as exc:
+        raise RuntimeError(f"Julia juliacall execution failed: {exc}") from exc
+
+    if not isinstance(py_result, dict):
+        raise RuntimeError("Julia juliacall returned non-dict result")
+    if str(py_result.get("status", "")).lower() == "error":
+        raise RuntimeError(py_result.get("error_msg") or py_result.get("error") or "Julia solver returned error")
+    return py_result
 
 def main():
     parser = argparse.ArgumentParser(description="OptiMystic Solver - Pure Calculator")

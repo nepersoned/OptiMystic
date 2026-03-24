@@ -102,7 +102,8 @@ function solve_st(payload::Dict{String, Any})
     set_silent(model)
     try
         set_attribute(model, "output_flag", false)
-    catch
+    catch err
+        @warn "Failed to set ST output_flag" error=err
     end
 
     @variable(model, X[1:n] >= 0, Int)
@@ -113,7 +114,8 @@ function solve_st(payload::Dict{String, Any})
         if haskey(start_values, vn)
             try
                 set_start_value(X[i], start_values[vn])
-            catch
+            catch err
+                @warn "Failed to set ST warm-start value" variable=vn value=start_values[vn] error=err
             end
         end
     end

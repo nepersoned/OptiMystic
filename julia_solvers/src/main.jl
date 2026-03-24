@@ -1,3 +1,7 @@
+module OptiMysticSolver
+
+export run_main, route_solver
+
 include("utils/io_contract.jl")
 include("utils/ir_tools.jl")
 include("solvers/mip.jl")
@@ -32,9 +36,11 @@ function run_main()
 
         _json_out(result)
     catch err
+        stacktrace_str = sprint(showerror, err, catch_backtrace())
         _json_out(Dict{String, Any}(
             "status" => "Error",
             "error_msg" => string(err),
+            "error_trace" => stacktrace_str,
             "objective" => nothing,
             "variables" => Any[],
             "constraints" => Any[],
@@ -45,3 +51,7 @@ function run_main()
         ))
     end
 end
+
+end # module OptiMysticSolver
+
+using .OptiMysticSolver: run_main, route_solver

@@ -114,6 +114,18 @@ def _clean_name(name: str) -> str:
     return re.sub(r"[^a-zA-Z0-9]", "_", str(name))
 
 
+def _get_variable_name(variable: Dict[str, Any]) -> str:
+    if not isinstance(variable, dict):
+        return ""
+    return str(variable.get("Variable") or variable.get("name") or "")
+
+
+def _get_variable_value(variable: Dict[str, Any]) -> float:
+    if not isinstance(variable, dict):
+        return 0.0
+    return safe_float(variable.get("Value", variable.get("value", 0.0)), 0.0)
+
+
 def process_results(
     res: Dict[str, Any],
     store: Dict[str, Any],
@@ -147,6 +159,7 @@ def _process_cutting_results(
 
     if not res or not isinstance(res.get("variables"), list):
         return {
+            "mode": "cutting",
             "total_cost": 0.0,
             "total_waste": 0.0,
             "num_bins": 0,
@@ -157,11 +170,31 @@ def _process_cutting_results(
         }
 
     for v in res["variables"]:
-        val = safe_float(v.get("Value", 0))
+        val = _get_variable_value(v)
         if val <= 0.001:
             continue
 
-        varname = v.get("Variable", "")
+        # Prefer structured solver outputs when available.
+        structured_item_idx = v.get("item_index") if isinstance(v, dict) else None
+        structured_bin_id = v.get("bin_id") if isinstance(v, dict) else None
+        if structured_item_idx is not None and structured_bin_id is not None:
+            try:
+                item_idx = int(structured_item_idx)
+                bin_id = str(structured_bin_id)
+                s_idx = (
+                    int(bin_id.split("_")[0].replace("ST", ""))
+                    if "ST" in bin_id and "CG" not in bin_id
+                    else 0
+                )
+                if bin_id not in raw_bins:
+                    raw_bins[bin_id] = {"s_idx": s_idx, "items": []}
+                for _ in range(int(round(val))):
+                    raw_bins[bin_id]["items"].append({"name": items[item_idx], "len": lens[item_idx]})
+                continue
+            except (TypeError, ValueError, IndexError, KeyError):
+                pass
+
+        varname = _get_variable_name(v)
         if "A_IT" in varname:
             try:
                 parts = varname.split("_")
@@ -243,6 +276,7 @@ def _process_cutting_results(
     report = "\n".join(report_lines)
 
     return {
+        "mode": "cutting",
         "total_cost": round(total_cost, 2),
         "total_waste": round(total_waste, 2),
         "num_bins": len(raw_bins),
