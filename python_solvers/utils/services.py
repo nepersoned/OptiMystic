@@ -11,11 +11,11 @@ MODE_ALIASES = {
     "cutting": "cutting",
     "logistics": "packing",
     "packing": "packing",
-    "resource": "resource_allocation",
-    "it": "resource_allocation",
-    "cloud": "resource_allocation",
-    "resource_allocation": "resource_allocation",
-    "resourcing": "resource_allocation",
+    "resource": "resourcing",
+    "it": "resourcing",
+    "cloud": "resourcing",
+    "resource_allocation": "resourcing",
+    "resourcing": "resourcing",
     "hr": "scheduling",
     "nsp": "scheduling",
     "scheduling": "scheduling",
@@ -328,7 +328,7 @@ def _process_generic_results(
             "status": "ok",
         }
 
-    if mode == "resource_allocation":
+    if mode == "resourcing":
         cpu = p.get("Weights", [])
         ram = p.get("WeightsRAM", [])
         values = p.get("Values", [])
@@ -355,7 +355,7 @@ def _process_generic_results(
         ram_pct = (used_ram / cap_ram * 100) if cap_ram > 0 else 0.0
         report = f"### Resource Allocation Summary\n- **CPU Used:** {used_cpu:.2f} / {cap_cpu:.2f} ({cpu_pct:.1f}%)\n- **RAM Used:** {used_ram:.2f} / {cap_ram:.2f} ({ram_pct:.1f}%)"
         return {
-            "mode": "resource_allocation",
+            "mode": "resourcing",
             "total_value": round(total_value, 2),
             "used_cpu": round(used_cpu, 2),
             "used_ram": round(used_ram, 2),
@@ -476,7 +476,7 @@ def _process_cutting_sensitivity(
         for _, row in df[["Constraint", "Shadow Price", "Slack"]].iterrows():
             rows.append({
                 "Constraint": str(row["Constraint"]),
-                "Shadow Price": f"${safe_float(row['Shadow Price']):.2f}",
+                "Shadow Price": safe_float(row["Shadow Price"]),
                 "Slack": safe_float(row["Slack"]),
             })
 
@@ -517,7 +517,7 @@ def _process_sensitivity_general(res: Dict[str, Any]) -> Dict[str, Any]:
         for _, row in df.iterrows():
             rows.append({
                 "Constraint": str(row.get("Constraint", "Unknown")),
-                "Shadow Price": f"${safe_float(row.get('Shadow Price', 0)):.2f}",
+                "Shadow Price": safe_float(row.get("Shadow Price", 0)),
                 "Slack": safe_float(row.get("Slack", 0)),
             })
         

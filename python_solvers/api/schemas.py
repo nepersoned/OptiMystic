@@ -30,7 +30,7 @@ class PackingOutput(BaseModel):
 
 
 class ResourcingOutput(BaseModel):
-    mode: Literal["resource_allocation"] = "resource_allocation"
+    mode: Literal["resourcing"] = "resourcing"
     total_value: float = 0.0
     used_cpu: float = 0.0
     used_ram: float = 0.0

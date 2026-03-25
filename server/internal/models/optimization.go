@@ -2,7 +2,9 @@ package models
 
 type OptimizeRequest struct {
 	TemplateType string                 `json:"template_type"`
+	Domain       string                 `json:"domain,omitempty"`
 	SolverType   string                 `json:"solver_type,omitempty"`
+	Solver       string                 `json:"solver,omitempty"`
 	Sense        string                 `json:"sense,omitempty"`
 	Params       map[string]interface{} `json:"params"`
 }
@@ -30,7 +32,7 @@ type SensitivityOutput struct {
 
 type SensitivityConstraint struct {
 	Constraint  string  `json:"Constraint"`
-	ShadowPrice string  `json:"Shadow Price"`
+	ShadowPrice float64 `json:"Shadow Price"`
 	Slack       float64 `json:"Slack"`
 }
 

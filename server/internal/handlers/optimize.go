@@ -53,7 +53,13 @@ func HandleOptimize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.TrimSpace(req.TemplateType) == "" {
-		writeAPIError(w, http.StatusBadRequest, "template_type_required", "template_type is required")
+		req.TemplateType = req.Domain
+	}
+	if strings.TrimSpace(req.SolverType) == "" {
+		req.SolverType = req.Solver
+	}
+	if strings.TrimSpace(req.TemplateType) == "" {
+		writeAPIError(w, http.StatusBadRequest, "template_type_required", "template_type (or domain) is required")
 		return
 	}
 	if req.Params == nil {

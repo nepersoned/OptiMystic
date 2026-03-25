@@ -50,17 +50,21 @@ raw params (scheduling domain)
          -> subprocess call to julia_solvers/
 ```
 
-## Quick Start (cmd.exe)
+## Quick Start (One Verified Path)
 
-```cmd
-cd /d c:\Users\kevin\OneDrive\Desktop\OptiMystic
-pip install -r python_solvers\requirements.txt
+Primary verification path is the root smoke test:
+
+```powershell
+cd C:\Users\kevin\OneDrive\Desktop\OptiMystic
+\.venv\Scripts\python.exe -m pip install -r python_solvers\requirements.txt
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
 ```
 
-### CP Example: Scheduling (Employee Shift Allocation)
+### Optional: Direct CP CLI check (Python-only path)
 
-```cmd
-python python_solvers\cli_solver.py --domain scheduling --solver cp --params "{\"Employees\":[{\"Name\":\"E1\",\"MaxShifts\":5},{\"Name\":\"E2\",\"MaxShifts\":4}],\"Shifts\":[{\"Name\":\"Morning\",\"Demand\":1},{\"Name\":\"Evening\",\"Demand\":1}],\"Values\":{\"E1\":{\"Morning\":1,\"Evening\":0.5},\"E2\":{\"Morning\":0.8,\"Evening\":1}},\"MaxShiftsPerEmployee\":5}"
+```powershell
+cd C:\Users\kevin\OneDrive\Desktop\OptiMystic
+\.venv\Scripts\python.exe python_solvers\cli_solver.py --domain scheduling --solver cp --params "{\"Employees\":[{\"Name\":\"E1\",\"MaxShifts\":5},{\"Name\":\"E2\",\"MaxShifts\":5}],\"Shifts\":[{\"Name\":\"Morning\",\"Demand\":1}],\"Values\":{\"E1\":{\"Morning\":1},\"E2\":{\"Morning\":1}},\"MaxShiftsPerEmployee\":5}"
 ```
 
 **Output:**

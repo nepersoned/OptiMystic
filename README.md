@@ -70,63 +70,43 @@ HTTP client
 - `POST /api/optimize`
 - `POST /api/optimize/`
 
-## Quick Start (Windows cmd.exe)
+## Quick Start (One Verified Path)
 
-### 1) Install Dependencies
+Use this single flow for demos/evaluation on Windows PowerShell.
+It is intentionally minimal and focuses on a known-good end-to-end API call.
 
-**Python:**
-```cmd
-cd /d c:\Users\kevin\OneDrive\Desktop\OptiMystic
-pip install -r python_solvers\requirements.txt
+### 1) Install Python dependencies with project venv
+
+```powershell
+cd C:\Users\kevin\OneDrive\Desktop\OptiMystic
+\.venv\Scripts\python.exe -m pip install -r python_solvers\requirements.txt
 ```
 
-**Julia** (Optional, required for non-CP solvers):
-```cmd
-REM Download Julia from https://julialang.org/downloads/
-REM Add julia.exe to PATH, then:
-cd /d c:\Users\kevin\OneDrive\Desktop\OptiMystic\julia_solvers
-julia --project=. -e "using Pkg; Pkg.instantiate()"
-```
+### 2) Start API server (Terminal A)
 
-### 2) Run Go API Server
-
-```cmd
-cd /d c:\Users\kevin\OneDrive\Desktop\OptiMystic\server
+```powershell
+cd C:\Users\kevin\OneDrive\Desktop\OptiMystic\server
+$env:OPTIMYSTIC_PYTHON = "C:/Users/kevin/OneDrive/Desktop/OptiMystic/.venv/Scripts/python.exe"
+$env:OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS = "180"
+$env:OPTIMYSTIC_JULIA_TIMEOUT_SECONDS = "180"
 go run .\cmd\server\main.go
 ```
 
-API listens on `http://localhost:8080/api/optimize`
+### 3) Run the verified smoke test set (Terminal B)
 
-### 3) Test Solver Dispatch (CLI)
-
-**Scheduling (CP - Python):**
-```cmd
-cd /d c:\Users\kevin\OneDrive\Desktop\OptiMystic
-python python_solvers\cli_solver.py --domain scheduling --solver cp --params "{\"Employees\":[{\"Name\":\"E1\",\"MaxShifts\":5}],\"Shifts\":[{\"Name\":\"Morning\",\"Demand\":2}],\"Values\":{\"E1\":{\"Morning\":1}},\"MaxShiftsPerEmployee\":5}"
+```powershell
+cd C:\Users\kevin\OneDrive\Desktop\OptiMystic
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
 ```
 
-**Cutting Stock (CG - Julia):**
-```cmd
-python python_solvers\cli_solver.py --domain cutting --solver cg --params "{\"Mode\":\"cutting\",\"Items\":[{\"Name\":\"A\",\"Length\":10,\"Demand\":5}],\"Stocks\":[{\"Length\":100,\"Cost\":1.0}],\"Kerf\":0.1}"
-```
+Smoke payload files used by the script:
+- `examples/smoke/scheduling-cp-ok.json`
+- `examples/smoke/packing-mip-ok.json`
 
-**Packing (MIP - Julia):**
-```cmd
-python python_solvers\cli_solver.py --domain packing --solver mip --params "{\"Items\":[{\"Name\":\"A\",\"Weight\":2,\"Value\":10}],\"Vehicles\":[{\"Capacity\":5}]}"
-```
-
-**Resourcing (ST - Julia):**
-```cmd
-python python_solvers\cli_solver.py --domain resourcing --solver st --params "{\"Mode\":\"resourcing\",\"Items\":[{\"Name\":\"CPU\",\"Value\":10}],\"Scenarios\":[{\"Name\":\"S1\",\"Probability\":1.0,\"Demands\":{\"CPU\":50}}],\"CPU\":100,\"ShortfallPenalty\":5.0}"
-```
-
-### 4) Test via HTTP
-
-```cmd
-curl -X POST http://localhost:8080/api/optimize ^
-  -H "Content-Type: application/json" ^
-  -d "{\"template_type\":\"scheduling\",\"solver_type\":\"cp\",\"params\":{\"Employees\":[{\"Name\":\"E1\",\"MaxShifts\":5}],\"Shifts\":[{\"Name\":\"Morning\",\"Demand\":2}],\"Values\":{\"E1\":{\"Morning\":1}},\"MaxShiftsPerEmployee\":5}}"
-```
+If you need Docker or Julia-only examples, see the submodule READMEs:
+- `server/README.md`
+- `python_solvers/README.md`
+- `julia_solvers/README.md`
 
 ## Request Contract
 

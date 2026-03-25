@@ -1,0 +1,16 @@
+services:
+  optimystic:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: optimystic:latest
+    container_name: optimystic
+    ports:
+      - "8000:8000"
+    environment:
+      PORT: "8000"
+      OPTIMYSTIC_PYTHON: "python3"
+      OPTIMYSTIC_JULIA: "julia"
+      OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS: "60"
+      OPTIMYSTIC_JULIA_TIMEOUT_SECONDS: "60"
+    restart: unless-stopped

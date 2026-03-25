@@ -1,0 +1,12 @@
+{
+  "template_type": "packing",
+  "solver_type": "mip",
+  "params": {
+    "Items": [
+      { "Name": "A", "Weight": 2, "Value": 10 }
+    ],
+    "Vehicles": [
+      { "Capacity": 5 }
+    ]
+  }
+}

@@ -4,6 +4,15 @@ import argparse
 import os
 import subprocess
 import threading
+
+# Allow running this file directly (python python_solvers/cli_solver.py)
+# by ensuring project root is importable as a top-level package location.
+if __package__ is None or __package__ == "":
+    _HERE = os.path.dirname(os.path.abspath(__file__))
+    _ROOT = os.path.dirname(_HERE)
+    if _ROOT not in sys.path:
+        sys.path.insert(0, _ROOT)
+
 from python_solvers.logic import logic_cp
 from python_solvers.utils import bridge_logic
 from python_solvers.utils import services

@@ -270,48 +270,35 @@ cli_solver.py (non-cp request)
 
 ---
 
-## Quick Start (Windows cmd.exe)
+## Quick Start (One Verified Path)
 
-### 1) Install Julia & Dependencies
+For reliable demo/evaluation, use the same root smoke flow.
 
-```cmd
-# Download Julia from https://julialang.org/downloads/
-# (Recommended: v1.10+ for stability)
+### 1) Prepare Julia packages once
 
-# Add Julia to PATH, then:
-cd /d c:\Users\kevin\OneDrive\Desktop\OptiMystic\julia_solvers
+```powershell
+cd C:\Users\kevin\OneDrive\Desktop\OptiMystic\julia_solvers
 julia --project=. -e "using Pkg; Pkg.instantiate()"
 ```
 
-### 2) Test Julia Solvers Directly
+### 2) Run end-to-end smoke from root
 
-```cmd
-cd /d c:\Users\kevin\OneDrive\Desktop\OptiMystic
-
-# MIP example (packing)
-python python_solvers\cli_solver.py --domain packing --solver mip --params "{\"Items\":[{\"Name\":\"A\",\"Weight\":2,\"Value\":10},{\"Name\":\"B\",\"Weight\":3,\"Value\":12}],\"Vehicles\":[{\"Capacity\":5}]}"
-
-# CG example (cutting)
-python python_solvers\cli_solver.py --domain cutting --solver cg --params "{\"Mode\":\"cutting\",\"Items\":[{\"Name\":\"A\",\"Length\":10,\"Demand\":5},{\"Name\":\"B\",\"Length\":8,\"Demand\":3}],\"Stocks\":[{\"Length\":100,\"Cost\":1.0}],\"Kerf\":0.1}"
-
-# ST example (resourcing)
-python python_solvers\cli_solver.py --domain resourcing --solver st --params "{\"Mode\":\"resourcing\",\"Items\":[{\"Name\":\"CPU\",\"Value\":10}],\"Scenarios\":[{\"Name\":\"S1\",\"Probability\":1.0,\"Demands\":{\"CPU\":50}}],\"CPU\":100,\"ShortfallPenalty\":5.0}"
-
-# GA example (exploratory)
-python python_solvers\cli_solver.py --domain generic --solver ga --params "{\"Items\":[{\"Name\":\"A\",\"Weight\":2},{\"Name\":\"B\",\"Weight\":3}],\"GA\":{\"seed\":42,\"generations\":50}}"
-```
-
-### 3) Test Go API End-to-End
-
-```cmd
-cd /d c:\Users\kevin\OneDrive\Desktop\OptiMystic\server
+```powershell
+cd C:\Users\kevin\OneDrive\Desktop\OptiMystic\server
+$env:OPTIMYSTIC_PYTHON = "C:/Users/kevin/OneDrive/Desktop/OptiMystic/.venv/Scripts/python.exe"
+$env:OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS = "180"
+$env:OPTIMYSTIC_JULIA_TIMEOUT_SECONDS = "180"
 go run .\cmd\server\main.go
-
-# In another terminal:
-curl -X POST http://localhost:8080/api/optimize ^
-  -H "Content-Type: application/json" ^
-  -d "{\"template_type\":\"packing\",\"solver_type\":\"mip\",\"params\":{...}}"
 ```
+
+In another terminal:
+
+```powershell
+cd C:\Users\kevin\OneDrive\Desktop\OptiMystic
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
+```
+
+The smoke script includes a packing MIP request that exercises Julia solver routing.
 
 ---
 

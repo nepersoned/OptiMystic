@@ -18,19 +18,26 @@ It is responsible for subprocess execution safety, domain-aware response typing,
 - `POST /api/optimize`
 - `POST /api/optimize/`
 
-## Run (cmd.exe)
+## One Verified Run Path (PowerShell)
 
-```cmd
-cd /d c:\Users\kevin\OneDrive\Desktop\OptiMystic\server
+Use this for demo/evaluation. This path is aligned with the root smoke test.
+
+```powershell
+cd C:\Users\kevin\OneDrive\Desktop\OptiMystic\server
+$env:OPTIMYSTIC_PYTHON = "C:/Users/kevin/OneDrive/Desktop/OptiMystic/.venv/Scripts/python.exe"
+$env:OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS = "180"
+$env:OPTIMYSTIC_JULIA_TIMEOUT_SECONDS = "180"
 go run .\cmd\server\main.go
 ```
 
-## Build (cmd.exe)
+In another terminal:
 
-```cmd
-cd /d c:\Users\kevin\OneDrive\Desktop\OptiMystic\server
-go build -o .\bin\optimystic-server .\cmd\server\main.go
+```powershell
+cd C:\Users\kevin\OneDrive\Desktop\OptiMystic
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
 ```
+
+If smoke test output is printed for all 3 steps (health, scheduling, packing), server integration is working end-to-end.
 
 ## Request/Response Examples
 

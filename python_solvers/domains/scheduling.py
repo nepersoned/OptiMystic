@@ -23,7 +23,7 @@ def map_params(raw_params: Dict[str, Any]) -> Dict[str, Any]:
       - Or Items (list of names) + Durations/Hours
     """
     items = raw_params.get("Employees", raw_params.get("Workers", raw_params.get("Items", [])))
-    shifts = raw_params.get("Shifts", raw_params.get("Slots", []))
+    shifts_raw = raw_params.get("Shifts", raw_params.get("Slots", []))
 
     if isinstance(items, list) and items and isinstance(items[0], dict):
         names = [x.get("Name", x.get("id", f"E_{i}")) for i, x in enumerate(items)]
@@ -36,13 +36,56 @@ def map_params(raw_params: Dict[str, Any]) -> Dict[str, Any]:
     demands = raw_params.get("Demands", raw_params.get("MinStaff", {}))
     sense = raw_params.get("Sense", "maximize")
 
+    shifts: List[str] = []
+    derived_demands: Dict[str, float] = {}
+    if isinstance(shifts_raw, list) and shifts_raw and isinstance(shifts_raw[0], dict):
+        for i, shift in enumerate(shifts_raw):
+            shift_name = str(shift.get("Name", shift.get("id", f"S_{i}")))
+            shifts.append(shift_name)
+            if "Demand" in shift:
+                try:
+                    derived_demands[shift_name] = float(shift.get("Demand", 1))
+                except (TypeError, ValueError):
+                    derived_demands[shift_name] = 1.0
+    elif isinstance(shifts_raw, list):
+        shifts = [str(s) for s in shifts_raw]
+
+    if not isinstance(demands, dict):
+        demands = {}
+    if derived_demands:
+        merged = dict(derived_demands)
+        merged.update({str(k): float(v) for k, v in demands.items()})
+        demands = merged
+
     if not shifts:
         shifts = list(demands.keys()) if demands else []
+
+    values_raw = raw_params.get("Values", raw_params.get("Satisfaction", [1] * n))
+    values: List[float]
+    if isinstance(values_raw, dict):
+        values = []
+        for employee in names:
+            employee_value = values_raw.get(employee, 1)
+            if isinstance(employee_value, dict):
+                numeric_values = []
+                for v in employee_value.values():
+                    try:
+                        numeric_values.append(float(v))
+                    except (TypeError, ValueError):
+                        continue
+                values.append(sum(numeric_values) / len(numeric_values) if numeric_values else 1.0)
+            else:
+                try:
+                    values.append(float(employee_value))
+                except (TypeError, ValueError):
+                    values.append(1.0)
+    else:
+        values = _safe_list(values_raw, n, 1.0)
 
     mapped = {
         "Items": names,
         "Weights": _safe_list(durations, n),
-        "Values": raw_params.get("Values", raw_params.get("Satisfaction", [1] * n)),
+        "Values": values,
         "Demands": demands,
         "Sense": sense,
         "Shifts": shifts,
