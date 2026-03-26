@@ -10,14 +10,14 @@ type OptimizeRequest struct {
 }
 
 type OptimizeResponse struct {
-	Status      string              `json:"status"`
-	Objective   *float64            `json:"objective,omitempty"`
-	SolveTime   float64             `json:"solve_time,omitempty"`
-	Variables   []RawVariable       `json:"variables,omitempty"`
-	Constraints []RawConstraint     `json:"constraints,omitempty"`
-	Details     interface{}         `json:"details,omitempty"`
-	Sensitivity *SensitivityOutput  `json:"sensitivity,omitempty"`
-	Error       string              `json:"error,omitempty"`
+	Status      string             `json:"status"`
+	Objective   *float64           `json:"objective,omitempty"`
+	SolveTime   float64            `json:"solve_time,omitempty"`
+	Variables   []RawVariable      `json:"variables,omitempty"`
+	Constraints []RawConstraint    `json:"constraints,omitempty"`
+	Details     interface{}        `json:"details,omitempty"`
+	Sensitivity *SensitivityOutput `json:"sensitivity,omitempty"`
+	Error       string             `json:"error,omitempty"`
 }
 
 type RawVariable map[string]interface{}
