@@ -86,7 +86,7 @@ cd C:\Your file path\OptiMystic
 
 ```powershell
 cd C:\Your file path\OptiMystic\server
-$env:OPTIMYSTIC_PYTHON = "C:/Users/kevin/OneDrive/Desktop/OptiMystic/.venv/Scripts/python.exe"
+$env:OPTIMYSTIC_PYTHON = "C:/Your file path/OptiMystic/.venv/Scripts/python.exe"
 $env:OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS = "180"
 $env:OPTIMYSTIC_JULIA_TIMEOUT_SECONDS = "180"
 go run .\cmd\server\main.go
@@ -95,7 +95,7 @@ go run .\cmd\server\main.go
 ### 3) Run the verified smoke test set (Terminal B)
 
 ```powershell
-cd C:\Users\kevin\OneDrive\Desktop\OptiMystic
+cd C:\Your file path\OptiMystic
 powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
 ```
 
