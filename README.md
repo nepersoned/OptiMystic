@@ -78,14 +78,14 @@ It is intentionally minimal and focuses on a known-good end-to-end API call.
 ### 1) Install Python dependencies with project venv
 
 ```powershell
-cd C:\Users\kevin\OneDrive\Desktop\OptiMystic
+cd C:\Your file path\OptiMystic
 \.venv\Scripts\python.exe -m pip install -r python_solvers\requirements.txt
 ```
 
 ### 2) Start API server (Terminal A)
 
 ```powershell
-cd C:\Users\kevin\OneDrive\Desktop\OptiMystic\server
+cd C:\Your file path\OptiMystic\server
 $env:OPTIMYSTIC_PYTHON = "C:/Users/kevin/OneDrive/Desktop/OptiMystic/.venv/Scripts/python.exe"
 $env:OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS = "180"
 $env:OPTIMYSTIC_JULIA_TIMEOUT_SECONDS = "180"
