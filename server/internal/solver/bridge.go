@@ -1,7 +1,7 @@
 package solver
 
 import (
-    "context"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
