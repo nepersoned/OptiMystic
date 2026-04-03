@@ -109,6 +109,38 @@ type PackingOutput struct {
 	Report       string                `json:"report"`
 }
 
+type VRPOutput struct {
+	TotalDistance float64     `json:"total_distance"`
+	NumVehicles   int         `json:"num_vehicles"`
+	Routes        []VRPRoute  `json:"routes"`
+	Unserved      []string    `json:"unserved"`
+	ArrivalTimes []float64 `json:"arrival_times,omitempty"`
+	Status        string      `json:"status"`
+	Report        string      `json:"report"`
+}
+
+type VRPRoute struct {
+	Vehicle string   `json:"vehicle"`
+	Route   []string `json:"route"`
+	PickupDeliveries [][]int   `json:"pickup_deliveries,omitempty"`
+	TimeWindowsApplied bool    `json:"time_windows_applied,omitempty"`
+	Distance float64 `json:"distance"`
+	Load    float64  `json:"load"`
+}
+
+type NlpOutput struct {
+	Status             string                 `json:"status"`
+	Report             string                 `json:"report"`
+	ObjectiveValue     float64                `json:"objective_value"`
+	VariableCount      int                    `json:"variable_count"`
+	ConstraintCount    int                    `json:"constraint_count"`
+	NonlinearTermCount int                    `json:"nonlinear_term_count"`
+	GaHotspotCount     int                    `json:"ga_hotspot_count"`
+	GaFixedCount       int                    `json:"ga_fixed_count"`
+	GaStartCount       int                    `json:"ga_start_count"`
+	ActiveVariables    []GenericActiveVariable `json:"active_variables,omitempty"`
+}
+
 type PackingSelectedItem struct {
 	Item   string  `json:"item"`
 	Count  float64 `json:"count"`

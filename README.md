@@ -8,8 +8,8 @@ This repository is organized for production-like API orchestration, domain-aware
 
 - Stable HTTP entry point for optimization requests (`/api/optimize`)
 - Safe Go-to-Python bridge execution with timeout control
-- Domain-mapped model generation (`cutting`, `packing`, `resourcing`, `scheduling`, `generic`)
-- Multiple solver strategies (MIP, CP, ST, partial CG/GA)
+- Domain-mapped model generation (`cutting`, `packing`, `resourcing`, `scheduling`, `vrp`, `generic`)
+- Multiple solver strategies (MIP, CP, ST, GA, VRP routing, NLP)
 - Standardized JSON output contract for frontend/backend integration
 
 ## Architecture
@@ -20,13 +20,15 @@ HTTP client
   -> Go/Python bridge (`server/internal/solver/bridge.go`)
   -> Python CLI runtime (`python_solvers/cli_solver.py`)
      ├─ solver_type == "cp" → logic_cp.solve_cp_model() [OR-Tools]
-     └─ solver_type != "cp" → subprocess Julia runtime
+         ├─ domain == "vrp" → logic_vrp.solve_vrp_model() [OR-Tools routing]
+         └─ solver_type != "cp" and domain != "vrp" → subprocess Julia runtime
         ├─ domains/*.py → IR generation
         └─ julia_solvers/ → routing
             ├─ route_solver() dispatcher
             ├─ mip.jl (JuMP+HiGHS) + GA warmstart
             ├─ cg.jl (Column Generation for cutting)
             ├─ st.jl (Stochastic two-stage for resourcing)
+           ├─ nlp.jl (Ipopt-backed nonlinear optimization + GA warm start)
             └─ ga.jl (Evolutionary search)
   -> Result shaping (`python_solvers/utils/services.py`)
   -> Go result dispatch (`server/internal/services/*.go`)
@@ -178,8 +180,8 @@ Consult this table to choose the right solver for your problem domain:
 | Exploratory search (any problem) | any | `ga` | Pure evolutionary, no MIP refinement | Julia |
 
 **Key distinctions:**
-- **Python-only (CP)**: Scheduling domain with CP solver
-- **Julia-delegated**: All other `solver_type` values (mip, ga, cg, st)
+- **Python-only (CP/VRP)**: Scheduling domain with CP solver, VRP with OR-Tools routing
+- **Julia-delegated**: All other `solver_type` values (mip, ga, cg, st, nlp)
 - **Fallback logic**: If specialized solver unavailable, system automatically chains to next option (e.g., CG→GA+MIP, ST→GA+MIP)
 
 ## Documentation Reference

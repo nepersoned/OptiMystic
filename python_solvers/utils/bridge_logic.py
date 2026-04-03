@@ -12,6 +12,9 @@ from typing import Any, Dict, List, Tuple, Union
 MODES = {
     "cutting": "cutting",
     "packing": "packing",
+    "vrp": "vrp",
+    "routing": "vrp",
+    "vehicle_routing": "vrp",
     "resourcing": "resourcing",
     "scheduling": "scheduling",
     "generic": "generic",
@@ -44,24 +47,30 @@ def map_params_by_mode(mode: str, params: Dict[str, Any]) -> Dict[str, Any]:
     if normalized_mode == "packing":
         from python_solvers.domains import packing
         return packing.map_params(params)
-    if normalized_mode == "resourcing":
+    if normalized_mode == "vrp":
+        from python_solvers.domains import vrp
+        mapped = cutting.map_params(params)
+    elif normalized_mode == "packing":
+        from python_solvers.domains import packing
+        mapped = packing.map_params(params)
+    elif normalized_mode == "vrp":
+        from python_solvers.domains import vrp
+        mapped = vrp.map_params(params)
+    elif normalized_mode == "resourcing":
         from python_solvers.domains import resourcing
-        return resourcing.map_params(params)
-    if normalized_mode == "scheduling":
+        mapped = resourcing.map_params(params)
+    elif normalized_mode == "scheduling":
         from python_solvers.domains import scheduling
-        return scheduling.map_params(params)
-    if normalized_mode == "generic":
+        mapped = scheduling.map_params(params)
+    elif normalized_mode == "generic":
         from python_solvers.domains import generic
-        return generic.map_params(params)
-    
-    return params
+        mapped = generic.map_params(params)
+    else:
+        mapped = dict(params or {})
 
-
-def generate_logic(
-    template_type: str,
-    params: Dict[str, Any],
-    solver_type: str | None = None,
-) -> Tuple[Union[Any, List], List[Any], List[Dict[str, Any]]]:
+    if isinstance(params, dict) and isinstance(params.get("NLP"), dict) and "NLP" not in mapped:
+        mapped["NLP"] = params.get("NLP")
+    return mapped
     """
     Generate (objective_or_model, constraints, variables) for the Python solver path.
     Python runtime is CP-only after Julia migration for non-CP solvers.

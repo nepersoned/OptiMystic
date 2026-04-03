@@ -2,7 +2,7 @@
 
 Julia optimization ecosystem for OptiMystic, handling all non-CP solver types.
 
-**Design**: Python CLI delegates non-CP requests to Julia subprocess via JSON I/O. Julia dispatches to task-specific solvers (MIP, GA, CG, ST) with automatic fallback chains.
+**Design**: Python CLI delegates non-CP requests to Julia subprocess via JSON I/O. Julia dispatches to task-specific solvers (MIP, GA, CG, ST, NLP) with automatic fallback chains.
 
 ## Solver-Domain Compatibility
 
@@ -31,6 +31,27 @@ result = solve_mip_from_ir(ir, opts)
 ```
 
 ---
+
+### NLP (Nonlinear Programming)
+
+| Role | Compatibility |
+|---|---|
+| **Solver** (solver="nlp") | Generic IR via JuMP + Ipopt |
+| **Warmstart provider** | GA hotspots are injected as start values / fixed values |
+
+**File**: [src/solvers/nlp.jl](src/solvers/nlp.jl)
+
+**Key Features:**
+- Parses a small nonlinear AST contract from `params.NLP`
+- Builds Ipopt-backed JuMP models for smooth nonlinear objectives and constraints
+- Uses GA hotspot results as warm starts and fixed hotspots
+- Emits solver diagnostics including GA counts and nonlinear term counts
+
+**Example Call:**
+```julia
+result = solve_nlp(payload)
+# => { status, objective, variables, constraints, solve_time, details }
+```
 
 ### GA (Genetic Algorithm / Evolutionary Search)
 
@@ -225,6 +246,8 @@ solver parameter
   ├─ "st" → solve_st()
   │         ├─ Items + Scenarios → full stochastic
   │         └─ else → GA + MIP fallback
+  ├─ "nlp" → solve_nlp()
+  │         └─ GA-guided nonlinear solve via Ipopt
   └─ "mip" (default)
       └─ solve_mip()
           ├─ GA hotspot calculation
@@ -241,6 +264,7 @@ solver parameter
 |---|---|---|---|---|
 | Schedule staff | scheduling | cp | `template_type="scheduling"` | OR-Tools CP-SAT optimal for binary assignment |
 | Schedule (relaxed) | scheduling | mip | Direct IR | Standard LP relaxation |
+| Nonlinear generic model | generic | nlp | `solver="nlp"` + nonlinear AST in `params.NLP` | Ipopt-backed smooth NLP with GA warm start |
 | Cutting stock | cutting | cg | `Mode="cutting"` + Items | Specialized column gen, educaitonal value |
 | Cutting (large) | cutting | mip | No CG data | Generic MIP faster for many items |
 | Bin packing | packing | mip | Default | Generic MIP handles variable dimensions |

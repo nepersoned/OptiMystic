@@ -9,6 +9,7 @@ It is responsible for subprocess execution safety, domain-aware response typing,
 - Orchestrates Python solver subprocess calls from a typed Go API surface.
 - Enforces timeout safety for long-running optimization workloads.
 - Dispatches domain results into typed outputs for predictable client handling.
+- Supports typed outputs for `vrp` and solver-aware generic NLP results.
 - Supports generic/raw passthrough for IR-driven advanced use cases.
 
 ## Endpoints
@@ -116,7 +117,7 @@ Response (shape example):
 Python subprocess execution timeout is controlled by environment variable:
 
 - `OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS`
-- default: `30`
+- default: `180`
 
 If timeout is reached, the API returns an error response indicating solver execution exceeded allowed time.
 
@@ -131,8 +132,8 @@ go run .\cmd\server\main.go
 
 `internal/services/results.go` coordinates domain-aware mapping.
 
-- Typed outputs: `cutting`, `packing`, `resourcing`, `scheduling`
-- Generic outputs: `GenericOutput`
+- Typed outputs: `cutting`, `packing`, `vrp`, `resourcing`, `scheduling`
+- Solver-aware generic outputs: `GenericOutput`, `NlpOutput`
 - Fallback behavior: if typed mapping is unavailable, raw-compatible fields are preserved for client-side handling
 
 This keeps API responses stable while allowing domain-specific detail structures.

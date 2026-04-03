@@ -11,6 +11,9 @@ MODE_ALIASES = {
     "cutting": "cutting",
     "logistics": "packing",
     "packing": "packing",
+    "vrp": "vrp",
+    "routing": "vrp",
+    "vehicle_routing": "vrp",
     "resource": "resourcing",
     "it": "resourcing",
     "cloud": "resourcing",
@@ -22,6 +25,7 @@ MODE_ALIASES = {
     "generic": "generic",
     "formula": "generic",
     "custom": "generic",
+    "nlp": "nlp",
 }
 
 def safe_float(v: Any, default: float = 0.0) -> float:
@@ -135,9 +139,95 @@ def process_results(
     Parse solver variables into bin plans and summary.
     """
     mode = normalize_mode(mode)
+    if mode == "nlp" or (isinstance(res, dict) and isinstance(res.get("details"), dict) and str(res["details"].get("engine", "")).upper() == "NLP"):
+        return _process_nlp_results(res, store)
+    if mode == "vrp":
+        return _process_vrp_results(res, store)
     if mode == "cutting":
         return _process_cutting_results(res, store)
     return _process_generic_results(res, store, mode)
+
+
+def _process_vrp_results(
+    res: Dict[str, Any],
+    store: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Process VRP route results into a compact report payload."""
+    p = parameter_map(store)
+    vrp = p.get("VRP", {}) if isinstance(p, dict) else {}
+    routes = res.get("routes", []) if isinstance(res, dict) else []
+    unserved = res.get("unserved", []) if isinstance(res, dict) else []
+    total_distance = safe_float(res.get("total_distance", res.get("objective", 0.0)), 0.0)
+    num_vehicles = len(routes) if isinstance(routes, list) else 0
+
+    report_lines = [
+        "### VRP Summary",
+        f"- **Total Distance:** {total_distance:.2f}",
+        f"- **Vehicles Used:** {num_vehicles}",
+        f"- **Unserved Nodes:** {len(unserved) if isinstance(unserved, list) else 0}",
+    ]
+
+    return {
+        "mode": "vrp",
+        "total_distance": round(total_distance, 2),
+        "num_vehicles": num_vehicles,
+        "routes": routes if isinstance(routes, list) else [],
+        "unserved": unserved if isinstance(unserved, list) else [],
+        "pickup_deliveries": p.get("PickupDeliveries", []),
+        "time_windows_applied": bool(vrp.get("time_windows")),
+        "report": "\n".join(report_lines),
+        "status": str(res.get("status", "unknown")) if isinstance(res, dict) else "unknown",
+        "depot": vrp.get("depot_index", 0),
+    }
+
+
+def _process_nlp_results(
+    res: Dict[str, Any],
+    store: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Process NLP results and expose GA warm-start diagnostics."""
+    p = parameter_map(store)
+    ir = p.get("IR", {}) if isinstance(p, dict) else {}
+    details = res.get("details", {}) if isinstance(res, dict) else {}
+    variables = res.get("variables", []) if isinstance(res, dict) else []
+    active_variables = []
+    for variable in variables:
+        if not isinstance(variable, dict):
+            continue
+        value = safe_float(variable.get("Value", variable.get("value", 0.0)), 0.0)
+        if abs(value) <= 1e-9:
+            continue
+        active_variables.append({"name": str(variable.get("Variable", variable.get("name", ""))), "value": value})
+
+    objective_terms = ir.get("objective", []) if isinstance(ir, dict) else []
+    constraints = ir.get("constraints", []) if isinstance(ir, dict) else []
+    nonlinear_count = 0
+    if isinstance(p.get("NLP"), dict):
+        nlp_cfg = p.get("NLP")
+        if nlp_cfg.get("objective_expr", nlp_cfg.get("objective")) is not None:
+            nonlinear_count += 1
+        nonlinear_count += len([c for c in nlp_cfg.get("constraints", []) if isinstance(c, dict) and c.get("expr") is not None])
+
+    report = (
+        "### NLP Summary\n"
+        f"- **Objective Terms:** {len(objective_terms)}\n"
+        f"- **Constraints:** {len(constraints)}\n"
+        f"- **Active Variables:** {len(active_variables)}\n"
+        f"- **GA Hotspots:** {int(details.get('ga_hotspot_count', 0) or 0)}"
+    )
+    return {
+        "mode": "nlp",
+        "status": str(res.get("status", "unknown")).lower(),
+        "report": report,
+        "objective_value": safe_float(res.get("objective", 0.0)),
+        "variable_count": len(variables),
+        "constraint_count": len(constraints),
+        "nonlinear_term_count": nonlinear_count,
+        "ga_hotspot_count": int(details.get("ga_hotspot_count", 0) or 0),
+        "ga_fixed_count": int(details.get("ga_fixed_count", 0) or 0),
+        "ga_start_count": int(details.get("ga_start_count", 0) or 0),
+        "active_variables": active_variables,
+    }
 
 
 def _process_cutting_results(

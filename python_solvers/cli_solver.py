@@ -14,6 +14,7 @@ if __package__ is None or __package__ == "":
         sys.path.insert(0, _ROOT)
 
 from python_solvers.logic import logic_cp
+from python_solvers.logic import logic_vrp
 from python_solvers.utils import bridge_logic
 from python_solvers.utils import services
 
@@ -32,11 +33,11 @@ def _julia_bridge_mode() -> str:
 
 
 def _julia_timeout_seconds() -> int:
-    value = os.getenv("OPTIMYSTIC_JULIA_TIMEOUT_SECONDS", "30")
+    value = os.getenv("OPTIMYSTIC_JULIA_TIMEOUT_SECONDS", "180")
     try:
         return max(1, int(float(value)))
     except (TypeError, ValueError):
-        return 30
+        return 180
 
 
 def _build_julia_payload(mapped_params: dict) -> dict:
@@ -48,6 +49,8 @@ def _build_julia_payload(mapped_params: dict) -> dict:
     # ST solver may need scenario metadata for reporting/details.
     if isinstance(mapped_params.get("ST"), dict):
         payload["ST"] = mapped_params.get("ST")
+    if isinstance(mapped_params.get("NLP"), dict):
+        payload["NLP"] = mapped_params.get("NLP")
     return payload
 
 
@@ -81,8 +84,16 @@ def _run_julia_solver(domain: str, solver: str, julia_params: dict) -> dict:
 
     try:
         result = json.loads(output)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"Invalid Julia solver JSON: {exc}") from exc
+    except json.JSONDecodeError:
+        result = None
+        for line in reversed([line.strip() for line in output.splitlines() if line.strip()]):
+            try:
+                result = json.loads(line)
+                break
+            except json.JSONDecodeError:
+                continue
+        if result is None:
+            raise RuntimeError(f"Invalid Julia solver JSON: {output[:200]}")
 
     if isinstance(result, dict) and str(result.get("status", "")).lower() == "error":
         raise RuntimeError(result.get("error_msg") or result.get("error") or "Julia solver returned error")
@@ -132,8 +143,15 @@ def main():
         params = json.loads(args.params)
         mapped_params = bridge_logic.map_params_by_mode(args.domain, params)
 
+        normalized_domain = (args.domain or "").strip().lower()
         solver_type = (args.solver or "").strip().lower()
-        if solver_type == "cp":
+        if normalized_domain == "vrp":
+            store_data = {
+                "variables": [],
+                "parameters": services.build_parameter_store(mapped_params),
+            }
+            result = logic_vrp.solve_vrp_model(store_data)
+        elif solver_type == "cp":
             objective, constraints, variables = bridge_logic.generate_logic(args.domain, params, solver_type)
             store_data = {
                 "variables": variables,

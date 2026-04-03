@@ -29,6 +29,40 @@ class PackingOutput(BaseModel):
     status: str = "unknown"
 
 
+class VrpRoute(BaseModel):
+    vehicle: str = ""
+    route: List[str] = Field(default_factory=list)
+    distance: float = 0.0
+    load: float = 0.0
+    arrival_times: List[float] = Field(default_factory=list)
+
+
+class VrpOutput(BaseModel):
+    mode: Literal["vrp"] = "vrp"
+    total_distance: float = 0.0
+    num_vehicles: int = 0
+    routes: List[VrpRoute] = Field(default_factory=list)
+    unserved: List[str] = Field(default_factory=list)
+    pickup_deliveries: List[List[int]] = Field(default_factory=list)
+    time_windows_applied: bool = False
+    report: str = ""
+    status: str = "unknown"
+
+
+class NlpOutput(BaseModel):
+    mode: Literal["nlp"] = "nlp"
+    status: str = "unknown"
+    report: str = ""
+    objective_value: float = 0.0
+    variable_count: int = 0
+    constraint_count: int = 0
+    nonlinear_term_count: int = 0
+    ga_hotspot_count: int = 0
+    ga_fixed_count: int = 0
+    ga_start_count: int = 0
+    active_variables: List[Dict[str, Any]] = Field(default_factory=list)
+
+
 class ResourcingOutput(BaseModel):
     mode: Literal["resourcing"] = "resourcing"
     total_value: float = 0.0
@@ -60,7 +94,7 @@ class GenericOutput(BaseModel):
 
 
 OptimizeDetails = Annotated[
-    Union[CuttingOutput, PackingOutput, ResourcingOutput, SchedulingOutput, GenericOutput],
+    Union[CuttingOutput, PackingOutput, VrpOutput, NlpOutput, ResourcingOutput, SchedulingOutput, GenericOutput],
     Field(discriminator="mode"),
 ]
 

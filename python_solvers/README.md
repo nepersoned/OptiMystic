@@ -3,8 +3,8 @@
 Python optimization runtime for OptiMystic. 
 
 **Architecture Split (Python/Julia Hybrid):**
-- **Python-only**: CP scheduling solver (OR-Tools CP-SAT)
-- **Julia-delegated**: All other domains (MIP, GA, CG, ST)
+- **Python-only**: CP scheduling solver and VRP routing solver (OR-Tools)
+- **Julia-delegated**: All other domains (MIP, GA, CG, ST, NLP)
 
 See [julia_solvers/README.md](../julia_solvers/README.md) for Julia solver documentation.
 
@@ -13,8 +13,9 @@ See [julia_solvers/README.md](../julia_solvers/README.md) for Julia solver docum
 | Domain | Solver | Backend | Status | Role |
 |--------|--------|---------|--------|------|
 | **scheduling** | cp | OR-Tools CP-SAT | ✅ Stable | Primary solver for employee shift allocation |
+| **vrp** | mip | OR-Tools Routing | ✅ Stable | Vehicle routing with time windows / pickup-delivery |
 
-> All other domains are handled by Julia runtime. See [julia_solvers/](../julia_solvers/) for MIP, GA, CG, ST implementations.
+> All other domains are handled by Julia runtime. See [julia_solvers/](../julia_solvers/) for MIP, GA, CG, ST, NLP implementations.
 
 ## Architecture by Layer (Python-Only)
 
@@ -109,9 +110,13 @@ cd C:\Users\kevin\OneDrive\Desktop\OptiMystic
 }
 ```
 
+### For VRP (Python OR-Tools routing)
+
+Use `"template_type": "vrp"` with `"solver_type": "mip"` or another non-`cp` solver value. The Python runtime handles VRP directly.
+
 ### For Other Domains (Delegated to Julia)
 
-Other domains should use `"template_type"` matching the domain (`cutting`, `packing`, `resourcing`, `generic`) and solver from {`mip`, `ga`, `cg`, `st`}. Python will spawn a subprocess to Julia runtime.
+Other domains should use `"template_type"` matching the domain (`cutting`, `packing`, `resourcing`, `generic`) and solver from {`mip`, `ga`, `cg`, `st`, `nlp`}. Python will spawn a subprocess to Julia runtime.
 
 See [julia_solvers/README.md](../julia_solvers/README.md) for full Julia solver contract and examples.
 
@@ -120,6 +125,7 @@ See [julia_solvers/README.md](../julia_solvers/README.md) for full Julia solver 
 - Solver dependencies are required at runtime:
   - Pyomo + compatible backend solver for MIP/ST flows.
   - OR-Tools for CP flow.
+  - OR-Tools routing for VRP flow.
 - Long-running solves are expected to be bounded by Go bridge timeout (`OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS`) at the server layer.
 - Results use status-driven handling:
   - `status` indicates success/failure state.
@@ -150,19 +156,28 @@ Exact populated fields depend on solver/domain path and failure mode.
 - **Output**: Assignment matrix, coverage shadow prices, per-employee loads
 - **Example**: `/api/optimize?domain=scheduling&solver_type=cp`
 
+### vrp
+- **Python Handler**: [domains/vrp.py](domains/vrp.py)
+- **Solver**: OR-Tools Routing
+- **Expected Input**: Nodes, Vehicles, DistanceMatrix or coordinates, TimeWindows, PickupDeliveries, DropPenalty, TimeLimit
+- **Model**: Capacity + time window + pickup/delivery routing
+- **Output**: routes, unserved nodes, arrival_times, total distance
+- **Example**: `/api/optimize?domain=vrp&solver_type=mip`
+
 ### cutting, packing, resourcing, generic
 - **Handled by**: Julia runtime
 - **Reference**: See [julia_solvers/README.md](../julia_solvers/README.md)
-- **Routing**: cli_solver.py detects `solver_type != "cp"` → subprocess to Julia
+- **Routing**: cli_solver.py detects non-CP/non-VRP requests → subprocess to Julia
 - **Output Format**: Standardized JSON with status, objective, variables
 
-> Python performs **no optimization** for non-scheduling domains. It only normalizes input and delegates to Julia.
+> Python performs **no optimization** for non-scheduling/non-VRP domains. It only normalizes input and delegates to Julia.
 
 ## How to Extend
 
 1. Add a new domain mapper in `domains/new_domain.py`.
 2. For CP domains: add solver logic in `logic/logic_cp_yourdomain.py`.
-3. For other domains: register in `utils/bridge_logic.py` and Julia will handle via subprocess.
-4. Add result summarization in `utils/services.py` if domain-specific post-processing needed.
+3. For VRP: extend `domains/vrp.py` and `logic/logic_vrp.py`.
+4. For other domains: register in `utils/bridge_logic.py` and Julia will handle via subprocess.
+5. Add result summarization in `utils/services.py` if domain-specific post-processing needed.
 
 This separation keeps new optimization types additive without rewriting the full runtime.

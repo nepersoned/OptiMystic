@@ -31,6 +31,8 @@ func normalizeDomain(domain string) string {
 		return "cutting"
 	case "logistics", "packing":
 		return "packing"
+	case "vrp", "routing", "vehicle_routing":
+		return "vrp"
 	case "resource", "it", "cloud", "resource_allocation", "resourcing":
 		return "resourcing"
 	case "hr", "nsp", "scheduling":
@@ -42,7 +44,7 @@ func normalizeDomain(domain string) string {
 	}
 }
 
-func DispatchResults(res *solver.OptimizeResponse, domain string) (interface{}, error) {
+func DispatchResults(res *solver.OptimizeResponse, domain string, solverType string) (interface{}, error) {
 	if res == nil {
 		return nil, fmt.Errorf("solver response is nil")
 	}
@@ -62,11 +64,16 @@ func DispatchResults(res *solver.OptimizeResponse, domain string) (interface{}, 
 		return mapToStruct[models.CuttingOutput](res.Details)
 	case "packing":
 		return mapToStruct[models.PackingOutput](res.Details)
+	case "vrp":
+		return mapToStruct[models.VRPOutput](res.Details)
 	case "resourcing":
 		return mapToStruct[models.ResourcingOutput](res.Details)
 	case "scheduling":
 		return mapToStruct[models.SchedulingOutput](res.Details)
 	case "generic":
+		if strings.TrimSpace(strings.ToLower(solverType)) == "nlp" {
+			return mapToStruct[models.NlpOutput](res.Details)
+		}
 		return mapToStruct[models.GenericOutput](res.Details)
 	default:
 		return res.Details, nil

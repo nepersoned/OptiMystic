@@ -81,5 +81,8 @@ function route_solver(payload::SolverPayload)
     if solver == "st"
         return solve_st(typed_payload)
     end
+    if solver == "nlp"
+        return solve_nlp(typed_payload)
+    end
     return solve_mip(typed_payload)
 end

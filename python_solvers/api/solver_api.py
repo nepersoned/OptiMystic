@@ -2,6 +2,7 @@ from typing import Any, Dict
 
 from python_solvers.cli_solver import _build_julia_payload, _run_julia_solver
 from python_solvers.logic import logic_cp
+from python_solvers.logic import logic_vrp
 from python_solvers.utils import bridge_logic
 from python_solvers.utils import services
 
@@ -10,7 +11,13 @@ def run_optimization(domain: str, solver: str, params: Dict[str, Any]) -> Dict[s
     solver_type = (solver or "").strip().lower()
     mapped_params = bridge_logic.map_params_by_mode(domain, params)
 
-    if solver_type == "cp":
+    if str(domain or "").strip().lower() == "vrp":
+        store_data = {
+            "variables": [],
+            "parameters": services.build_parameter_store(mapped_params),
+        }
+        result = logic_vrp.solve_vrp_model(store_data)
+    elif solver_type == "cp":
         objective, constraints, variables = bridge_logic.generate_logic(domain, params, solver_type)
         store_data = {
             "variables": variables,

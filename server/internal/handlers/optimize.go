@@ -79,7 +79,7 @@ func HandleOptimize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	finalDetails, err := services.DispatchResults(result, req.TemplateType)
+	finalDetails, err := services.DispatchResults(result, req.TemplateType, req.SolverType)
 	if err != nil {
 		slog.Error("result_processing_failed", "template_type", req.TemplateType, "error", err.Error())
 		writeAPIError(w, http.StatusInternalServerError, "result_processing_failed", err.Error())

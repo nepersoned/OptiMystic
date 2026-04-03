@@ -39,6 +39,8 @@ func normalizeDomain(domain string) string {
 		return "cutting"
 	case "logistics":
 		return "packing"
+	case "vrp", "routing", "vehicle_routing":
+		return "vrp"
 	case "resource", "it", "cloud", "resource_allocation":
 		return "resourcing"
 	case "hr", "nsp":
@@ -54,7 +56,7 @@ func normalizeSolverType(solverType string) string {
 	switch strings.TrimSpace(strings.ToLower(solverType)) {
 	case "", "mip":
 		return "mip"
-	case "cg", "cp", "st", "ga":
+	case "cg", "cp", "st", "ga", "vrp", "nlp":
 		return strings.TrimSpace(strings.ToLower(solverType))
 	default:
 		return "mip"
@@ -72,11 +74,11 @@ func pythonCommand() string {
 func pythonTimeout() time.Duration {
 	value := strings.TrimSpace(os.Getenv("OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS"))
 	if value == "" {
-		return 30 * time.Second
+		return 180 * time.Second
 	}
 	seconds, err := strconv.Atoi(value)
 	if err != nil || seconds <= 0 {
-		return 30 * time.Second
+		return 180 * time.Second
 	}
 	return time.Duration(seconds) * time.Second
 }
