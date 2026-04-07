@@ -12,16 +12,15 @@ function _cg_build_master_model(patterns::Vector{Vector{Int}}, demands::Vector{F
     end
 
     θ = VariableRef[]
-    p_count = length(patterns)
     n = length(demands)
-    for p in 1:p_count
+    for p in eachindex(patterns)
         v = @variable(m, lower_bound=0.0, base_name="theta_$(p)")
         push!(θ, v)
     end
 
     demand_cons = Vector{ConstraintRef}(undef, n)
-    for i in 1:n
-        demand_cons[i] = @constraint(m, sum(patterns[p][i] * θ[p] for p in 1:p_count) >= demands[i])
+    for i in eachindex(demands)
+        demand_cons[i] = @constraint(m, sum(patterns[p][i] * θ[p] for p in eachindex(patterns)) >= demands[i])
     end
     @objective(m, Min, stock_cost * sum(v for v in θ))
     return m, θ, demand_cons
@@ -55,8 +54,7 @@ function _cg_build_pricing_model(item_lens::Vector{Float64}, kerf::Float64, stoc
 end
 
 function _cg_pricing_knapsack!(m::Model, a, duals::Vector{Float64})
-    n = length(duals)
-    for i in 1:n
+    for i in eachindex(duals)
         set_objective_coefficient(m, a[i], duals[i])
     end
 
@@ -65,15 +63,15 @@ function _cg_pricing_knapsack!(m::Model, a, duals::Vector{Float64})
     if !feasible
         return 0.0, [0 for _ in 1:n]
     end
-    pattern = [Int(round(value(a[i]))) for i in 1:n]
+    pattern = [Int(round(value(a[i]))) for i in eachindex(duals)]
     return objective_value(m), pattern
 end
 
 function _cg_initial_patterns(item_lens::Vector{Float64}, kerf::Float64, stock_len::Float64)
     patterns = Vector{Vector{Int}}()
     n = length(item_lens)
-    for i in 1:n
-        p = [0 for _ in 1:n]
+    for i in eachindex(item_lens)
+        p = zeros(Int, n)
         capacity = stock_len + kerf
         unit = item_lens[i] + kerf
         if unit <= 0
@@ -93,13 +91,13 @@ function _solve_cg_cutting(params::Dict{String, Any}, opts::Dict{String, Any})
     end
 
     lens_raw = _as_vector(get(params, "ItemLens", get(params, "Weights", Any[])))
-    item_lens = [_to_float(i <= length(lens_raw) ? lens_raw[i] : 0.0, 0.0) for i in 1:length(items)]
+    item_lens = [_to_float(i <= length(lens_raw) ? lens_raw[i] : 0.0, 0.0) for i in eachindex(items)]
     if any(x -> x <= 0.0, item_lens)
         return Dict{String, Any}("status" => "Error", "error_msg" => "CG requires positive item lengths", "solve_time" => time() - started)
     end
 
     demands_map = _as_dict(get(params, "Demands", Dict{String, Any}()))
-    demands = [_to_float(get(demands_map, items[i], 0.0), 0.0) for i in 1:length(items)]
+    demands = [_to_float(get(demands_map, items[i], 0.0), 0.0) for i in eachindex(items)]
     kerf = max(0.0, _to_float(get(params, "Kerf", 0.0), 0.0))
 
     stocks = _as_vector(get(params, "Stocks", Any[]))
@@ -168,10 +166,10 @@ function _solve_cg_cutting(params::Dict{String, Any}, opts::Dict{String, Any})
     p_count = length(patterns)
     n = length(items)
     @variable(m, Θ[1:p_count] >= 0, Int)
-    for i in 1:n
-        @constraint(m, sum(patterns[p][i] * Θ[p] for p in 1:p_count) >= demands[i])
+    for i in eachindex(items)
+        @constraint(m, sum(patterns[p][i] * Θ[p] for p in eachindex(patterns)) >= demands[i])
     end
-    @objective(m, Min, stock_cost * sum(Θ[p] for p in 1:p_count))
+    @objective(m, Min, stock_cost * sum(Θ[p] for p in eachindex(patterns)))
     optimize!(m)
 
     status = _status_from_model(m)
@@ -181,7 +179,7 @@ function _solve_cg_cutting(params::Dict{String, Any}, opts::Dict{String, Any})
     variables = Vector{Any}()
     if feasible
         bin_idx = 0
-        for p in 1:p_count
+        for p in eachindex(patterns)
             count = Int(round(value(Θ[p])))
             if count <= 0
                 continue
@@ -189,7 +187,7 @@ function _solve_cg_cutting(params::Dict{String, Any}, opts::Dict{String, Any})
             for _ in 1:count
                 bin_id = "CG_$(bin_idx)"
                 push!(variables, Dict("Variable" => "U_$(bin_id)", "Value" => 1.0))
-                for i in 1:n
+                for i in eachindex(items)
                     qty = patterns[p][i]
                     if qty > 0
                         push!(variables, Dict("Variable" => "A_IT$(i-1)_$(bin_id)", "Value" => float(qty)))
@@ -201,7 +199,7 @@ function _solve_cg_cutting(params::Dict{String, Any}, opts::Dict{String, Any})
     end
 
     constraints_data = Any[]
-    for i in 1:length(master_duals)
+    for i in eachindex(master_duals)
         push!(constraints_data, Dict("Constraint" => "demand_$(i-1)", "Shadow Price" => master_duals[i], "Slack" => 0.0))
     end
 

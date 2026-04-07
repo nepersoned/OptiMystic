@@ -88,13 +88,14 @@ HTTP Client
 
 ## Solver-Domain Compatibility Matrix
 
-| Domain | CP (OR-Tools) | MIP (JuMP+HiGHS) | GA (Evolutionary) | CG (Column Gen) | ST (Stochastic) |
-|--------|---|---|---|---|---|
-| **scheduling** | ✅ Primary | ✅ Fallback | ✅ MIP warmstart | ❌ | ❌ |
-| **cutting** | ❌ | ✅ Fallback | ✅ MIP warmstart | ✅ Primary (Mode="cutting") | ❌ |
-| **packing** | ❌ | ✅ | ✅ MIP warmstart | ❌ | ❌ |
-| **resourcing** | ❌ | ✅ Fallback | ✅ MIP warmstart | ❌ | ✅ Primary (Mode="resourcing") |
-| **generic** | ❌ | ✅ | ✅ MIP warmstart | ❌ | ❌ |
+| Domain | CP (OR-Tools) | VRP (OR-Tools Routing, Python) | MIP (JuMP+HiGHS) | GA (Evolutionary) | CG (Column Gen) | ST (Stochastic) | NLP (JuMP+Ipopt) |
+|--------|---|---|---|---|---|---|---|
+| **scheduling** | ✅ Primary | ❌ | ✅ Fallback | ✅ MIP warmstart | ❌ | ❌ | ❌ |
+| **vrp** | ❌ | ✅ Primary | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **cutting** | ❌ | ❌ | ✅ Fallback | ✅ MIP warmstart | ✅ Primary (Mode="cutting") | ❌ | 🟡 Contract-dependent |
+| **packing** | ❌ | ❌ | ✅ Primary | ✅ MIP warmstart | ❌ | ❌ | 🟡 Contract-dependent |
+| **resourcing** | ❌ | ❌ | ✅ Fallback | ✅ MIP warmstart | ❌ | ✅ Primary (Mode="resourcing") | 🟡 Contract-dependent |
+| **generic** | ❌ | ❌ | ✅ Primary | ✅ MIP warmstart | ❌ | ❌ | ✅ Primary (`solver_type="nlp"`) |
 
 **Legend:**
 - ✅ Primary: Domain-specialized solver path (e.g., CP for scheduling)
@@ -223,11 +224,13 @@ Consult this table to choose the right solver for your problem domain:
 |------|--------|--------|-----|---------|
 | **Schedule employees across shifts** | scheduling | `cp` | OR-Tools CP-SAT specialized for binary assignment | Python |
 | Schedule with MIP instead | scheduling | `mip` | LP relaxation via generic MIP path | Julia |
+| **Vehicle routing (CVRP/VRP constraints)** | vrp | `mip` | Routed to Python OR-Tools Routing path for domain-specific VRP solving | Python |
 | **Cutting stock (educational)** | cutting | `cg` | Column generation with master/pricing decomposition | Julia |
 | Cutting (large scale) | cutting | `mip` | Generic MIP faster when problem scales | Julia |
-| **Bin packing / vehicle routing** | packing | `mip` | Generic MIP handles capacity & loading constraints | Julia |
+| **Bin packing** | packing | `mip` | Generic MIP handles capacity & loading constraints | Julia |
 | **Resource allocation under demand uncertainty** | resourcing | `st` | Two-stage stochastic with scenario recourse | Julia |
 | Resource allocation (deterministic) | resourcing | `mip` | Simplified to single-stage MIP | Julia |
+| **Nonlinear optimization model** | generic | `nlp` | Ipopt-backed nonlinear solve path via Julia NLP solver | Julia |
 | **Custom optimization** | generic | `mip` | Direct IR passthrough for expert models | Julia |
 | Exploratory search (any problem) | any | `ga` | Pure evolutionary, no MIP refinement | Julia |
 

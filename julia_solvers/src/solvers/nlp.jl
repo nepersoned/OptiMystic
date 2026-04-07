@@ -130,7 +130,7 @@ function _nl_ast_to_expr(node::Any, alias_map::Dict{String, Symbol})
             return 0.0
         end
         expr = _nl_ast_to_expr(args[1], alias_map)
-        for idx in 2:length(args)
+        for idx in Iterators.drop(eachindex(args), 1)
             expr = :($expr + $(_nl_ast_to_expr(args[idx], alias_map)))
         end
         return expr
@@ -139,7 +139,7 @@ function _nl_ast_to_expr(node::Any, alias_map::Dict{String, Symbol})
             return 0.0
         end
         expr = _nl_ast_to_expr(args[1], alias_map)
-        for idx in 2:length(args)
+        for idx in Iterators.drop(eachindex(args), 1)
             expr = :($expr - $(_nl_ast_to_expr(args[idx], alias_map)))
         end
         return expr
@@ -148,7 +148,7 @@ function _nl_ast_to_expr(node::Any, alias_map::Dict{String, Symbol})
             return 1.0
         end
         expr = _nl_ast_to_expr(args[1], alias_map)
-        for idx in 2:length(args)
+        for idx in Iterators.drop(eachindex(args), 1)
             expr = :($expr * $(_nl_ast_to_expr(args[idx], alias_map)))
         end
         return expr
@@ -157,7 +157,7 @@ function _nl_ast_to_expr(node::Any, alias_map::Dict{String, Symbol})
             return 1.0
         end
         expr = _nl_ast_to_expr(args[1], alias_map)
-        for idx in 2:length(args)
+        for idx in Iterators.drop(eachindex(args), 1)
             expr = :($expr / $(_nl_ast_to_expr(args[idx], alias_map)))
         end
         return expr
