@@ -60,7 +60,7 @@ HTTP Client
             ├─ st.jl (Stochastic two-stage for resourcing)
            ├─ nlp.jl (Ipopt-backed nonlinear optimization + GA warm start)
             └─ ga.jl (Evolutionary search)
-  -> R post-processing (planned subprocess integration)
+  -> R post-processing (notebook-side today; API integration planned)
   -> Go result dispatch (`server/internal/services/*.go`)
   -> HTTP JSON response
 ```
@@ -121,7 +121,7 @@ cd C:\Your\Path\OptiMystic
 
 # Install dependencies (one time)
 pip install -r python_solvers\requirements.txt
-pip install jupyterlab rpy2
+pip install jupyterlab
 
 # Start JupyterLab
 jupyter lab
@@ -252,6 +252,7 @@ Consult this table to choose the right solver for your problem domain:
   - Julia-only test (MIP packing)
   - R bridge test (`rpy2` + `r_solvers` source load)
   - R post-processing test (Python/Julia output -> `process_results`)
+  - Dynamic packing dashboard: item efficiency, utilization, and capacity what-if sensitivity
   - Full end-to-end pipeline validation
   - Run in JupyterLab or Jupyter Notebook
 

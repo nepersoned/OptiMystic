@@ -136,7 +136,7 @@ print(plot)
 
 ## Testing
 
-**Jupyter Notebook Test Suite:** `examples/test_r_analytics.ipynb`
+**Jupyter Notebook Test Suite:** `examples/test_jupyterlab_full_pipeline.ipynb`
 
 Tests included:
 - Core module loading
@@ -145,6 +145,7 @@ Tests included:
 - VRP domain: processing & visualization
 - Main dispatcher integration
 - Complete pipeline validation
+- Dynamic packing dashboard: selected items, efficiency, and capacity what-if
 
 Run in Jupyter:
 ```r
