@@ -1,21 +1,51 @@
 # OptiMystic
 
-Multi-domain optimization platform with a Go HTTP API (`server`) and Python solver runtime (`python_solvers`).
+Multi-domain optimization platform with dual service architectures:
+- **JupyterLab**: Interactive analytics & development environment
+- **MCP Server**: Production API orchestration
 
-This repository is organized for production-like API orchestration, domain-aware modeling, and contract-first optimization payloads.
+This repository integrates Go, Python, Julia, and R for domain-aware modeling and contract-first optimization.
 
 ## What This Repository Delivers
 
-- Stable HTTP entry point for optimization requests (`/api/optimize`)
-- Safe Go-to-Python bridge execution with timeout control
-- Domain-mapped model generation (`cutting`, `packing`, `resourcing`, `scheduling`, `vrp`, `generic`)
-- Multiple solver strategies (MIP, CP, ST, GA, VRP routing, NLP)
-- Standardized JSON output contract for frontend/backend integration
+- **Interactive Development**: JupyterLab with Python/Julia/R notebooks for testing and prototyping
+- **Production API**: Go HTTP API (`/api/optimize`) with subprocess orchestration and timeout control
+- **Domain-Mapped Solvers**: Multiple strategies (CP, MIP, GA, CG, ST, VRP, NLP) across 7 domains
+- **Post-Processing Analytics**: R-based result processing and visualization (ggplot2)
+- **Standardized Contracts**: JSON-based request/response formats for frontend integration
 
-## Architecture
+## Architecture: Dual Service Model
 
+### Service 1: JupyterLab (Interactive Development)
 ```text
-HTTP client
+JupyterLab Interface
+├─ Python Kernel
+│  └─ python_solvers/ (direct import)
+│     ├─ domains/*.py (IR generation)
+│     └─ cli_solver.py (solver routing)
+│
+├─ Julia Kernel
+│  └─ julia_solvers/ (direct import)
+│     ├─ src/main.jl
+│     └─ src/solvers/*.jl
+│
+├─ R Kernel
+│  └─ r_solvers/ (source files)
+│     ├─ processors.R (result normalization)
+│     ├─ plotting.R (ggplot2 visualization)
+│     └─ domains/*.R (domain-specific analysis)
+│
+└─ Terminal (bash/powershell)
+   └─ Go server management
+      └─ Go API layer (`server/cmd/server/main.go`)
+         └─ HTTP /api/optimize endpoint
+
+** Workflow: Develop, test, and visualize end-to-end in one interface **
+```
+
+### Service 2: MCP Server (Production API)
+```text
+HTTP Client
   -> Go API layer (`server/internal/handlers`)
   -> Go/Python bridge (`server/internal/solver/bridge.go`)
   -> Python CLI runtime (`python_solvers/cli_solver.py`)
@@ -30,23 +60,31 @@ HTTP client
             ├─ st.jl (Stochastic two-stage for resourcing)
            ├─ nlp.jl (Ipopt-backed nonlinear optimization + GA warm start)
             └─ ga.jl (Evolutionary search)
-  -> Result shaping (`python_solvers/utils/services.py`)
+  -> R post-processing (planned subprocess integration)
   -> Go result dispatch (`server/internal/services/*.go`)
   -> HTTP JSON response
 ```
 
-**Runtime Split:**
-- **Python (OR-Tools CP-SAT)**: Scheduling domain only
-- **Julia (JuMP ecosystem)**: All other domains (MIP/GA/CG/ST)
+**Solver Dispatch:**
+- **Python (OR-Tools)**: CP scheduling, VRP routing
+- **Julia (JuMP)**: MIP, GA, CG, ST, NLP
+- **R (tidyverse/ggplot2)**: Result analytics & visualization
 
 ## Runtime Components
 
-- `server/`  
-  Go API service handling routing, validation, subprocess orchestration, timeout, and response mapping.
-- `python_solvers/`  
-  Python runtime that transforms domain inputs into solver models and returns normalized JSON results.
-- `_legacy/`, `_legacy_django/`  
-  Reference code only; not the active runtime path.
+### For JupyterLab Development
+- `python_solvers/` — Python solver runtimes (CP, MIP delegation)
+- `julia_solvers/` — Julia optimizer ecosystem (MIP, GA, CG, ST, NLP)
+- `r_solvers/` — R analytics & visualization (ggplot2-based post-processing)
+- `examples/test_jupyterlab_full_pipeline.ipynb` — Complete end-to-end test notebook
+
+### For MCP Production API
+- `server/` — Go HTTP API service with subprocess orchestration
+- `python_solvers/` — Solver runtime (shared with JupyterLab)
+- `julia_solvers/` — Julia backend (shared with JupyterLab)
+
+### Legacy (Reference Only)
+- `_legacy/`, `_legacy_django/` — Old architecture; not active
 
 ## Solver-Domain Compatibility Matrix
 
@@ -72,43 +110,57 @@ HTTP client
 - `POST /api/optimize`
 - `POST /api/optimize/`
 
-## Quick Start (One Verified Path)
+## Quick Start
 
-Use this single flow for demos/evaluation on Windows PowerShell.
-It is intentionally minimal and focuses on a known-good end-to-end API call.
+Choose your workflow:
 
-### 1) Install Python dependencies with project venv
+### Option 1: Interactive Development (JupyterLab)
 
 ```powershell
-cd C:\Your file path\OptiMystic
-\.venv\Scripts\python.exe -m pip install -r python_solvers\requirements.txt
+cd C:\Your\Path\OptiMystic
+
+# Install dependencies (one time)
+pip install -r python_solvers\requirements.txt
+pip install jupyterlab rpy2
+
+# Start JupyterLab
+jupyter lab
+
+# Open: examples/test_jupyterlab_full_pipeline.ipynb
 ```
 
-### 2) Start API server (Terminal A)
+**In JupyterLab:**
+- Notebook tabs: Python, Julia, R kernels side-by-side
+- Terminal tab: Launch Go server (`cd server && go run .\cmd\server\main.go`)
+- File browser: Edit code and see live results
+- First run in notebook: R bridge check cell (`ensure_r_bridge()`) to verify rpy2 + `r_solvers` linkage
+
+### Option 2: Production API (MCP Server)
 
 ```powershell
-cd C:\Your file path\OptiMystic\server
-$env:OPTIMYSTIC_PYTHON = "C:/Your file path/OptiMystic/.venv/Scripts/python.exe"
+cd C:\Your\Path\OptiMystic\server
+
+# Set environment variables
+$env:OPTIMYSTIC_PYTHON = "C:/Your/Path/OptiMystic/.venv/Scripts/python.exe"
 $env:OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS = "180"
 $env:OPTIMYSTIC_JULIA_TIMEOUT_SECONDS = "180"
+
+# Start API server
 go run .\cmd\server\main.go
 ```
 
-### 3) Run the verified smoke test set (Terminal B)
+Then POST to `http://localhost:8080/api/optimize` with solver payloads.
 
-```powershell
-cd C:\Your file path\OptiMystic
-powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
+### Option 3: Docker (Comprehensive)
+
+```bash
+docker-compose up
+# Includes: Go API + Python + Julia + R + JupyterLab
 ```
 
-Smoke payload files used by the script:
-- `examples/smoke/scheduling-cp-ok.json`
-- `examples/smoke/packing-mip-ok.json`
+---
 
-If you need Docker or Julia-only examples, see the submodule READMEs:
-- `server/README.md`
-- `python_solvers/README.md`
-- `julia_solvers/README.md`
+**For detailed setup:** See `server/README.md`, `python_solvers/README.md`, `julia_solvers/README.md`, `r_solvers/README.md`
 
 ## Request Contract
 
@@ -184,52 +236,90 @@ Consult this table to choose the right solver for your problem domain:
 - **Julia-delegated**: All other `solver_type` values (mip, ga, cg, st, nlp)
 - **Fallback logic**: If specialized solver unavailable, system automatically chains to next option (e.g., CG→GA+MIP, ST→GA+MIP)
 
-## Documentation Reference
+## Documentation & Testing
 
-- **Python CP (scheduling)**: [python_solvers/README.md](python_solvers/README.md)
-- **Julia solvers (mip, ga, cg, st)**: [julia_solvers/README.md](julia_solvers/README.md)
-- **API specification**: See `server/README.md`
+### Setup Guides
+- [Server (Go API)](server/README.md) — HTTP API, subprocess orchestration
+- [Python Solvers](python_solvers/README.md) — CP-SAT, MIP delegation, domain handling
+- [Julia Solvers](julia_solvers/README.md) — JuMP ecosystem (MIP, GA, CG, ST, NLP)
+- [R Analytics](r_solvers/README.md) — Post-processing, visualization framework
 
-## Development Notes
-
-- Go server timeout for Python subprocess:
-  - Environment variable: `OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS`
-  - Default in server README: `30`
-- Primary integration flow:
-  - `server/internal/handlers/optimize.go`
-  - `server/internal/solver/bridge.go`
-  - `python_solvers/cli_solver.py`
-- Response mapping:
-  - Domain-aware dispatch in `server/internal/services/results.go`
-
-## Troubleshooting
-
-- `python not found`  
-  Ensure Python is installed and available in `PATH` for the Go server process.
-- solver backend missing (`cbc`, `glpk`, etc.)  
-  Install required Pyomo backend solver and verify availability in the current environment.
-- CP flow errors  
-  Confirm OR-Tools is installed from `python_solvers/requirements.txt`.
-- timeout on large models  
-  Increase `OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS` before running server.
-- empty or generic-looking `details`  
-  Validate `template_type` + `solver_type` combination and whether typed result mapping exists.
+### Testing
+- **Main Test Suite**: `examples/test_jupyterlab_full_pipeline.ipynb`
+  - Helper runner: `examples/jupyter_debug_tools.py`
+  - Purpose: integration test/debug notebook (not a Voila deployment notebook)
+  - Python-only test (CP scheduling)
+  - Julia-only test (MIP packing)
+  - R bridge test (`rpy2` + `r_solvers` source load)
+  - R post-processing test (Python/Julia output -> `process_results`)
+  - Full end-to-end pipeline validation
+  - Run in JupyterLab or Jupyter Notebook
 
 ## Repo Structure
 
 ```text
 OptiMystic/
+├── docker-compose.yml
+├── Dockerfile
 ├── README.md
+├── examples/
+│   ├── jupyter_debug_tools.py
+│   └── test_jupyterlab_full_pipeline.ipynb  (MAIN TEST - Python + Julia + R)
 ├── server/
 │   ├── README.md
 │   ├── cmd/server/main.go
+│   ├── go.mod
 │   └── internal/
+│       ├── handlers/
+│       ├── models/
+│       ├── router/
+│       ├── services/
+│       └── solver/
+├── julia_solvers/
+│   ├── README.md
+│   ├── Project.toml
+│   ├── Manifest.toml
+│   ├── cli_solver.jl
+│   └── src/
+│       ├── main.jl
+│       ├── solvers/
+│       │   ├── mip.jl
+│       │   ├── ga.jl
+│       │   ├── cg.jl
+│       │   ├── st.jl
+│       │   ├── nlp.jl
+│       │   └── router.jl
+│       └── utils/
 ├── python_solvers/
 │   ├── README.md
+│   ├── requirements.txt
 │   ├── cli_solver.py
+│   ├── api/
+│   │   ├── main.py
+│   │   ├── schemas.py
+│   │   └── solver_api.py
 │   ├── domains/
+│   │   ├── cutting.py
+│   │   ├── packing.py
+│   │   ├── scheduling.py
+│   │   ├── resourcing.py
+│   │   ├── vrp.py
+│   │   ├── generic.py
+│   │   └── ir_utils.py
 │   ├── logic/
+│   │   ├── logic_cp.py
+│   │   └── logic_vrp.py
 │   └── utils/
+│       └── bridge_logic.py
+├── r_solvers/
+│   ├── README.md
+│   ├── utils.R              (common utilities)
+│   ├── processors.R         (domain dispatchers + processing)
+│   ├── plotting.R           (ggplot2 visualization framework)
+│   └── domains/
+│       ├── cutting.R        (cutting domain analysis + plots)
+│       ├── packing.R        (packing domain analysis + plots)
+│       └── vrp.R            (VRP domain analysis + plots)
 ├── _legacy/
 └── _legacy_django/
 ```
@@ -238,3 +328,5 @@ OptiMystic/
 
 - Server details: `server/README.md`
 - Python runtime details: `python_solvers/README.md`
+- Julia solver details: `julia_solvers/README.md`
+- R analytics details: `r_solvers/README.md`

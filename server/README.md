@@ -21,7 +21,7 @@ It is responsible for subprocess execution safety, domain-aware response typing,
 
 ## One Verified Run Path (PowerShell)
 
-Use this for demo/evaluation. This path is aligned with the root smoke test.
+Use this for demo/evaluation with JupyterLab or direct API calls.
 
 ```powershell
 cd C:\Users\kevin\OneDrive\Desktop\OptiMystic\server
@@ -35,10 +35,12 @@ In another terminal:
 
 ```powershell
 cd C:\Users\kevin\OneDrive\Desktop\OptiMystic
-powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
+curl -Method POST "http://localhost:8000/api/optimize" `
+  -ContentType "application/json" `
+  -Body '{"template_type":"packing","solver_type":"mip","params":{"Items":[{"Name":"A","Weight":2,"Value":10}],"Vehicles":[{"Capacity":5}]}}'
 ```
 
-If smoke test output is printed for all 3 steps (health, scheduling, packing), server integration is working end-to-end.
+Or run `examples/test_jupyterlab_full_pipeline.ipynb` in JupyterLab for Python/Julia/R integrated validation.
 
 ## Request/Response Examples
 

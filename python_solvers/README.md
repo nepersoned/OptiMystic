@@ -32,9 +32,9 @@ See [julia_solvers/README.md](../julia_solvers/README.md) for Julia solver docum
    - Applies coverage constraints, per-employee shift limits, rules
    - Configures solver options (seed, workers, time_limit)
 
-4. **`utils/services.py`** (Post-processing)
-   - Extracts assignment matrix, shadow prices
-   - Returns standardized JSON
+4. **R post-processing (`r_solvers/`)**
+  - Python returns raw optimization JSON
+  - R processors/plots handle analytics and visualization in JupyterLab
 
 ## Runtime Flow (Python-Only: CP Scheduling)
 
@@ -44,8 +44,7 @@ raw params (scheduling domain)
      ├─ if solver_type == "cp"
      │   -> domains/scheduling.py: normalize params → CP spec
      │   -> logic/logic_cp.py: build_model() → solve_cp_model()
-     │   -> utils/services.py: post-process results
-     │   -> return JSON (status, objective, variables, constraints)
+    │   -> return JSON (status, objective, variables, constraints)
      │
      └─ else (non-scheduling or non-cp)
          -> subprocess call to julia_solvers/
@@ -53,13 +52,16 @@ raw params (scheduling domain)
 
 ## Quick Start (One Verified Path)
 
-Primary verification path is the root smoke test:
+Primary verification path is the JupyterLab full pipeline notebook:
 
 ```powershell
 cd C:\Users\kevin\OneDrive\Desktop\OptiMystic
 \.venv\Scripts\python.exe -m pip install -r python_solvers\requirements.txt
-powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
+\.venv\Scripts\python.exe -m pip install jupyterlab rpy2
+jupyter lab
 ```
+
+Open `examples/test_jupyterlab_full_pipeline.ipynb` and run Python-only / Julia-only / R-only sections.
 
 ### Optional: Direct CP CLI check (Python-only path)
 
@@ -178,6 +180,6 @@ Exact populated fields depend on solver/domain path and failure mode.
 2. For CP domains: add solver logic in `logic/logic_cp_yourdomain.py`.
 3. For VRP: extend `domains/vrp.py` and `logic/logic_vrp.py`.
 4. For other domains: register in `utils/bridge_logic.py` and Julia will handle via subprocess.
-5. Add result summarization in `utils/services.py` if domain-specific post-processing needed.
+5. Add post-processing rules in `r_solvers/processors.R` if domain-specific analytics are needed.
 
 This separation keeps new optimization types additive without rewriting the full runtime.

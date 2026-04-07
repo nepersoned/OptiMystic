@@ -16,7 +16,6 @@ if __package__ is None or __package__ == "":
 from python_solvers.logic import logic_cp
 from python_solvers.logic import logic_vrp
 from python_solvers.utils import bridge_logic
-from python_solvers.utils import services
 
 
 _JULIA_MAIN = None
@@ -148,27 +147,19 @@ def main():
         if normalized_domain == "vrp":
             store_data = {
                 "variables": [],
-                "parameters": services.build_parameter_store(mapped_params),
+                "parameters": dict(mapped_params or {}),
             }
             result = logic_vrp.solve_vrp_model(store_data)
         elif solver_type == "cp":
             objective, constraints, variables = bridge_logic.generate_logic(args.domain, params, solver_type)
             store_data = {
                 "variables": variables,
-                "parameters": services.build_parameter_store(mapped_params),
+                "parameters": dict(mapped_params or {}),
             }
             result = logic_cp.solve_cp_model(store_data, objective)
         else:
             julia_payload = _build_julia_payload(mapped_params)
             result = _run_julia_solver(args.domain, solver_type or "mip", julia_payload)
-            variables = mapped_params.get("IR", {}).get("variables", [])
-            store_data = {
-                "variables": variables,
-                "parameters": services.build_parameter_store(mapped_params),
-            }
-
-        processed_data = services.process_results(result, store_data, args.domain)
-        sensitivity_data = services.process_sensitivity(result, store_data, args.domain)
 
         output = {
             "status": result.get("status", "Error"),
@@ -177,8 +168,8 @@ def main():
             "constraints": result.get("constraints", []),
             "solve_time": result.get("solve_time", 0),
             "lp_sensitivity": result.get("lp_sensitivity", False),
-            "details": processed_data,
-            "sensitivity": sensitivity_data
+            "details": result.get("details"),
+            "sensitivity": result.get("sensitivity")
         }
 
         print(json.dumps(output))

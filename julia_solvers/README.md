@@ -305,24 +305,14 @@ cd C:\Users\kevin\OneDrive\Desktop\OptiMystic\julia_solvers
 julia --project=. -e "using Pkg; Pkg.instantiate()"
 ```
 
-### 2) Run end-to-end smoke from root
-
-```powershell
-cd C:\Users\kevin\OneDrive\Desktop\OptiMystic\server
-$env:OPTIMYSTIC_PYTHON = "C:/Users/kevin/OneDrive/Desktop/OptiMystic/.venv/Scripts/python.exe"
-$env:OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS = "180"
-$env:OPTIMYSTIC_JULIA_TIMEOUT_SECONDS = "180"
-go run .\cmd\server\main.go
-```
-
-In another terminal:
+### 2) Run end-to-end test from JupyterLab
 
 ```powershell
 cd C:\Users\kevin\OneDrive\Desktop\OptiMystic
-powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
+jupyter lab
 ```
 
-The smoke script includes a packing MIP request that exercises Julia solver routing.
+Open `examples/test_jupyterlab_full_pipeline.ipynb` and run the Julia-only section.
 
 ---
 

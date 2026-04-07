@@ -1,16 +1,39 @@
 services:
-  optimystic:
+  api:
     build:
       context: .
       dockerfile: Dockerfile
-    image: optimystic:latest
-    container_name: optimystic
+      target: api
+    image: optimystic-api:latest
+    container_name: optimystic-api
     ports:
       - "8000:8000"
     environment:
       PORT: "8000"
       OPTIMYSTIC_PYTHON: "python3"
       OPTIMYSTIC_JULIA: "julia"
-      OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS: "60"
-      OPTIMYSTIC_JULIA_TIMEOUT_SECONDS: "60"
+      OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS: "180"
+      OPTIMYSTIC_JULIA_TIMEOUT_SECONDS: "180"
+    restart: unless-stopped
+
+  jupyterlab:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: jupyterlab
+    image: optimystic-jupyterlab:latest
+    container_name: optimystic-jupyterlab
+    ports:
+      - "8888:8888"
+    environment:
+      OPTIMYSTIC_PYTHON: "python3"
+      OPTIMYSTIC_JULIA: "julia"
+      OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS: "180"
+      OPTIMYSTIC_JULIA_TIMEOUT_SECONDS: "180"
+      JUPYTER_ENABLE_LAB: "yes"
+    volumes:
+      - ./:/app
+    working_dir: /app
+    depends_on:
+      - api
     restart: unless-stopped
