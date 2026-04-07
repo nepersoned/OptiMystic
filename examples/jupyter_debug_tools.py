@@ -1,5 +1,6 @@
 import json
 import importlib
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -9,7 +10,40 @@ from typing import Any, Dict
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
-def _run_cli(domain: str, solver: str, params: Dict[str, Any]) -> Dict[str, Any]:
+def _configure_r_runtime_paths() -> None:
+    """Ensure Windows can resolve R shared-library dependencies before importing rpy2."""
+    if os.name != "nt":
+        return
+
+    candidates = []
+    r_home_env = os.environ.get("R_HOME")
+    if r_home_env:
+        candidates.append(Path(r_home_env))
+    candidates.append(Path("C:/Program Files/R/R-4.5.3"))
+
+    r_home = None
+    for candidate in candidates:
+        if (candidate / "bin" / "x64").exists():
+            r_home = candidate
+            break
+    if r_home is None:
+        return
+
+    os.environ.setdefault("R_HOME", str(r_home))
+    r_bin = r_home / "bin" / "x64"
+    current_path = os.environ.get("PATH", "")
+    if str(r_bin) not in current_path:
+        os.environ["PATH"] = f"{r_bin};{current_path}" if current_path else str(r_bin)
+
+    add_dll_directory = getattr(os, "add_dll_directory", None)
+    if callable(add_dll_directory):
+        try:
+            add_dll_directory(str(r_bin))
+        except OSError:
+            pass
+
+
+def _run_cli(domain: str, solver: str, params: Dict[str, Any], timeout_seconds: int = 90) -> Dict[str, Any]:
     cmd = [
         sys.executable,
         str(PROJECT_ROOT / "python_solvers" / "cli_solver.py"),
@@ -20,13 +54,23 @@ def _run_cli(domain: str, solver: str, params: Dict[str, Any]) -> Dict[str, Any]
         "--params",
         json.dumps(params),
     ]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    env = dict(os.environ)
+    env.setdefault("OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS", str(timeout_seconds))
+    env.setdefault("OPTIMYSTIC_JULIA_TIMEOUT_SECONDS", str(timeout_seconds))
+    proc = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        timeout=timeout_seconds,
+        env=env,
+        cwd=str(PROJECT_ROOT),
+    )
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr.strip() or proc.stdout.strip() or "Solver CLI failed")
     return json.loads(proc.stdout)
 
 
-def run_python_only_cp_scheduling() -> Dict[str, Any]:
+def run_python_only_cp_scheduling(quick: bool = False) -> Dict[str, Any]:
     params = {
         "Employees": [
             {"Name": "E1", "MaxShifts": 5},
@@ -42,10 +86,16 @@ def run_python_only_cp_scheduling() -> Dict[str, Any]:
         },
         "MaxShiftsPerEmployee": 5,
     }
-    return _run_cli("scheduling", "cp", params)
+    if quick:
+        params["Shifts"] = [{"Name": "Morning", "Demand": 1}]
+        params["Values"] = {
+            "E1": {"Morning": 1.0},
+            "E2": {"Morning": 0.9},
+        }
+    return _run_cli("scheduling", "cp", params, timeout_seconds=45 if quick else 90)
 
 
-def run_julia_only_mip_packing() -> Dict[str, Any]:
+def run_julia_only_mip_packing(quick: bool = False) -> Dict[str, Any]:
     params = {
         "Items": [
             {"Name": "A", "Weight": 2, "Value": 10},
@@ -54,13 +104,27 @@ def run_julia_only_mip_packing() -> Dict[str, Any]:
         ],
         "Vehicles": [{"Capacity": 7}],
     }
-    return _run_cli("packing", "mip", params)
+    if quick:
+        params["Items"] = [{"Name": "A", "Weight": 2, "Value": 10}]
+        params["Vehicles"] = [{"Capacity": 3}]
+    # First Julia run can include heavy package precompilation.
+    return _run_cli("packing", "mip", params, timeout_seconds=240 if quick else 180)
 
 
-def run_full_pipeline() -> Dict[str, Dict[str, Any]]:
+def run_full_pipeline(quick: bool = False) -> Dict[str, Dict[str, Any]]:
     return {
-        "python_cp": run_python_only_cp_scheduling(),
-        "julia_mip": run_julia_only_mip_packing(),
+        "python_cp": run_python_only_cp_scheduling(quick=quick),
+        "julia_mip": run_julia_only_mip_packing(quick=quick),
+    }
+
+
+def warmup_julia_path() -> Dict[str, Any]:
+    """Run a tiny Julia-backed request to trigger initial compile/precompile overhead once."""
+    result = run_julia_only_mip_packing(quick=True)
+    return {
+        "status": result.get("status"),
+        "objective": result.get("objective"),
+        "note": "Julia path warmed up. Next runs are usually faster.",
     }
 
 
@@ -70,22 +134,25 @@ def explain_debug_pipeline() -> Dict[str, str]:
         "julia_only": "Validate only Julia MIP execution path (called via Python CLI subprocess)",
         "r_bridge": "Validate rpy2 and r_solvers loading/connectivity",
         "full_pipeline": "End-to-end validation: Python/Julia outputs passed into R process_results",
+        "quick_mode": "Use quick=True to run smaller payloads for faster feedback",
+        "warmup": "Run warmup_julia_path() once to reduce first-run Julia latency",
     }
 
 
-def run_section(section: str) -> Dict[str, Any]:
+def run_section(section: str, quick: bool = True) -> Dict[str, Any]:
     name = (section or "").strip().lower()
     if name == "python":
-        return {"python_cp": run_python_only_cp_scheduling()}
+        return {"python_cp": run_python_only_cp_scheduling(quick=quick)}
     if name == "julia":
-        return {"julia_mip": run_julia_only_mip_packing()}
+        return {"julia_mip": run_julia_only_mip_packing(quick=quick)}
     if name == "full":
-        return run_full_pipeline()
+        return run_full_pipeline(quick=quick)
     raise ValueError("section must be one of: python, julia, full")
 
 
 def ensure_r_bridge() -> Dict[str, Any]:
     """Initialize rpy2 bridge and load r_solvers modules."""
+    _configure_r_runtime_paths()
     try:
         ro = importlib.import_module("rpy2.robjects")
     except Exception as exc:

@@ -57,7 +57,7 @@ Primary verification path is the JupyterLab full pipeline notebook:
 ```powershell
 cd C:\Users\kevin\OneDrive\Desktop\OptiMystic
 \.venv\Scripts\python.exe -m pip install -r python_solvers\requirements.txt
-\.venv\Scripts\python.exe -m pip install jupyterlab rpy2
+\.venv\Scripts\python.exe -m pip install jupyterlab
 jupyter lab
 ```
 
