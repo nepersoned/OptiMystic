@@ -13,8 +13,6 @@ if __package__ is None or __package__ == "":
     if _ROOT not in sys.path:
         sys.path.insert(0, _ROOT)
 
-from python_solvers.logic import logic_cp
-from python_solvers.logic import logic_vrp
 from python_solvers.utils import bridge_logic
 
 
@@ -50,6 +48,8 @@ def _build_julia_payload(mapped_params: dict) -> dict:
         payload["ST"] = mapped_params.get("ST")
     if isinstance(mapped_params.get("NLP"), dict):
         payload["NLP"] = mapped_params.get("NLP")
+    if isinstance(mapped_params.get("MINLP"), dict):
+        payload["MINLP"] = mapped_params.get("MINLP")
     return payload
 
 
@@ -144,19 +144,8 @@ def main():
 
         normalized_domain = (args.domain or "").strip().lower()
         solver_type = (args.solver or "").strip().lower()
-        if normalized_domain == "vrp":
-            store_data = {
-                "variables": [],
-                "parameters": dict(mapped_params or {}),
-            }
-            result = logic_vrp.solve_vrp_model(store_data)
-        elif solver_type == "cp":
-            objective, constraints, variables = bridge_logic.generate_logic(args.domain, params, solver_type)
-            store_data = {
-                "variables": variables,
-                "parameters": dict(mapped_params or {}),
-            }
-            result = logic_cp.solve_cp_model(store_data, objective)
+        if normalized_domain == "vrp" or solver_type == "cp":
+            result = bridge_logic.run_python_runtime(args.domain, params, solver_type)
         else:
             julia_payload = _build_julia_payload(mapped_params)
             result = _run_julia_solver(args.domain, solver_type or "mip", julia_payload)

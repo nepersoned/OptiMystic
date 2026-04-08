@@ -30,7 +30,7 @@ MODES = {
     "nsp": "scheduling",
 }
 
-SOLVER_TYPES = ["cp"]
+SOLVER_TYPES = ["cp", "vrp", "routing"]
 
 
 def map_params_by_mode(mode: str, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -92,4 +92,41 @@ def generate_logic(template_type: str, params: Dict[str, Any], solver_type: str 
                 from python_solvers.logic import logic_cp
                 return logic_cp.build_model(normalized_mode, mapped)
 
-        raise ValueError("Python bridge only supports solver_type='cp'. Use Julia runtime for non-CP solvers.")
+        raise ValueError("Python bridge generate_logic supports solver_type='cp' only. Use run_python_runtime for CP/VRP dispatch.")
+
+
+def run_python_runtime(template_type: str, params: Dict[str, Any], solver_type: str = "cp") -> Dict[str, Any]:
+    """
+    Execute Python-owned solver paths from the bridge layer.
+
+    Ownership:
+    - CP scheduling: OR-Tools CP-SAT (logic_cp)
+    - VRP routing: OR-Tools Routing (logic_vrp)
+
+    Non-owned solvers (mip/ga/cg/st/nlp/minlp) must be delegated to Julia runtime.
+    """
+    mapped = map_params_by_mode(template_type, params)
+    mode = (template_type or "").strip().lower()
+    normalized_mode = MODES.get(mode, mode)
+    solver_type = (solver_type or "cp").strip().lower()
+
+    if normalized_mode == "vrp" or solver_type in ("vrp", "routing"):
+        from python_solvers.logic import logic_vrp
+
+        store_data = {
+            "variables": [],
+            "parameters": dict(mapped or {}),
+        }
+        return logic_vrp.solve_vrp_model(store_data)
+
+    if solver_type == "cp":
+        from python_solvers.logic import logic_cp
+
+        objective, constraints, variables = generate_logic(template_type, params, solver_type)
+        store_data = {
+            "variables": variables,
+            "parameters": dict(mapped or {}),
+        }
+        return logic_cp.solve_cp_model(store_data, objective)
+
+    raise ValueError("Python runtime supports only CP/VRP. Use Julia runtime for non-CP/VRP solvers.")

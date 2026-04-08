@@ -2,7 +2,9 @@
 
 R-based post-processing and visualization layer for OptiMystic solver outputs.
 
-**Design**: Consumes JSON results from Python/Julia solvers, normalizes domain-specific data, and prepares for visualization in Jupyter Notebook.
+**Design**: Consumes JSON results from Python/Julia solvers, normalizes domain-specific data, and serves as the dedicated post-analysis layer in Jupyter workflows.
+
+**Direction**: R is being expanded as the primary deep-analysis tier for business interpretation, statistical diagnostics, and high-quality visualization.
 
 ## Architecture
 
@@ -193,10 +195,10 @@ install.packages(c("dplyr", "ggplot2", "jsonlite", "tidyr"))
 - [ ] `domains/nlp.R` — Convergence diagnostics
 - [ ] `domains/generic.R` — Custom IR analysis
 
-### Phase 4: Go Integration
-- [ ] R subprocess wrapper in Go server
-- [ ] JSON result piping from Python/Julia → R
-- [ ] Streaming visualization updates
+### Phase 4: Advanced Post-Analysis
+- [ ] Automated anomaly detection on solver outputs
+- [ ] Scenario-comparison reports across solver runs
+- [ ] Executive-ready summary templates per domain
 
 ## Notes
 

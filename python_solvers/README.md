@@ -128,7 +128,7 @@ See [julia_solvers/README.md](../julia_solvers/README.md) for full Julia solver 
   - Pyomo + compatible backend solver for MIP/ST flows.
   - OR-Tools for CP flow.
   - OR-Tools routing for VRP flow.
-- Long-running solves are expected to be bounded by Go bridge timeout (`OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS`) at the server layer.
+- Long-running solves are expected to be bounded by runtime timeout controls (`OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS`, `OPTIMYSTIC_JULIA_TIMEOUT_SECONDS`).
 - Results use status-driven handling:
   - `status` indicates success/failure state.
   - `error` and `error_msg` communicate failure cause when solve/build fails.

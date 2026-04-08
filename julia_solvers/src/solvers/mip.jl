@@ -85,9 +85,11 @@ function _build_mip_model(ir::Dict{String, Any};
 
         if haskey(fixed_values, name)
             try
-                fix(v, fixed_values[name]; force=true)
+                if !haskey(warm_start, name)
+                    set_start_value(v, fixed_values[name])
+                end
             catch err
-                @warn "Failed to fix variable" variable=name value=fixed_values[name] error=err
+                @warn "Failed to map fixed value to warm start" variable=name value=fixed_values[name] error=err
             end
         end
 

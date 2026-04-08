@@ -85,6 +85,10 @@ end
 
 function _solve_cg_cutting(params::Dict{String, Any}, opts::Dict{String, Any})
     started = time()
+    cg_cfg = _as_dict(get(opts, "CG", Dict{String, Any}()))
+    time_limit_seconds = max(1.0, _to_float(get(cg_cfg, "time_limit_seconds", get(opts, "TimeLimit", get(opts, "time_limit", 30))), 30.0))
+    deadline = started + time_limit_seconds
+    timed_out = false
     items = [string(x) for x in _as_vector(get(params, "Items", Any[]))]
     if isempty(items)
         return Dict{String, Any}("status" => "Error", "error_msg" => "CG requires Items", "solve_time" => time() - started)
@@ -130,7 +134,16 @@ function _solve_cg_cutting(params::Dict{String, Any}, opts::Dict{String, Any})
     pricing_model, pricing_a = _cg_build_pricing_model(item_lens, kerf, stock_len)
 
     while iterations < max_iterations
+        if time() >= deadline
+            timed_out = true
+            break
+        end
         iterations += 1
+        try
+            set_attribute(master_model, "time_limit", max(1.0, deadline - time()))
+        catch err
+            @warn "Failed to set CG master time_limit" error=err
+        end
         optimize!(master_model)
         master_status = _status_from_model(master_model)
         feasible_master = primal_status(master_model) == MOI.FEASIBLE_POINT
@@ -141,6 +154,17 @@ function _solve_cg_cutting(params::Dict{String, Any}, opts::Dict{String, Any})
         end
         if master_status == "Infeasible" || master_status == "ModelInvalid"
             break
+        end
+
+        if time() >= deadline
+            timed_out = true
+            break
+        end
+
+        try
+            set_attribute(pricing_model, "time_limit", max(1.0, deadline - time()))
+        catch err
+            @warn "Failed to set CG pricing time_limit" error=err
         end
 
         pricing_obj, new_pattern = _cg_pricing_knapsack!(pricing_model, pricing_a, master_duals)
@@ -161,6 +185,11 @@ function _solve_cg_cutting(params::Dict{String, Any}, opts::Dict{String, Any})
         set_attribute(m, "output_flag", false)
     catch err
         @warn "Failed to set CG integer-master output_flag" error=err
+    end
+    try
+        set_attribute(m, "time_limit", max(1.0, deadline - time()))
+    catch err
+        @warn "Failed to set CG integer-master time_limit" error=err
     end
 
     p_count = length(patterns)
@@ -212,9 +241,11 @@ function _solve_cg_cutting(params::Dict{String, Any}, opts::Dict{String, Any})
         "lp_sensitivity" => false,
         "details" => Dict(
             "engine" => "CG",
-            "message" => "Column generation (master + pricing) solved",
+            "message" => timed_out ? "Column generation reached time limit and returned best available integer master solution" : "Column generation (master + pricing) solved",
             "iterations" => iterations,
             "pattern_count" => length(patterns),
+            "timed_out" => timed_out,
+            "time_limit_seconds" => time_limit_seconds,
         ),
     )
 end
@@ -224,6 +255,10 @@ function solve_cg(payload::Dict{String, Any})
     ir = _extract_ir(params)
     sense = _normalize_sense(get(params, "Sense", "minimize"))
     opts = _ga_options(params)
+    ga_cfg = _as_dict(get(params, "GA", Dict{String, Any}()))
+    variable_count = length(_as_vector(get(ir, "variables", Any[])))
+    ga_variable_threshold = max(0, _to_int(get(ga_cfg, "variable_threshold", 10000), 10000))
+    use_ga = variable_count > ga_variable_threshold
 
     # Prefer domain-aware CG when cutting payload is present.
     if lowercase(string(get(params, "Mode", ""))) == "cutting" && !isempty(_as_vector(get(params, "Items", Any[])))
@@ -235,31 +270,45 @@ function solve_cg(payload::Dict{String, Any})
         Random.seed!(seed)
     end
 
-    ga = solve_ga_hotspots(
-        ir,
-        sense;
-        population=_to_int(get(opts, "population", 48), 48),
-        generations=_to_int(get(opts, "generations", 20), 20),
-        elite_k=_to_int(get(opts, "elite_k", 6), 6),
-        hotspot_threshold=_to_float(get(opts, "hotspot_threshold", 0.85), 0.85),
-        mutation_rate=_to_float(get(opts, "mutation_rate", 0.15), 0.15),
-        library_ops=_bool_from_any(get(opts, "library_ops", false), false),
-    )
+    ga = if use_ga
+        solve_ga_hotspots(
+            ir,
+            sense;
+            population=_to_int(get(opts, "population", 48), 48),
+            generations=_to_int(get(opts, "generations", 20), 20),
+            elite_k=_to_int(get(opts, "elite_k", 6), 6),
+            hotspot_threshold=_to_float(get(opts, "hotspot_threshold", 0.85), 0.85),
+            mutation_rate=_to_float(get(opts, "mutation_rate", 0.15), 0.15),
+            library_ops=_bool_from_any(get(opts, "library_ops", false), false),
+        )
+    else
+        Dict{String, Any}(
+            "status" => "Skipped",
+            "hotspots" => Any[],
+            "start_values" => Dict{String, Float64}(),
+            "fixed_values" => Dict{String, Float64}(),
+        )
+    end
     start_values = Dict{String, Float64}()
-    fixed_values = Dict{String, Float64}()
 
     for (k, v) in get(ga, "start_values", Dict{String, Float64}())
         start_values[string(k)] = _to_float(v, 0.0)
     end
     for (k, v) in get(ga, "fixed_values", Dict{String, Float64}())
-        fixed_values[string(k)] = _to_float(v, 0.0)
+        key = string(k)
+        if !haskey(start_values, key)
+            start_values[key] = _to_float(v, 0.0)
+        end
     end
 
-    mip = solve_mip_from_ir(ir, sense; warm_start=start_values, fixed_values=fixed_values)
+    mip = solve_mip_from_ir(ir, sense; warm_start=start_values)
     mip["details"] = Dict(
         "engine" => "CG",
-        "message" => "CG fallback: GA hotspot + MIP refinement",
+        "message" => use_ga ? "CG fallback: GA warm start + MIP refinement" : "CG fallback: direct MIP refinement (GA skipped by variable threshold)",
         "hotspot_count" => length(get(ga, "hotspots", Any[])),
+        "ga_used" => use_ga,
+        "variable_count" => variable_count,
+        "ga_variable_threshold" => ga_variable_threshold,
     )
     return mip
 end

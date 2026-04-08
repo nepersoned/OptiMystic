@@ -9,6 +9,7 @@ include("solvers/ga.jl")
 include("solvers/cg.jl")
 include("solvers/st.jl")
 include("solvers/nlp.jl")
+include("solvers/minlp.jl")
 include("solvers/router.jl")
 
 function run_main()

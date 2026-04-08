@@ -2,7 +2,7 @@
 
 Julia optimization ecosystem for OptiMystic, handling all non-CP solver types.
 
-**Design**: Python CLI delegates non-CP requests to Julia subprocess via JSON I/O. Julia dispatches to task-specific solvers (MIP, GA, CG, ST, NLP) with automatic fallback chains.
+**Design**: Python CLI delegates non-CP requests to Julia subprocess via JSON I/O. Julia dispatches to task-specific solvers (MIP, GA, CG, ST, NLP, MINLP) with automatic fallback chains.
 
 ## Solver-Domain Compatibility
 
@@ -20,7 +20,7 @@ Julia optimization ecosystem for OptiMystic, handling all non-CP solver types.
 
 **Key Features:**
 - Builds generic LP/MIP model from IR (variable types, constraint parsing)
-- Detects GA hotspots and injects warmstart values (start_values, fixed_values)
+- Detects GA hotspots and injects warmstart hints (start_values + fixed_values merged as start hints)
 - `set_silent()` suppresses HiGHS logging for clean JSON stdout
 - Status mapping: `OPTIMAL`, `INFEASIBLE`, `TIME_LIMIT`, `FEASIBLE`, etc.
 
@@ -37,19 +37,40 @@ result = solve_mip_from_ir(ir, opts)
 | Role | Compatibility |
 |---|---|
 | **Solver** (solver="nlp") | Generic IR via JuMP + Ipopt |
-| **Warmstart provider** | GA hotspots are injected as start values / fixed values |
+| **Warmstart provider** | GA hotspots are injected as start-value hints |
 
 **File**: [src/solvers/nlp.jl](src/solvers/nlp.jl)
 
 **Key Features:**
 - Parses a small nonlinear AST contract from `params.NLP`
 - Builds Ipopt-backed JuMP models for smooth nonlinear objectives and constraints
-- Uses GA hotspot results as warm starts and fixed hotspots
+- Uses GA hotspot results as warm starts (no hard fixing)
 - Emits solver diagnostics including GA counts and nonlinear term counts
 
 **Example Call:**
 ```julia
 result = solve_nlp(payload)
+# => { status, objective, variables, constraints, solve_time, details }
+```
+
+### MINLP (Mixed-Integer Nonlinear Programming)
+
+| Role | Compatibility |
+|---|---|
+| **Solver** (solver="minlp") | Generic IR + nonlinear AST via Juniper + Ipopt + HiGHS |
+| **Warmstart provider** | GA hotspots are injected as start-value hints |
+
+**File**: [src/solvers/minlp.jl](src/solvers/minlp.jl)
+
+**Key Features:**
+- Handles mixed-integer nonlinear models by combining Juniper (outer MINLP orchestration), Ipopt (NLP subproblems), and HiGHS (MIP subproblems).
+- Reuses the nonlinear AST parsing path used by NLP (`objective_expr`, nonlinear constraint expressions).
+- Keeps GA guidance as warm-start only (no hard-fix anti-pattern).
+- Emits MINLP-specific diagnostics (`discrete_variable_count`, `nonlinear_term_count`, GA usage).
+
+**Example Call:**
+```julia
+result = solve_minlp(payload)
 # => { status, objective, variables, constraints, solve_time, details }
 ```
 
@@ -248,6 +269,8 @@ solver parameter
   │         └─ else → GA + MIP fallback
   ├─ "nlp" → solve_nlp()
   │         └─ GA-guided nonlinear solve via Ipopt
+  ├─ "minlp" → solve_minlp()
+  │           └─ Juniper + Ipopt + HiGHS mixed-integer nonlinear solve
   └─ "mip" (default)
       └─ solve_mip()
           ├─ GA hotspot calculation
@@ -265,11 +288,12 @@ solver parameter
 | Schedule staff | scheduling | cp | `template_type="scheduling"` | OR-Tools CP-SAT optimal for binary assignment |
 | Schedule (relaxed) | scheduling | mip | Direct IR | Standard LP relaxation |
 | Nonlinear generic model | generic | nlp | `solver="nlp"` + nonlinear AST in `params.NLP` | Ipopt-backed smooth NLP with GA warm start |
-| Cutting stock | cutting | cg | `Mode="cutting"` + Items | Specialized column gen, educaitonal value |
+| Cutting stock | cutting | cg | `Mode="cutting"` + Items | Specialized column generation pipeline |
 | Cutting (large) | cutting | mip | No CG data | Generic MIP faster for many items |
 | Bin packing | packing | mip | Default | Generic MIP handles variable dimensions |
 | Resource allocation | resourcing | st | `Mode="resourcing"` + Scenarios | Risk-aware multi-stage planning |
 | Resource (deterministic) | resourcing | mip | No scenarios | Simplification of ST |
+| Mixed-integer nonlinear model | generic | minlp | `solver="minlp"` + nonlinear AST in `params.MINLP` | Discrete + nonlinear support via Juniper |
 | Custom opt. problem | generic | mip | Direct IR | Direct IR passthrough |
 | Exploratory search | any | ga | `solver="ga"` | Pure evolutionary (no MIP refinement) |
 
@@ -288,6 +312,7 @@ cli_solver.py (non-cp request)
               │   └─ JuMP + HiGHS
               ├─ cg.jl: solve_cg()
               ├─ st.jl: solve_st()
+                ├─ minlp.jl: solve_minlp()
               └─ ga.jl: solve_ga_only()
           └─ return JSON (status, objective, variables)
 ```

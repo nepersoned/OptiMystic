@@ -2,7 +2,7 @@
 
 julia_version = "1.12.5"
 manifest_format = "2.0"
-project_hash = "9a14847f284627fbc0b8960184c52989de8e9dbd"
+project_hash = "c41136039488547146d8e4d170ca95c5c46bfe62"
 
 [[deps.ASL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -83,6 +83,11 @@ deps = ["IrrationalConstants", "LogExpFunctions", "NaNMath", "Random", "SpecialF
 git-tree-sha1 = "23163d55f885173722d1e4cf0f6110cdbaf7e272"
 uuid = "b552c78f-8df3-52c6-915a-8e097449b14b"
 version = "1.15.1"
+
+[[deps.Distributed]]
+deps = ["Random", "Serialization", "Sockets"]
+uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+version = "1.11.0"
 
 [[deps.DocStringExtensions]]
 git-tree-sha1 = "7442a5dfe1ebb773c29cc2962a8980f47221d76c"
@@ -200,6 +205,12 @@ version = "1.30.0"
 deps = ["StyledStrings"]
 uuid = "ac6e5ff7-fb65-4e79-a425-ec3bc9c03011"
 version = "1.12.0"
+
+[[deps.Juniper]]
+deps = ["Distributed", "JSON", "LinearAlgebra", "MathOptInterface", "MutableArithmetics", "Random", "Statistics"]
+git-tree-sha1 = "3fee071e336de1f625dcf8b14c6cef2bd479071a"
+uuid = "2ddba703-00a4-53a7-87a5-e8b9971dde84"
+version = "0.9.4"
 
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
@@ -347,7 +358,7 @@ uuid = "efe28fd5-8261-553b-a9e1-b2916fc3738e"
 version = "0.5.6+0"
 
 [[deps.OptiMysticJuliaSolvers]]
-deps = ["HiGHS", "JSON", "JSON3", "JuMP", "MathOptInterface"]
+deps = ["HiGHS", "Ipopt", "JSON", "JSON3", "JuMP", "MathOptInterface"]
 path = "."
 uuid = "7f608bb4-f3b3-4ce1-b6f6-2f24ce18c0f2"
 version = "0.1.0"
@@ -413,6 +424,10 @@ version = "2025.9.18+0"
 
 [[deps.Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
+version = "1.11.0"
+
+[[deps.Sockets]]
+uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
 version = "1.11.0"
 
 [[deps.SparseArrays]]

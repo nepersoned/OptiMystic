@@ -1,9 +1,11 @@
 using JuMP
 using Ipopt
+using HiGHS
+using Juniper
 using Random
 import MathOptInterface as MOI
 
-function _status_from_nlp(model::Model)
+function _status_from_minlp(model::Model)
     ts = termination_status(model)
     ps = primal_status(model)
     if ts == MOI.OPTIMAL
@@ -24,8 +26,8 @@ function _status_from_nlp(model::Model)
     return "Unknown"
 end
 
-function _nlp_options(params::Dict{String, Any})
-    cfg = _as_dict(get(params, "NLP", Dict{String, Any}()))
+function _minlp_options(params::Dict{String, Any})
+    cfg = _as_dict(get(params, "MINLP", Dict{String, Any}()))
     ga_cfg = _as_dict(get(params, "GA", Dict{String, Any}()))
     merged = Dict{String, Any}(ga_cfg)
     for (k, v) in cfg
@@ -53,7 +55,7 @@ function _nlp_options(params::Dict{String, Any})
         merged["seed"] = 0
     end
     if !haskey(merged, "time_limit_seconds")
-        merged["time_limit_seconds"] = get(params, "TimeLimit", get(params, "time_limit", 10))
+        merged["time_limit_seconds"] = get(params, "TimeLimit", get(params, "time_limit", 20))
     end
     if !haskey(merged, "variable_threshold")
         merged["variable_threshold"] = 10000
@@ -61,171 +63,32 @@ function _nlp_options(params::Dict{String, Any})
     return merged
 end
 
-function _nlp_spec(params::Dict{String, Any})
-    return _as_dict(get(params, "NLP", Dict{String, Any}()))
+function _minlp_spec(params::Dict{String, Any})
+    return _as_dict(get(params, "MINLP", get(params, "NLP", Dict{String, Any}())))
 end
 
-function _safe_symbol(name::String)
-    cleaned = replace(name, r"[^A-Za-z0-9_]" => "_")
-    if isempty(cleaned)
-        cleaned = "x"
-    end
-    if !occursin(r"^[A-Za-z_]", cleaned)
-        cleaned = "v_" * cleaned
-    end
-    return Symbol(cleaned)
-end
-
-function _is_nonlinear_node(node::Any)
-    if node isa Number || node isa AbstractString
-        return false
-    end
-    if !(node isa Dict)
-        return false
-    end
-    raw = _as_dict(node)
-    if haskey(raw, "var") || haskey(raw, "const") || haskey(raw, "value")
-        return false
-    end
-    op = lowercase(string(get(raw, "op", get(raw, "type", ""))))
-    if op in ("mul", "div", "pow", "sin", "cos", "tan", "exp", "log", "sqrt", "abs", "min", "max")
-        return true
-    end
-    args = _as_vector(get(raw, "args", get(raw, "terms", Any[])))
-    return any(_is_nonlinear_node(arg) for arg in args)
-end
-
-function _nl_ast_to_expr(node::Any, alias_map::Dict{String, Symbol})
-    if node isa Number
-        return Float64(node)
-    end
-    if node isa AbstractString
-        name = String(node)
-        if haskey(alias_map, name)
-            return alias_map[name]
-        end
-        try
-            return parse(Float64, name)
-        catch
-            return _safe_symbol(name)
-        end
-    end
-    if !(node isa Dict)
-        return 0.0
-    end
-
-    raw = _as_dict(node)
-    if haskey(raw, "const")
-        return _to_float(get(raw, "const", 0.0), 0.0)
-    end
-    if haskey(raw, "value") && !haskey(raw, "op")
-        return _to_float(get(raw, "value", 0.0), 0.0)
-    end
-    if haskey(raw, "var")
-        return get(alias_map, string(get(raw, "var", "")), _safe_symbol(string(get(raw, "var", ""))))
-    end
-
-    op = lowercase(string(get(raw, "op", get(raw, "type", ""))))
-    args = _as_vector(get(raw, "args", get(raw, "terms", Any[])))
-
-    if op in ("add", "sum")
-        if isempty(args)
-            return 0.0
-        end
-        expr = _nl_ast_to_expr(args[1], alias_map)
-        for idx in Iterators.drop(eachindex(args), 1)
-            expr = :($expr + $(_nl_ast_to_expr(args[idx], alias_map)))
-        end
-        return expr
-    elseif op == "sub"
-        if isempty(args)
-            return 0.0
-        end
-        expr = _nl_ast_to_expr(args[1], alias_map)
-        for idx in Iterators.drop(eachindex(args), 1)
-            expr = :($expr - $(_nl_ast_to_expr(args[idx], alias_map)))
-        end
-        return expr
-    elseif op == "mul"
-        if isempty(args)
-            return 1.0
-        end
-        expr = _nl_ast_to_expr(args[1], alias_map)
-        for idx in Iterators.drop(eachindex(args), 1)
-            expr = :($expr * $(_nl_ast_to_expr(args[idx], alias_map)))
-        end
-        return expr
-    elseif op == "div"
-        if isempty(args)
-            return 1.0
-        end
-        expr = _nl_ast_to_expr(args[1], alias_map)
-        for idx in Iterators.drop(eachindex(args), 1)
-            expr = :($expr / $(_nl_ast_to_expr(args[idx], alias_map)))
-        end
-        return expr
-    elseif op == "pow" && length(args) >= 2
-        return :($(_nl_ast_to_expr(args[1], alias_map)) ^ $(_nl_ast_to_expr(args[2], alias_map)))
-    elseif op == "neg" && !isempty(args)
-        return :(-$(_nl_ast_to_expr(args[1], alias_map)))
-    elseif op in ("sin", "cos", "tan", "exp", "log", "sqrt", "abs") && !isempty(args)
-        return Expr(:call, Symbol(op), _nl_ast_to_expr(args[1], alias_map))
-    elseif op in ("min", "max") && !isempty(args)
-        return Expr(:call, Symbol(op), (_nl_ast_to_expr(arg, alias_map) for arg in args)...)
-    end
-
-    return 0.0
-end
-
-function _solve_nlp_ga_guidance(ir::Dict{String, Any}, sense::String, opts::Dict{String, Any})
-    seed = _to_int(get(opts, "seed", 0), 0)
-    if seed != 0
-        Random.seed!(seed)
-    end
-
-    ga_result = solve_ga_hotspots(
-        ir,
-        sense;
-        population=_to_int(get(opts, "population", 48), 48),
-        generations=_to_int(get(opts, "generations", 30), 30),
-        elite_k=_to_int(get(opts, "elite_k", 8), 8),
-        hotspot_threshold=_to_float(get(opts, "hotspot_threshold", 0.9), 0.9),
-        mutation_rate=_to_float(get(opts, "mutation_rate", 0.15), 0.15),
-        library_ops=_bool_from_any(get(opts, "library_ops", false), false),
-    )
-
-    warm_start = Dict{String, Float64}()
-    for (k, v) in get(ga_result, "start_values", Dict{String, Float64}())
-        warm_start[string(k)] = _to_float(v, 0.0)
-    end
-    for (k, v) in get(ga_result, "fixed_values", Dict{String, Float64}())
-        key = string(k)
-        if !haskey(warm_start, key)
-            warm_start[key] = _to_float(v, 0.0)
-        end
-    end
-
-    return ga_result, warm_start
-end
-
-function _build_nlp_model(ir::Dict{String, Any}, nlp_spec::Dict{String, Any};
+function _build_minlp_model(ir::Dict{String, Any}, minlp_spec::Dict{String, Any};
     sense::String="minimize",
     warm_start::Dict{String, Float64}=Dict{String, Float64}(),
-    time_limit_seconds::Float64=10.0,
+    time_limit_seconds::Float64=20.0,
 )
-    model = Model(Ipopt.Optimizer)
+    model = Model(Juniper.Optimizer)
     set_silent(model)
     try
-        set_attribute(model, "max_cpu_time", max(1.0, time_limit_seconds))
+        set_optimizer_attribute(model, "nl_solver", Ipopt.Optimizer)
     catch err
-        @warn "Failed to set NLP time limit" value=max(1.0, time_limit_seconds) error=err
+        @warn "Failed to set MINLP nl_solver" error=err
     end
     try
-        set_attribute(model, "print_level", 0)
+        set_optimizer_attribute(model, "mip_solver", HiGHS.Optimizer)
     catch err
-        @warn "Failed to set NLP print_level" error=err
+        @warn "Failed to set MINLP mip_solver" error=err
     end
-
+    try
+        set_optimizer_attribute(model, "time_limit", max(1.0, time_limit_seconds))
+    catch err
+        @warn "Failed to set MINLP time_limit" error=err
+    end
     vars = Dict{String, VariableRef}()
     aliases = Dict{String, Symbol}()
     order = String[]
@@ -248,15 +111,18 @@ function _build_nlp_model(ir::Dict{String, Any}, nlp_spec::Dict{String, Any};
             set_upper_bound(v, _to_float(ub_raw, lb))
         end
         if vtype == "Binary"
+            set_binary(v)
             set_lower_bound(v, 0.0)
             set_upper_bound(v, 1.0)
+        elseif vtype == "Integer"
+            set_integer(v)
         end
 
         if haskey(warm_start, name)
             try
                 set_start_value(v, warm_start[name])
             catch err
-                @warn "Failed to set NLP warm-start value" variable=name value=warm_start[name] error=err
+                @warn "Failed to set MINLP warm-start value" variable=name value=warm_start[name] error=err
             end
         end
 
@@ -266,7 +132,7 @@ function _build_nlp_model(ir::Dict{String, Any}, nlp_spec::Dict{String, Any};
         try
             @eval $(alias) = $v
         catch err
-            @warn "Failed to bind NLP alias" variable=name alias=String(alias) error=err
+            @warn "Failed to bind MINLP alias" variable=name alias=String(alias) error=err
         end
     end
 
@@ -286,7 +152,7 @@ function _build_nlp_model(ir::Dict{String, Any}, nlp_spec::Dict{String, Any};
         end
     end
 
-    nonlinear_objective = get(nlp_spec, "objective_expr", get(nlp_spec, "objective", nothing))
+    nonlinear_objective = get(minlp_spec, "objective_expr", get(minlp_spec, "objective", nothing))
     has_nonlinear_objective = nonlinear_objective !== nothing && _is_nonlinear_node(nonlinear_objective)
     if has_nonlinear_objective
         combined_objective = _nl_ast_to_expr(nonlinear_objective, aliases)
@@ -364,13 +230,14 @@ function _build_nlp_model(ir::Dict{String, Any}, nlp_spec::Dict{String, Any};
     return model, vars, order
 end
 
-function solve_nlp(payload::Dict{String, Any})
+function solve_minlp(payload::Dict{String, Any})
     started = time()
     params = _as_dict(get(payload, "params", Dict{String, Any}()))
     ir = _extract_ir(params)
     sense = _normalize_sense(get(params, "Sense", "minimize"))
-    opts = _nlp_options(params)
-    nlp_spec = _nlp_spec(params)
+    opts = _minlp_options(params)
+    minlp_spec = _minlp_spec(params)
+
     variable_count = length(_as_vector(get(ir, "variables", Any[])))
     ga_variable_threshold = max(0, _to_int(get(opts, "variable_threshold", 10000), 10000))
     use_ga = variable_count > ga_variable_threshold
@@ -386,11 +253,10 @@ function solve_nlp(payload::Dict{String, Any})
         ga_result, warm_start = _solve_nlp_ga_guidance(ir, sense, opts)
     end
 
-    time_limit_seconds = _to_float(get(opts, "time_limit_seconds", 10), 10.0)
-
-    model, vars, order = _build_nlp_model(
+    time_limit_seconds = _to_float(get(opts, "time_limit_seconds", 20), 20.0)
+    model, vars, order = _build_minlp_model(
         ir,
-        nlp_spec;
+        minlp_spec,
         sense=sense,
         warm_start=warm_start,
         time_limit_seconds=time_limit_seconds,
@@ -398,7 +264,7 @@ function solve_nlp(payload::Dict{String, Any})
 
     optimize!(model)
 
-    status = _status_from_nlp(model)
+    status = _status_from_minlp(model)
     objective = nothing
     if primal_status(model) == MOI.FEASIBLE_POINT
         objective = objective_value(model)
@@ -415,24 +281,23 @@ function solve_nlp(payload::Dict{String, Any})
     end
 
     ga_hotspots = get(ga_result, "hotspots", Any[])
-    start_values = get(ga_result, "start_values", Dict{String, Float64}())
-    fixed_values_out = get(ga_result, "fixed_values", Dict{String, Float64}())
-    integer_like_count = 0
+    nonlinear_terms = 0
+    if get(minlp_spec, "objective_expr", get(minlp_spec, "objective", nothing)) !== nothing
+        nonlinear_terms += 1
+    end
+    for raw_constraint in _as_vector(get(minlp_spec, "constraints", Any[]))
+        c = _as_dict(raw_constraint)
+        if haskey(c, "expr") || haskey(c, "lhs")
+            nonlinear_terms += 1
+        end
+    end
+
+    discrete_count = 0
     for raw_var in _as_vector(get(ir, "variables", Any[]))
         v = _as_dict(raw_var)
         vtype = lowercase(string(get(v, "type", "Continuous")))
         if vtype in ("binary", "integer")
-            integer_like_count += 1
-        end
-    end
-    nonlinear_terms = 0
-    if get(nlp_spec, "objective_expr", get(nlp_spec, "objective", nothing)) !== nothing
-        nonlinear_terms += 1
-    end
-    for raw_constraint in _as_vector(get(nlp_spec, "constraints", Any[]))
-        c = _as_dict(raw_constraint)
-        if haskey(c, "expr") || haskey(c, "lhs")
-            nonlinear_terms += 1
+            discrete_count += 1
         end
     end
 
@@ -444,18 +309,15 @@ function solve_nlp(payload::Dict{String, Any})
         "solve_time" => time() - started,
         "lp_sensitivity" => false,
         "details" => Dict(
-            "engine" => "NLP",
-            "message" => use_ga ? "NLP solved with GA-guided warm start" : "NLP solved directly (GA skipped by variable threshold)",
+            "engine" => "MINLP",
+            "solver" => "Juniper+Ipopt+HiGHS",
+            "message" => use_ga ? "MINLP solved with GA-guided warm start" : "MINLP solved directly (GA skipped by variable threshold)",
             "ga_hotspot_count" => length(ga_hotspots),
-            "ga_fixed_count" => length(keys(fixed_values_out)),
-            "ga_start_count" => length(keys(start_values)),
             "ga_used" => use_ga,
             "variable_count" => variable_count,
+            "discrete_variable_count" => discrete_count,
             "ga_variable_threshold" => ga_variable_threshold,
-            "constraint_count" => length(_as_vector(get(ir, "constraints", Any[]))),
             "nonlinear_term_count" => nonlinear_terms,
-            "discrete_variable_count" => integer_like_count,
-            "ipopt_relaxes_discrete" => integer_like_count > 0,
         ),
     )
 end
