@@ -3,6 +3,26 @@
 
 source("plotting.R")
 
+process_vrp_results <- function(res, store) {
+  routes <- res$routes %||% list()
+  unserved <- res$unserved %||% list()
+  total_distance <- safe_numeric(res$total_distance %||% res$objective, 0)
+  num_vehicles <- length(routes)
+
+  list(
+    mode = "vrp",
+    total_distance = round(total_distance, 2),
+    num_vehicles = num_vehicles,
+    routes = routes,
+    unserved = unserved,
+    report = sprintf(
+      "Total Distance: %.2f\nVehicles Used: %d\nUnserved: %d",
+      total_distance, num_vehicles, length(unserved)
+    ),
+    status = res$status %||% "unknown"
+  )
+}
+
 # ============================================================================
 # VRP-SPECIFIC RESULT PROCESSING
 # ============================================================================

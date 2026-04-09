@@ -3,6 +3,50 @@
 
 source("plotting.R")
 
+process_cutting_results <- function(res, store) {
+  params <- parameter_map(store)
+
+  items <- params$Items %||% c()
+  lens <- params$ItemLens %||% c()
+  stocks <- params$Stocks %||% list()
+  kerf <- safe_numeric(params$Kerf, 0)
+
+  raw_bins <- list()
+  total_cost <- 0.0
+  total_waste <- 0.0
+
+  if (!is.list(res$variables) || length(res$variables) == 0) {
+    return(list(
+      mode = "cutting",
+      total_cost = 0.0,
+      total_waste = 0.0,
+      num_bins = 0,
+      bin_plans = list(),
+      report = "No cutting plan generated.",
+      item_counts = list(),
+      status = "no_solution"
+    ))
+  }
+
+  for (v in res$variables) {
+    value <- get_variable_value(v)
+    if (value <= 0.001) {
+      next
+    }
+  }
+
+  list(
+    mode = "cutting",
+    total_cost = round(total_cost, 2),
+    total_waste = round(total_waste, 2),
+    num_bins = length(raw_bins),
+    bin_plans = list(),
+    report = sprintf("Bins used: %d, Total cost: $%.2f", length(raw_bins), total_cost),
+    item_counts = list(),
+    status = "ok"
+  )
+}
+
 # ============================================================================
 # CUTTING-SPECIFIC RESULT PROCESSING
 # ============================================================================

@@ -48,6 +48,9 @@ Jupyter Notebook
 
 #### `processors.R` — Result Processing
 - `process_results()` — Main dispatcher
+- `process_decision_analytics()` — Run-history diagnostics with confidence intervals
+- `compare_solver_performance()` — A/B variant comparison wrapper
+- `build_executive_summary()` — Decision-oriented summary text
 - Domain-specific handlers:
   - `process_cutting_extended()` — Material cost, efficiency
   - `process_packing_extended()` — Capacity utilization, item selection
@@ -65,6 +68,12 @@ Jupyter Notebook
   - `plot_cutting()` — Routes to cutting plots
   - `plot_packing()` — Routes to packing plots
   - `plot_vrp()` — Routes to VRP plots
+
+#### `analytics.R` — Statistical Decision Engine
+- `analyze_run_history()` — Stability metrics and bootstrap CIs across repeated runs
+- `compare_solver_variants()` — Comparative ranking by feasibility/objective/time
+- `bootstrap_ci()` — Confidence interval estimation for run metrics
+- `mad_zscore_flags()` — Outlier detection for unstable runs
 
 ### Domain-Specific Modules (in `domains/`)
 
@@ -118,6 +127,7 @@ Jupyter Notebook
 setwd('r_solvers')
 source('utils.R')
 source('processors.R')
+source('analytics.R')
 
 # 2. Load domain modules (optional, auto-loaded by processors.R)
 source('domains/cutting.R')
@@ -134,6 +144,19 @@ processed <- process_results(result, store, mode = "cutting")
 # 5. Visualize
 plot <- plot_cutting(processed, plot_type = "efficiency")
 print(plot)
+
+# 6. Statistical diagnostics across repeated runs
+history <- list(result_a, result_b, result_c)
+diag <- process_decision_analytics(history, mode = "cutting")
+print(diag$recommendation)
+
+# 7. Solver variant comparison (A/B)
+cmp <- compare_solver_performance(
+  run_results = history,
+  solver_labels = c("mip", "mip", "ga_warm_mip"),
+  mode = "cutting"
+)
+print(cmp$best_solver)
 ```
 
 ## Testing
@@ -196,9 +219,9 @@ install.packages(c("dplyr", "ggplot2", "jsonlite", "tidyr"))
 - [ ] `domains/generic.R` — Custom IR analysis
 
 ### Phase 4: Advanced Post-Analysis
-- [ ] Automated anomaly detection on solver outputs
-- [ ] Scenario-comparison reports across solver runs
-- [ ] Executive-ready summary templates per domain
+- [x] Automated anomaly detection on solver outputs
+- [x] Scenario-comparison reports across solver runs
+- [x] Executive-ready summary templates per domain
 
 ## Notes
 

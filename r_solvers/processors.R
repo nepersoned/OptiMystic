@@ -3,6 +3,7 @@
 
 source("utils.R")
 source("plotting.R")
+source("analytics.R")
 
 # Load domain-specific modules
 tryCatch({
@@ -21,6 +22,30 @@ tryCatch({
   source("domains/vrp.R")
 }, error = function(e) {
   warning("Could not load VRP domain module")
+})
+
+tryCatch({
+  source("domains/resourcing.R")
+}, error = function(e) {
+  warning("Could not load resourcing domain module")
+})
+
+tryCatch({
+  source("domains/scheduling.R")
+}, error = function(e) {
+  warning("Could not load scheduling domain module")
+})
+
+tryCatch({
+  source("domains/nlp.R")
+}, error = function(e) {
+  warning("Could not load NLP domain module")
+})
+
+tryCatch({
+  source("domains/generic.R")
+}, error = function(e) {
+  warning("Could not load generic domain module")
 })
 
 # Main dispatcher for result processing
@@ -61,319 +86,6 @@ normalize_status <- function(status) {
     return("error")
   }
   s
-}
-
-# ============================================================================
-# DOMAIN-SPECIFIC PROCESSORS
-# ============================================================================
-
-# Cutting domain processor
-process_cutting_results <- function(res, store) {
-  params <- parameter_map(store)
-  
-  items <- params$Items %||% c()
-  lens <- params$ItemLens %||% c()
-  stocks <- params$Stocks %||% list()
-  kerf <- safe_numeric(params$Kerf, 0)
-  
-  # Basic implementation: extract bin assignments from variables
-  raw_bins <- list()
-  total_cost <- 0.0
-  total_waste <- 0.0
-  
-  if (!is.list(res$variables) || length(res$variables) == 0) {
-    return(list(
-      mode = "cutting",
-      total_cost = 0.0,
-      total_waste = 0.0,
-      num_bins = 0,
-      bin_plans = list(),
-      report = "No cutting plan generated.",
-      item_counts = list(),
-      status = "no_solution"
-    ))
-  }
-  
-  # Parse variables (simplified)
-  for (v in res$variables) {
-    value <- get_variable_value(v)
-    if (value <= 0.001) {
-      next
-    }
-    # Variable parsing logic - placeholder for extension
-  }
-  
-  # Summarize results
-  list(
-    mode = "cutting",
-    total_cost = round(total_cost, 2),
-    total_waste = round(total_waste, 2),
-    num_bins = length(raw_bins),
-    bin_plans = list(),
-    report = sprintf("Bins used: %d, Total cost: $%.2f", length(raw_bins), total_cost),
-    item_counts = list(),
-    status = "ok"
-  )
-}
-
-# Packing domain processor
-process_packing_results <- function(res, store) {
-  params <- parameter_map(store)
-  
-  items <- params$Items %||% c()
-  weights <- params$Weights %||% c()
-  values <- params$Values %||% c()
-  capacity <- safe_numeric(params$Capacity, 0)
-  
-  var_values <- list()
-  if (is.list(res$variables)) {
-    for (v in res$variables) {
-      var_name <- get_variable_name(v)
-      var_values[[var_name]] <- get_variable_value(v)
-    }
-  }
-  
-  selected <- list()
-  used <- 0.0
-  total_value <- 0.0
-  
-  for (i in seq_along(items)) {
-    qty <- safe_numeric(var_values[[sprintf("X_%d", i - 1)]], 0.0)
-    if (qty <= 0) {
-      next
-    }
-    item_weight <- safe_numeric(
-      if (i <= length(weights)) weights[[i]] else 0,
-      0
-    )
-    item_value <- safe_numeric(
-      if (i <= length(values)) values[[i]] else 0,
-      0
-    )
-    
-    selected[[length(selected) + 1]] <- list(
-      item = items[[i]],
-      count = qty,
-      weight = item_weight,
-      value = item_value
-    )
-    
-    used <- used + item_weight * qty
-    total_value <- total_value + item_value * qty
-  }
-  
-  usage_pct <- if (capacity > 0) (used / capacity * 100) else 0
-  
-  list(
-    mode = "packing",
-    total_value = round(total_value, 2),
-    used_capacity = round(used, 2),
-    capacity = round(capacity, 2),
-    items = selected,
-    report = sprintf(
-      "Total Value: %.2f\nUsed Capacity: %.2f / %.2f (%.1f%%)",
-      total_value, used, capacity, usage_pct
-    ),
-    status = normalize_status(res$status)
-  )
-}
-
-# VRP domain processor
-process_vrp_results <- function(res, store) {
-  routes <- res$routes %||% list()
-  unserved <- res$unserved %||% list()
-  total_distance <- safe_numeric(res$total_distance %||% res$objective, 0)
-  num_vehicles <- length(routes)
-  
-  list(
-    mode = "vrp",
-    total_distance = round(total_distance, 2),
-    num_vehicles = num_vehicles,
-    routes = routes,
-    unserved = unserved,
-    report = sprintf(
-      "Total Distance: %.2f\nVehicles Used: %d\nUnserved: %d",
-      total_distance, num_vehicles, length(unserved)
-    ),
-    status = res$status %||% "unknown"
-  )
-}
-
-# Resourcing domain processor
-process_resourcing_results <- function(res, store) {
-  params <- parameter_map(store)
-  
-  items <- params$Items %||% c()
-  weights <- params$Weights %||% c()
-  cap <- safe_numeric(params$Capacity, 0)
-  values <- params$Values %||% c()
-  
-  var_values <- list()
-  if (is.list(res$variables)) {
-    for (v in res$variables) {
-      var_name <- get_variable_name(v)
-      var_values[[var_name]] <- get_variable_value(v)
-    }
-  }
-  
-  selected <- list()
-  used <- 0.0
-  total_value <- 0.0
-  
-  for (i in seq_along(items)) {
-    qty <- safe_numeric(var_values[[sprintf("X_%d", i - 1)]], 0.0)
-    if (qty <= 0) {
-      next
-    }
-    
-    item_weight <- safe_numeric(if (i <= length(weights)) weights[[i]] else 0, 0)
-    item_value <- safe_numeric(if (i <= length(values)) values[[i]] else 0, 0)
-    
-    selected[[length(selected) + 1]] <- list(
-      item = items[[i]],
-      count = qty,
-      capacity_used = item_weight,
-      value = item_value
-    )
-    
-    used <- used + item_weight * qty
-    total_value <- total_value + item_value * qty
-  }
-  
-  usage_pct <- if (cap > 0) (used / cap * 100) else 0
-  
-  list(
-    mode = "resourcing",
-    total_value = round(total_value, 2),
-    used_capacity = round(used, 2),
-    capacity = round(cap, 2),
-    items = selected,
-    report = sprintf(
-      "Total Value: %.2f\nCapacity Used: %.2f / %.2f (%.1f%%)",
-      total_value, used, cap, usage_pct
-    ),
-    status = normalize_status(res$status)
-  )
-}
-
-# Scheduling domain processor
-process_scheduling_results <- function(res, store) {
-  params <- parameter_map(store)
-  
-  items <- params$Items %||% c()
-  shifts <- params$Shifts %||% list()
-  if (length(shifts) == 0) {
-    shifts <- names(params$Demands %||% list())
-  }
-  
-  var_values <- list()
-  if (is.list(res$variables)) {
-    for (v in res$variables) {
-      var_name <- get_variable_name(v)
-      var_values[[var_name]] <- get_variable_value(v)
-    }
-  }
-  
-  assignments <- list()
-  shift_counts <- sapply(shifts, function(s) 0)
-  
-  for (s_idx in seq_along(shifts)) {
-    for (e_idx in seq_along(items)) {
-      var_name <- sprintf("Assign_%d_%d", e_idx - 1, s_idx - 1)
-      val <- safe_numeric(var_values[[var_name]], 0.0)
-      if (val <= 0) {
-        next
-      }
-      
-      assignments[[length(assignments) + 1]] <- list(
-        employee = items[[e_idx]],
-        shift = shifts[[s_idx]],
-        value = val
-      )
-      
-      shift_counts[[s_idx]] <- shift_counts[[s_idx]] + round(val)
-    }
-  }
-  
-  list(
-    mode = "scheduling",
-    shift_coverage = as.list(shift_counts),
-    assignments = assignments,
-    report = sprintf(
-      "Total Assignments: %d\nShifts Covered: %d",
-      length(assignments), length(shifts)
-    ),
-    status = normalize_status(res$status)
-  )
-}
-
-# NLP domain processor
-process_nlp_results <- function(res, store) {
-  params <- parameter_map(store)
-  
-  variables <- res$variables %||% list()
-  constraints <- res$constraints %||% list()
-  details <- res$details %||% list()
-  
-  active_vars <- list()
-  for (v in variables) {
-    value <- safe_numeric(v$Value %||% v$value, 0.0)
-    if (abs(value) > 1e-9) {
-      active_vars[[length(active_vars) + 1]] <- list(
-        name = get_variable_name(v),
-        value = value
-      )
-    }
-  }
-  
-  list(
-    mode = "nlp",
-    status = tolower(res$status %||% "unknown"),
-    objective_value = safe_numeric(res$objective, 0),
-    variable_count = length(variables),
-    constraint_count = length(constraints),
-    active_variables = active_vars,
-    ga_hotspot_count = as.integer(details$ga_hotspot_count %||% 0),
-    report = sprintf(
-      "Objective: %.2f, Variables: %d, Constraints: %d, GA Hotspots: %d",
-      safe_numeric(res$objective, 0),
-      length(variables),
-      length(constraints),
-      as.integer(details$ga_hotspot_count %||% 0)
-    )
-  )
-}
-
-# Generic domain processor (fallback)
-process_generic_results <- function(res, store) {
-  params <- parameter_map(store)
-  variables <- res$variables %||% list()
-  
-  active_vars <- list()
-  for (v in variables) {
-    value <- safe_numeric(v$Value %||% v$value, 0.0)
-    if (abs(value) > 1e-6) {
-      active_vars[[length(active_vars) + 1]] <- list(
-        name = get_variable_name(v),
-        value = value
-      )
-    }
-  }
-  
-  list(
-    mode = "generic",
-    status = normalize_status(res$status),
-    objective_value = safe_numeric(res$objective, 0),
-    variable_count = length(variables),
-    constraint_count = length(res$constraints %||% list()),
-    active_variables = active_vars,
-    report = sprintf(
-      "Status: %s, Objective: %.2f, Variables: %d",
-      tolower(res$status %||% "unknown"),
-      safe_numeric(res$objective, 0),
-      length(variables)
-    )
-  )
 }
 
 # ============================================================================
@@ -578,4 +290,77 @@ process_sensitivity <- function(res, store, mode = NULL) {
   }
 
   process_general_sensitivity(res)
+}
+
+# ============================================================================
+# DECISION ANALYTICS (RUN HISTORY)
+# ============================================================================
+
+process_decision_analytics <- function(run_results,
+                                       mode = NULL,
+                                       confidence = 0.95,
+                                       n_boot = 1000,
+                                       seed = 42) {
+  analyze_run_history(
+    run_results = run_results,
+    mode = normalize_mode(mode),
+    confidence = confidence,
+    n_boot = n_boot,
+    seed = seed
+  )
+}
+
+compare_solver_performance <- function(run_results,
+                                       solver_labels,
+                                       mode = NULL,
+                                       confidence = 0.95,
+                                       n_boot = 1000,
+                                       seed = 42) {
+  compare_solver_variants(
+    run_results = run_results,
+    solver_labels = solver_labels,
+    mode = normalize_mode(mode),
+    confidence = confidence,
+    n_boot = n_boot,
+    seed = seed
+  )
+}
+
+build_executive_summary <- function(processed_result = NULL,
+                                    sensitivity = NULL,
+                                    decision_analytics = NULL) {
+  lines <- c()
+
+  if (is.list(processed_result)) {
+    mode <- as.character(processed_result$mode %||% "generic")
+    status <- as.character(processed_result$status %||% "unknown")
+    objective <- safe_numeric(processed_result$objective_value %||% processed_result$total_value %||% processed_result$total_distance, NA_real_)
+    lines <- c(lines, sprintf("Mode: %s", mode))
+    lines <- c(lines, sprintf("Status: %s", status))
+    if (is.finite(objective)) {
+      lines <- c(lines, sprintf("Primary objective metric: %.4f", objective))
+    }
+  }
+
+  if (is.list(sensitivity)) {
+    insight <- as.character(sensitivity$insight %||% "No sensitivity insight")
+    lines <- c(lines, sprintf("Sensitivity insight: %s", insight))
+  }
+
+  if (is.list(decision_analytics)) {
+    feasible_rate <- safe_numeric(decision_analytics$feasible_rate, NA_real_)
+    recommendation <- as.character(decision_analytics$recommendation %||% "No recommendation")
+    run_count <- as.integer(decision_analytics$run_count %||% 0)
+    lines <- c(lines, sprintf("Observed runs: %d", run_count))
+    if (is.finite(feasible_rate)) {
+      lines <- c(lines, sprintf("Feasible rate: %.2f%%", feasible_rate * 100.0))
+    }
+    lines <- c(lines, sprintf("Decision recommendation: %s", recommendation))
+  }
+
+  if (length(lines) == 0) {
+    return("No report inputs provided")
+  }
+
+  paste(lines, collapse = "\n")
 }
