@@ -76,7 +76,7 @@ bootstrap_ci <- function(values, confidence = 0.95, n_boot = 1000, seed = 42) {
   n <- length(x)
   for (b in seq_len(n_boot)) {
     idx <- sample.int(n, size = n, replace = TRUE)
-    boot_means[[b]] <- mean(x[[idx]], na.rm = TRUE)
+    boot_means[[b]] <- mean(x[idx], na.rm = TRUE)
   }
 
   alpha <- (1.0 - confidence) / 2.0
