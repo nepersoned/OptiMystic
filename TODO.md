@@ -1,85 +1,85 @@
 # OptiMystic TODO
 
-이 문서는 상용화 전까지의 단일 실행 체크리스트입니다.
+This document is the single execution checklist until production readiness.
 
-## 사용 규칙
+## Usage Rules
 
-- 작업 시작: `[ ]` -> `[~]`
-- 작업 완료: `[~]` -> `[x]`
-- 새 작업은 우선순위 섹션에 바로 추가
-- 애매하면 "완료 기준"을 먼저 적고 시작
+- Start work: `[ ]` -> `[~]`
+- Complete work: `[~]` -> `[x]`
+- Add new tasks directly under the relevant priority section
+- If a task is ambiguous, define the completion criteria first
 
-## 0. 오늘 바로 할 일 (Top Priority)
+## 0. Immediate Tasks (Top Priority)
 
-- [ ] Trace ID 생성 및 전체 요청 경로 전파
-- [ ] agent_loop 실행/툴 호출 로그를 구조화(JSON)로 통일
-- [ ] 모델 호출 비용 지표(요청당 토큰/비용) 기록
-- [ ] optimize 실행 멱등키(idempotency key) 설계 및 적용
-- [ ] Google API 타임아웃/재시도/백오프 정책 표준화
+- [ ] Create and propagate a Trace ID across the full request path
+- [ ] Standardize agent_loop and tool-call logs into structured JSON
+- [ ] Track model call cost metrics (tokens/cost per request)
+- [ ] Design and apply idempotency keys for optimize execution
+- [ ] Standardize timeout/retry/backoff policy for Google API calls
 
-## 1. 안정성 (Reliability)
+## 1. Reliability
 
-- [ ] 외부 LLM 호출 서킷 브레이커 도입
-- [ ] 툴 실행 실패 시 표준 fallback 응답 정의
-- [ ] 공통 예외 처리 계층 정리(에러 코드 일관화)
-- [ ] 장기 실행 작업 timeout 정책 통합
-- [ ] 재시도 가능/불가능 오류 분류표 작성
+- [ ] Introduce a circuit breaker for external LLM calls
+- [ ] Define a standard fallback response for tool execution failures
+- [ ] Consolidate common exception handling (consistent error codes)
+- [ ] Unify timeout policies for long-running tasks
+- [ ] Create a retryable vs non-retryable error classification table
 
-완료 기준:
-- [ ] 동일 요청 연타 시 중복 실행/중복 과금 없음
-- [ ] 외부 모델 장애 시 서비스 전체 다운 없이 제한 모드 동작
+Completion Criteria:
+- [ ] No duplicate execution or duplicate billing for repeated identical requests
+- [ ] Service stays available in degraded mode during external model outages
 
-## 2. 관측성 (Observability)
+## 2. Observability
 
-- [ ] 요청 단위 Trace ID + tool_call_id 연결
-- [ ] 단계별 지연 시간(LLM, tool, solver) 분해 측정
-- [ ] 실패율/지연/비용 대시보드 구성
-- [ ] 임계치 알람(실패율, 지연, 비용 급증) 설정
-- [ ] 로그 보관 정책(기간/용량) 확정
+- [ ] Link request-level Trace ID with tool_call_id
+- [ ] Break down latency by stage (LLM, tool, solver)
+- [ ] Build dashboards for failure rate, latency, and cost
+- [ ] Configure threshold alerts (failure, latency, cost spikes)
+- [ ] Finalize log retention policy (duration/capacity)
 
-완료 기준:
-- [ ] 장애 케이스 90% 이상이 Trace ID로 원인 추적 가능
+Completion Criteria:
+- [ ] Root cause is traceable via Trace ID for at least 90% of incidents
 
-## 3. 보안/권한 (Security & Ops)
+## 3. Security & Ops
 
-- [ ] GOOGLE_API_KEY 등 시크릿 저장소 전환
-- [ ] API 인증(AuthN) 적용
-- [ ] 프로젝트/조직 단위 인가(AuthZ) 정책 적용
-- [ ] 감사 로그(Audit Log) 저장
-- [ ] 환경별 설정(dev/stage/prod) 분리 검증
+- [ ] Migrate secrets (e.g., GOOGLE_API_KEY) to a secret manager
+- [ ] Apply API authentication (AuthN)
+- [ ] Apply project/org-level authorization policies (AuthZ)
+- [ ] Store audit logs
+- [ ] Validate strict environment separation (dev/stage/prod)
 
-완료 기준:
-- [ ] 코드/설정 파일 내 평문 시크릿 0건
-- [ ] 무권한 데이터 접근 차단 테스트 통과
+Completion Criteria:
+- [ ] Zero plaintext secrets in code/config files
+- [ ] Unauthorized data access blocking tests pass
 
-## 4. 품질/테스트 (Quality)
+## 4. Quality
 
-- [ ] 에이전트 회귀 테스트 시나리오 고정(핵심 도메인)
-- [ ] MCP 툴 계약 테스트 추가
-- [ ] 실패 재현용 fixture 데이터셋 구성
-- [ ] 성능 스모크 테스트 자동화
-- [ ] CI 품질 게이트(테스트 실패 시 merge 차단) 설정
+- [ ] Freeze agent regression test scenarios (core domains)
+- [ ] Add MCP tool contract tests
+- [ ] Build fixture datasets for failure reproduction
+- [ ] Automate performance smoke tests
+- [ ] Configure CI quality gates (block merge on test failure)
 
-완료 기준:
-- [ ] 핵심 시나리오 자동 회귀 80% 이상 커버
+Completion Criteria:
+- [ ] Automated regression covers at least 80% of core scenarios
 
-## 5. 제품화 기능 (Productization)
+## 5. Productization
 
-- [ ] DB 메모리 스키마 정의(session, message, tool_trace, summary)
-- [ ] 자연어 대화 엔드포인트(`/chat`) 분리 설계
-- [ ] R 분석 후처리 비동기 파이프라인 연결
-- [ ] 결과 리포트 조회 API 추가
-- [ ] 운영자용 상태 페이지(헬스/최근 오류/비용) 제공
+- [ ] Define DB memory schema (session, message, tool_trace, summary)
+- [ ] Design a separate natural-language chat endpoint (`/chat`)
+- [ ] Connect asynchronous post-processing pipeline for R analytics
+- [ ] Add result report retrieval API
+- [ ] Provide an operator status page (health/recent errors/cost)
 
-## 6. 도커/배포 운영
+## 6. Docker/Deployment Operations
 
-- [ ] docker 폴더 구조 기준 실행 명령 통일 문서화
-- [ ] AWS/Azure/GCP 배포 스크립트 smoke 검증
-- [ ] 배포 롤백 절차(runbook) 추가
-- [ ] 이미지 태깅 정책(commit sha 기반) 확정
-- [ ] 프로덕션 배포 체크리스트 고정
+- [ ] Standardize documented run commands for the docker folder structure
+- [ ] Smoke-validate deployment scripts for AWS/Azure/GCP
+- [ ] Add deployment rollback runbook
+- [ ] Finalize image tagging policy (commit SHA-based)
+- [ ] Finalize production deployment checklist
 
-## 메모
+## Notes
 
-- 이 파일 하나만 기준으로 진행
-- 주간 계획 대신 체크박스 상태로 진척 관리
+- Use this file as the single source of truth
+- Track progress via checkbox state instead of weekly plans
