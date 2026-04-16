@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -200,6 +201,106 @@ def build_domain_payload_from_records(domain: str, records: List[Dict[str, Any]]
         return {"IR": {"meta": {"domain": "generic"}, "variables": [], "objective": [], "constraints": []}}
 
     raise ValueError(f"지원하지 않는 domain 입니다: {domain}")
+
+
+def apply_forecast_to_payload(
+    domain: str,
+    payload: Dict[str, Any],
+    forecast_rows: List[Dict[str, Any]],
+    bound: str = "upper",
+    min_demand: int = 1,
+    round_mode: str = "ceil",
+) -> Dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise ValueError("payload must be a dict")
+    if not isinstance(forecast_rows, list) or not forecast_rows:
+        raise ValueError("forecast_rows must be a non-empty list")
+
+    value_key = (bound or "upper").strip().lower()
+    if value_key not in {"lower", "point", "upper", "recommended_demand"}:
+        raise ValueError("bound must be one of: lower, point, upper, recommended_demand")
+
+    round_key = (round_mode or "ceil").strip().lower()
+    if round_key not in {"ceil", "floor", "round"}:
+        raise ValueError("round_mode must be one of: ceil, floor, round")
+
+    def _to_int(value: Any) -> int | None:
+        try:
+            raw = float(value)
+        except Exception:
+            return None
+        if round_key == "floor":
+            out = math.floor(raw)
+        elif round_key == "round":
+            out = int(round(raw))
+        else:
+            out = math.ceil(raw)
+        return max(int(min_demand), int(out))
+
+    by_name: Dict[str, int] = {}
+    all_value: int | None = None
+
+    for row in forecast_rows:
+        if not isinstance(row, dict):
+            continue
+        item_name = str(row.get("item", "")).strip()
+        chosen = row.get(value_key, row.get("upper"))
+        demand = _to_int(chosen)
+        if demand is None:
+            continue
+        if item_name.lower() == "all" or not item_name:
+            all_value = demand if all_value is None else max(all_value, demand)
+            continue
+        prev = by_name.get(item_name)
+        by_name[item_name] = demand if prev is None else max(prev, demand)
+
+    normalized_domain = (domain or "").strip().lower()
+    updated = 0
+    updated_items: List[str] = []
+
+    def _apply(rows: List[Dict[str, Any]], name_key: str, demand_key: str, skip_first: bool = False) -> None:
+        nonlocal updated
+        start_index = 1 if skip_first else 0
+        for row in rows[start_index:]:
+            if not isinstance(row, dict):
+                continue
+            name = str(row.get(name_key, "")).strip()
+            new_demand = by_name.get(name)
+            if new_demand is None and all_value is not None:
+                new_demand = all_value
+            if new_demand is None:
+                continue
+            row[demand_key] = int(new_demand)
+            updated += 1
+            updated_items.append(name or f"index_{updated}")
+
+    if normalized_domain == "packing":
+        items = payload.get("Items")
+        if isinstance(items, list):
+            _apply(items, "Name", "Demand")
+    elif normalized_domain == "cutting":
+        items = payload.get("Items")
+        if isinstance(items, list):
+            _apply(items, "Name", "Demand")
+    elif normalized_domain == "scheduling":
+        shifts = payload.get("Shifts")
+        if isinstance(shifts, list):
+            _apply(shifts, "Name", "Demand")
+    elif normalized_domain == "vrp":
+        nodes = payload.get("Nodes")
+        if isinstance(nodes, list):
+            _apply(nodes, "Name", "Demand", skip_first=True)
+
+    return {
+        "payload": payload,
+        "meta": {
+            "domain": normalized_domain,
+            "bound": value_key,
+            "round_mode": round_key,
+            "updated_count": updated,
+            "updated_items": updated_items,
+        },
+    }
 
 
 def logical_error_feedback(domain: str, params: Dict[str, Any], result: Dict[str, Any]) -> Dict[str, Any] | None:

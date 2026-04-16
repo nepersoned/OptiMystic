@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from python_solvers.api.solver_api import run_optimization
 from python_solvers.mcp_schema import DOMAIN_PARAM_MODELS, DomainName, OptimizationRequest
 from python_solvers.mcp_utils import (
+    apply_forecast_to_payload,
     build_domain_payload_from_records,
     load_dataframe_from_path,
     logical_error_feedback,
@@ -15,6 +16,7 @@ from python_solvers.mcp_utils import (
     to_jsonable,
     validation_feedback,
 )
+from python_solvers.forecasting import forecast_demand as run_forecast_demand
 from python_solvers.r_bridge import ensure_r_bridge, run_r_post_analysis
 
 
@@ -118,6 +120,81 @@ def read_company_data(file_path: str, max_rows: int = 3) -> Dict[str, Any]:
             "ok": False,
             "error": {
                 "code": "read_company_data_failed",
+                "message": str(exc),
+            },
+        }
+
+
+@mcp.tool(
+    name="forecast_demand",
+    description=(
+        "Forecast demand from historical CSV/XLSX time-series using StatsForecast AutoARIMA. "
+        "Returns point forecast and confidence bounds that can be fed into optimization."
+    ),
+)
+def forecast_demand(
+    file_path: str,
+    time_col: str,
+    target_col: str,
+    item_col: str | None = None,
+    horizon: int = 7,
+    freq: str = "D",
+    confidence_level: int = 95,
+) -> Dict[str, Any]:
+    try:
+        return run_forecast_demand(
+            file_path=file_path,
+            time_col=time_col,
+            target_col=target_col,
+            item_col=item_col,
+            horizon=horizon,
+            freq=freq,
+            level=confidence_level,
+        )
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error": {
+                "code": "forecast_demand_failed",
+                "message": str(exc),
+            },
+        }
+
+
+@mcp.tool(
+    name="bridge_forecast_to_payload",
+    description=(
+        "Apply forecast output rows to optimization payload demand fields. "
+        "Use this after forecast_demand and before optimize for robust planning."
+    ),
+)
+def bridge_forecast_to_payload(
+    domain: DomainName,
+    payload: Dict[str, Any],
+    forecast_rows: List[Dict[str, Any]],
+    bound: str = "upper",
+    min_demand: int = 1,
+    round_mode: str = "ceil",
+) -> Dict[str, Any]:
+    try:
+        merged = apply_forecast_to_payload(
+            domain=domain,
+            payload=dict(payload) if isinstance(payload, dict) else {},
+            forecast_rows=forecast_rows,
+            bound=bound,
+            min_demand=min_demand,
+            round_mode=round_mode,
+        )
+        return {
+            "ok": True,
+            "payload": merged["payload"],
+            "meta": merged["meta"],
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error": {
+                "code": "bridge_forecast_to_payload_failed",
                 "message": str(exc),
             },
         }

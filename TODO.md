@@ -72,7 +72,8 @@ Completion Criteria:
 - [ ] Provide an operator status page (health/recent errors/cost)
 - [x] Add optional PostgreSQL-backed optimization run history endpoint (`/runs`)
 - [x] Expose R post-analysis capability as MCP tool (`analyze_with_r`)
-- [x] Keep forecasting/prediction scope deferred until requirements are finalized
+- [x] Add StatsForecast-based forecasting MCP tool (`forecast_demand`) baseline
+- [x] Add forecast-to-optimization bridge MCP tool (`bridge_forecast_to_payload`)
 
 ## 6. Docker/Deployment Operations
 

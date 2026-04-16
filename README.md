@@ -12,8 +12,8 @@ OptiMystic is a multi-domain optimization platform built on Python, Julia, and R
 - Domain analytics and visualization layer in R
 
 Current scope note:
-- Forecast/prediction features are intentionally deferred for a later phase.
-- Current priority is optimization + post-analysis workflow quality.
+- Forecasting baseline is now enabled via `forecast_demand` MCP tool.
+- Current priority is optimization + forecasting + post-analysis workflow quality.
 
 ## Current Production Direction
 
@@ -37,7 +37,7 @@ User / App / Agent
   -> Structured JSON result
 
 LLM Agent Loop
-  -> FastMCP tools (read_company_data, get_target_schema, map_to_target_schema, optimize, analyze_with_r)
+  -> FastMCP tools (read_company_data, forecast_demand, bridge_forecast_to_payload, get_target_schema, map_to_target_schema, optimize, analyze_with_r)
   -> self-healing retry + mapping auto-fill + argument normalization
 ```
 
@@ -93,6 +93,32 @@ The MCP server now exposes `analyze_with_r` for post-analysis on solver outputs.
 - Returns: `processed_result`, `sensitivity`, `decision_analytics`, `executive_summary`
 
 This is intended for diagnostics/reporting after optimization, not for forecasting.
+
+## Forecasting via MCP
+
+The MCP server exposes `forecast_demand` powered by StatsForecast AutoARIMA.
+
+- Required: `file_path`, `time_col`, `target_col`
+- Optional: `item_col`, `horizon`, `freq`, `confidence_level`
+- Returns: point/lower/upper forecast rows and `recommended_demand` (upper bound)
+
+Runtime note:
+- If `statsforecast` is available, it uses AutoARIMA.
+- If not installed, it falls back to a lightweight CPU baseline (`fallback-last-value`) so the pipeline remains available.
+
+Windows + Python 3.13 note:
+- `statsforecast` can fail to install in some Python 3.13 environments.
+- Recommended path is a dedicated Python 3.12 env for forecasting engine activation.
+
+```powershell
+cd C:\Projects\OptiMystic
+.\scripts\setup_py312_forecasting.ps1
+```
+
+Recommended integration for optimization:
+1. Forecast with `forecast_demand`
+2. Bridge with `bridge_forecast_to_payload` using bound=`upper`
+3. Run `optimize`
 
 ## Docker Local Run
 
