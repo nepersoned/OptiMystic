@@ -1,0 +1,130 @@
+from __future__ import annotations
+
+import importlib
+import json
+import os
+from pathlib import Path
+from typing import Any, Dict, List
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+R_SOLVERS_DIR = PROJECT_ROOT / "r_solvers"
+
+
+def _configure_r_runtime_paths() -> None:
+    """Ensure Windows can resolve R shared-library dependencies before importing rpy2."""
+    if os.name != "nt":
+        return
+
+    candidates = []
+    r_home_env = os.environ.get("R_HOME")
+    if r_home_env:
+        candidates.append(Path(r_home_env))
+
+    candidates.append(Path("C:/Program Files/R/R-4.5.3"))
+
+    r_home = None
+    for candidate in candidates:
+        if (candidate / "bin" / "x64").exists():
+            r_home = candidate
+            break
+
+    if r_home is None:
+        return
+
+    os.environ.setdefault("R_HOME", str(r_home))
+    r_bin = r_home / "bin" / "x64"
+    current_path = os.environ.get("PATH", "")
+    if str(r_bin) not in current_path:
+        os.environ["PATH"] = f"{r_bin};{current_path}" if current_path else str(r_bin)
+
+    add_dll_directory = getattr(os, "add_dll_directory", None)
+    if callable(add_dll_directory):
+        try:
+            add_dll_directory(str(r_bin))
+        except OSError:
+            pass
+
+
+def _get_robjects() -> Any:
+    _configure_r_runtime_paths()
+    return importlib.import_module("rpy2.robjects")
+
+
+def _json_from_r_var(ro: Any, var_name: str) -> Dict[str, Any]:
+    json_text = str(ro.r(f"jsonlite::toJSON({var_name}, auto_unbox = TRUE, null = 'null')")[0])
+    return json.loads(json_text)
+
+
+def ensure_r_bridge() -> Dict[str, Any]:
+    ro = _get_robjects()
+
+    ro.globalenv["optimystic_r_dir"] = R_SOLVERS_DIR.as_posix()
+    ro.r("setwd(optimystic_r_dir)")
+
+    for package in ("jsonlite", "ggplot2", "dplyr", "tidyr"):
+        ro.r(f"library({package})")
+
+    ro.r("source('utils.R')")
+    ro.r("source('plotting.R')")
+    ro.r("source('processors.R')")
+
+    return {
+        "ok": True,
+        "r_version": str(ro.r("R.version.string")[0]),
+        "r_workdir": R_SOLVERS_DIR.as_posix(),
+    }
+
+
+def run_r_post_analysis(
+    mode: str,
+    run_result: Dict[str, Any],
+    run_results: List[Dict[str, Any]],
+    store: Dict[str, Any] | None = None,
+    confidence: float = 0.95,
+    n_boot: int = 500,
+    seed: int = 42,
+) -> Dict[str, Any]:
+    ro = _get_robjects()
+
+    normalized_store = store if isinstance(store, dict) else {"parameters": []}
+    normalized_mode = str(mode or "generic")
+    normalized_result = run_result if isinstance(run_result, dict) else {}
+    normalized_history = [r for r in (run_results or []) if isinstance(r, dict)]
+
+    if not normalized_history and normalized_result:
+        normalized_history = [normalized_result]
+
+    if not normalized_result and normalized_history:
+        normalized_result = normalized_history[0]
+
+    ro.globalenv["optimystic_result_json"] = json.dumps(normalized_result, ensure_ascii=True)
+    ro.globalenv["optimystic_store_json"] = json.dumps(normalized_store, ensure_ascii=True)
+    ro.globalenv["optimystic_runs_json"] = json.dumps(normalized_history, ensure_ascii=True)
+    ro.globalenv["optimystic_mode"] = normalized_mode
+    ro.globalenv["optimystic_confidence"] = float(confidence)
+    ro.globalenv["optimystic_n_boot"] = int(max(10, n_boot))
+    ro.globalenv["optimystic_seed"] = int(seed)
+
+    ro.r("optimystic_result <- jsonlite::fromJSON(optimystic_result_json, simplifyVector = FALSE)")
+    ro.r("optimystic_store <- jsonlite::fromJSON(optimystic_store_json, simplifyVector = FALSE)")
+    ro.r("optimystic_runs <- jsonlite::fromJSON(optimystic_runs_json, simplifyVector = FALSE)")
+
+    ro.r("optimystic_processed <- process_results(optimystic_result, optimystic_store, optimystic_mode)")
+    ro.r("optimystic_sensitivity <- process_sensitivity(optimystic_result, optimystic_store, optimystic_mode)")
+    ro.r(
+        "optimystic_decision <- process_decision_analytics("
+        "optimystic_runs, mode = optimystic_mode, confidence = optimystic_confidence, "
+        "n_boot = optimystic_n_boot, seed = optimystic_seed)"
+    )
+    ro.r(
+        "optimystic_summary <- build_executive_summary("
+        "optimystic_processed, optimystic_sensitivity, optimystic_decision)"
+    )
+
+    return {
+        "processed_result": _json_from_r_var(ro, "optimystic_processed"),
+        "sensitivity": _json_from_r_var(ro, "optimystic_sensitivity"),
+        "decision_analytics": _json_from_r_var(ro, "optimystic_decision"),
+        "executive_summary": str(ro.r("optimystic_summary")[0]),
+    }

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from fastmcp import FastMCP
 from pydantic import ValidationError
@@ -15,6 +15,7 @@ from python_solvers.mcp_utils import (
     to_jsonable,
     validation_feedback,
 )
+from python_solvers.r_bridge import ensure_r_bridge, run_r_post_analysis
 
 
 mcp = FastMCP("OptiMystic AI COO")
@@ -225,6 +226,88 @@ def get_target_schema(domain: DomainName) -> Dict[str, Any]:
         "domain": domain,
         "schema": to_jsonable(schema_model.model_json_schema()),
     }
+
+
+def _analyze_with_r_impl(
+    mode: DomainName,
+    run_result: Dict[str, Any] | None = None,
+    run_results: List[Dict[str, Any]] | None = None,
+    store: Dict[str, Any] | None = None,
+    confidence: float = 0.95,
+    n_boot: int = 500,
+    seed: int = 42,
+) -> Dict[str, Any]:
+    try:
+        bridge = ensure_r_bridge()
+
+        normalized_result = run_result if isinstance(run_result, dict) else {}
+        normalized_history = [row for row in (run_results or []) if isinstance(row, dict)]
+
+        if not normalized_result and normalized_history:
+            normalized_result = normalized_history[0]
+        if not normalized_history and normalized_result:
+            normalized_history = [normalized_result]
+
+        if not normalized_result:
+            return {
+                "ok": False,
+                "error": {
+                    "code": "invalid_analysis_input",
+                    "message": "run_result 또는 run_results 중 최소 1개는 필요합니다.",
+                },
+            }
+
+        analysis = run_r_post_analysis(
+            mode=mode,
+            run_result=normalized_result,
+            run_results=normalized_history,
+            store=store,
+            confidence=confidence,
+            n_boot=n_boot,
+            seed=seed,
+        )
+
+        return {
+            "ok": True,
+            "r_bridge": bridge,
+            "analysis": to_jsonable(analysis),
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error": {
+                "code": "r_analysis_failed",
+                "message": str(exc),
+            },
+        }
+
+
+@mcp.tool(
+    name="analyze_with_r",
+    description=(
+        "Run post-analysis with r_solvers through rpy2. "
+        "Accepts single run result or run history and returns processed_result, sensitivity, "
+        "decision analytics, and executive summary."
+    ),
+)
+def analyze_with_r(
+    mode: DomainName,
+    run_result: Dict[str, Any] | None = None,
+    run_results: List[Dict[str, Any]] | None = None,
+    store: Dict[str, Any] | None = None,
+    confidence: float = 0.95,
+    n_boot: int = 500,
+    seed: int = 42,
+) -> Dict[str, Any]:
+    return _analyze_with_r_impl(
+        mode=mode,
+        run_result=run_result,
+        run_results=run_results,
+        store=store,
+        confidence=confidence,
+        n_boot=n_boot,
+        seed=seed,
+    )
 
 
 def main() -> None:

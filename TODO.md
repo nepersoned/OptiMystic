@@ -70,6 +70,9 @@ Completion Criteria:
 - [ ] Connect asynchronous post-processing pipeline for R analytics
 - [ ] Add result report retrieval API
 - [ ] Provide an operator status page (health/recent errors/cost)
+- [x] Add optional PostgreSQL-backed optimization run history endpoint (`/runs`)
+- [x] Expose R post-analysis capability as MCP tool (`analyze_with_r`)
+- [x] Keep forecasting/prediction scope deferred until requirements are finalized
 
 ## 6. Docker/Deployment Operations
 

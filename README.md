@@ -11,6 +11,10 @@ OptiMystic is a multi-domain optimization platform built on Python, Julia, and R
 - Docker-based local/cloud runtime
 - Domain analytics and visualization layer in R
 
+Current scope note:
+- Forecast/prediction features are intentionally deferred for a later phase.
+- Current priority is optimization + post-analysis workflow quality.
+
 ## Current Production Direction
 
 Active stack:
@@ -33,7 +37,7 @@ User / App / Agent
   -> Structured JSON result
 
 LLM Agent Loop
-  -> FastMCP tools (read_company_data, get_target_schema, map_to_target_schema, optimize)
+  -> FastMCP tools (read_company_data, get_target_schema, map_to_target_schema, optimize, analyze_with_r)
   -> self-healing retry + mapping auto-fill + argument normalization
 ```
 
@@ -79,6 +83,16 @@ $env:GOOGLE_API_KEY="<YOUR_KEY>"
 Expected success signal:
 - `"ok": true`
 - `"status": "Optimal"` in optimize result trace
+
+## R Post-Analysis via MCP
+
+The MCP server now exposes `analyze_with_r` for post-analysis on solver outputs.
+
+- Required: `mode` and one of `run_result` or `run_results`
+- Optional: `store`, `confidence`, `n_boot`, `seed`
+- Returns: `processed_result`, `sensitivity`, `decision_analytics`, `executive_summary`
+
+This is intended for diagnostics/reporting after optimization, not for forecasting.
 
 ## Docker Local Run
 
