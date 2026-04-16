@@ -12,12 +12,20 @@ try:
 except Exception:
     OpenAI = None
 
+try:
+    from google import genai as google_genai
+    from google.genai import types as google_types
+except Exception:
+    google_genai = None
+    google_types = None
+
 from python_solvers.mcp_server import mcp
 
 
 DEFAULT_MODEL = "gemma4:e2b"
 DEFAULT_FALLBACK_MODEL = "gemma4:e2b"
 DEFAULT_LLM_PROVIDER = "ollama"
+DEFAULT_GOOGLE_MODEL = "gemma-4-26b-a4b-it"
 MAX_STEPS = 4
 CHAT_TIMEOUT_SEC = 45
 MAX_CONTEXT_MESSAGES = 24
@@ -195,6 +203,129 @@ async def _chat_openai(model: str, messages: List[Dict[str, Any]], tools: List[D
     )
 
 
+def _build_google_client() -> Any:
+    if google_genai is None:
+        raise RuntimeError("google-genai package is not installed. Run: pip install google-genai")
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        raise RuntimeError("GOOGLE_API_KEY environment variable is not set.")
+    return google_genai.Client(api_key=api_key)
+
+
+def _convert_tools_to_google(tools: List[Dict[str, Any]]) -> Any:
+    """Convert OpenAI-style tools list to a google.genai Tool object."""
+    if google_types is None:
+        return None
+    fn_decls: List[Dict[str, Any]] = []
+    for t in tools:
+        fn = t.get("function") or {}
+        fn_decls.append({
+            "name": fn.get("name", ""),
+            "description": fn.get("description", ""),
+            "parameters": fn.get("parameters") or {"type": "object", "properties": {}},
+        })
+    return google_types.Tool(function_declarations=fn_decls)
+
+
+def _convert_messages_to_google(messages: List[Dict[str, Any]]) -> tuple:
+    """Convert OpenAI-style messages to (system_instruction_str, contents_list)."""
+    if google_types is None:
+        return None, []
+    system_parts: List[str] = []
+    contents: List[Any] = []
+    for msg in messages:
+        role = msg.get("role", "user")
+        content = msg.get("content") or ""
+        if role == "system":
+            if content:
+                system_parts.append(content)
+        elif role == "user":
+            if content:
+                contents.append(google_types.Content(role="user", parts=[google_types.Part(text=content)]))
+        elif role == "assistant":
+            tool_calls = msg.get("tool_calls") or []
+            parts: List[Any] = []
+            if content:
+                parts.append(google_types.Part(text=content))
+            for tc in tool_calls:
+                fn = tc.get("function") or {}
+                name = fn.get("name", "")
+                arguments = fn.get("arguments", "{}")
+                if isinstance(arguments, str):
+                    try:
+                        args: Dict[str, Any] = json.loads(arguments)
+                    except Exception:
+                        args = {}
+                else:
+                    args = arguments if isinstance(arguments, dict) else {}
+                parts.append(google_types.Part(
+                    function_call=google_types.FunctionCall(name=name, args=args)
+                ))
+            if parts:
+                contents.append(google_types.Content(role="model", parts=parts))
+        elif role == "tool":
+            name = msg.get("name", "")
+            try:
+                result: Any = json.loads(content) if isinstance(content, str) else content
+            except Exception:
+                result = {"content": content}
+            contents.append(google_types.Content(
+                role="user",
+                parts=[google_types.Part(
+                    function_response=google_types.FunctionResponse(
+                        name=name,
+                        response=result if isinstance(result, dict) else {"content": str(result)},
+                    )
+                )],
+            ))
+    system_instruction = "\n\n".join(system_parts) if system_parts else None
+    return system_instruction, contents
+
+
+def _chat_google_sync(model: str, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]) -> Dict[str, Any]:
+    client = _build_google_client()
+    google_tool = _convert_tools_to_google(tools)
+    system_instruction, contents = _convert_messages_to_google(messages)
+    config_kwargs: Dict[str, Any] = {
+        "temperature": 0.1,
+    }
+    if google_tool:
+        config_kwargs["tools"] = [google_tool]
+    if system_instruction:
+        config_kwargs["system_instruction"] = system_instruction
+    config = google_types.GenerateContentConfig(**config_kwargs)
+    response = client.models.generate_content(
+        model=model,
+        contents=contents,
+        config=config,
+    )
+    tool_calls: List[Dict[str, Any]] = []
+    if response.function_calls:
+        for fc in response.function_calls:
+            tool_calls.append({
+                "type": "function",
+                "function": {
+                    "name": str(fc.name),
+                    "arguments": json.dumps(_to_jsonable(dict(fc.args) if fc.args else {}), ensure_ascii=False),
+                },
+            })
+    text_content = ""
+    try:
+        text_content = response.text or ""
+    except Exception:
+        pass
+    return {
+        "message": {
+            "content": text_content,
+            "tool_calls": tool_calls,
+        }
+    }
+
+
+async def _chat_google(model: str, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]) -> Dict[str, Any]:
+    return await asyncio.to_thread(_chat_google_sync, model, messages, tools)
+
+
 async def _chat_with_provider(
     provider: str,
     model: str,
@@ -204,6 +335,8 @@ async def _chat_with_provider(
     provider_key = (provider or "").strip().lower()
     if provider_key == "openai":
         return await _chat_openai(model=model, messages=messages, tools=tools)
+    if provider_key == "google":
+        return await _chat_google(model=model, messages=messages, tools=tools)
     return await _chat_ollama(model=model, messages=messages, tools=tools)
 
 
@@ -474,12 +607,16 @@ def parse_args() -> argparse.Namespace:
         default="examples/sample.csv를 먼저 읽고 packing 도메인으로 가능한 최적화까지 진행해줘.",
         help="User request for the agent loop",
     )
-    parser.add_argument("--model", default=DEFAULT_MODEL, help="Ollama model name")
+    parser.add_argument(
+        "--model",
+        default=DEFAULT_MODEL,
+        help="Model name (Ollama: 'gemma4:e2b', Google: 'gemma-4-26b-a4b-it', OpenAI-compat: any)",
+    )
     parser.add_argument(
         "--llm-provider",
-        choices=["ollama", "openai"],
+        choices=["ollama", "openai", "google"],
         default=DEFAULT_LLM_PROVIDER,
-        help="LLM backend provider: ollama (local) or openai-compatible endpoint (e.g., vLLM)",
+        help="LLM backend provider: ollama (local), openai (vLLM endpoint), google (Gemini API)",
     )
     parser.add_argument(
         "--fallback-model",
@@ -493,11 +630,18 @@ def parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = parse_args()
+    # Google provider 지정 시 모델이 기본값(Ollama) 그대로면 Google 기본 모델로 교체
+    resolved_model = args.model
+    if args.llm_provider == "google" and resolved_model == DEFAULT_MODEL:
+        resolved_model = DEFAULT_GOOGLE_MODEL
+    resolved_fallback = args.fallback_model
+    if args.llm_provider == "google" and resolved_fallback == DEFAULT_FALLBACK_MODEL:
+        resolved_fallback = DEFAULT_GOOGLE_MODEL
     outcome = asyncio.run(
         run_agent_loop(
             user_query=args.query,
-            model=args.model,
-            fallback_model=args.fallback_model,
+            model=resolved_model,
+            fallback_model=resolved_fallback,
             llm_provider=args.llm_provider,
             max_steps=args.max_steps,
             chat_timeout_sec=args.chat_timeout_sec,
