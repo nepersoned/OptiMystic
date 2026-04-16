@@ -77,14 +77,14 @@ Expected success signal:
 API + Jupyter:
 
 ```powershell
-docker compose up --build api jupyterlab
+docker compose -f docker/docker-compose.yml up --build api jupyterlab
 ```
 
 Agent smoke (Google):
 
 ```powershell
 $env:GOOGLE_API_KEY="<YOUR_KEY>"
-docker compose --profile agent run --rm agent-loop
+docker compose -f docker/docker-compose.yml --profile agent run --rm agent-loop
 ```
 
 ## Cloud Deployment
@@ -95,9 +95,9 @@ Available runbooks:
 - GCP: `deploy/gcp/README.md`
 
 Compose files:
-- `docker-compose.aws.yml`
-- `docker-compose.azure.yml`
-- `docker-compose.gcp.yml`
+- `docker/docker-compose.aws.yml`
+- `docker/docker-compose.azure.yml`
+- `docker/docker-compose.gcp.yml`
 
 ## Minimal Request Contract
 

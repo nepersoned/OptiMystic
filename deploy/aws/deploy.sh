@@ -13,10 +13,10 @@ if [[ ! -f deploy/aws/.env.app ]]; then
 fi
 
 echo "[1/4] build images"
-docker compose -f docker-compose.aws.yml build api
+docker compose -f docker/docker-compose.aws.yml build api
 
 echo "[2/4] start API"
-docker compose --env-file deploy/aws/.env.app -f docker-compose.aws.yml up -d api
+docker compose --env-file deploy/aws/.env.app -f docker/docker-compose.aws.yml up -d api
 
 echo "[3/4] health check"
 for i in {1..20}; do
@@ -32,6 +32,6 @@ for i in {1..20}; do
 done
 
 echo "[4/4] optional agent smoke test"
-docker compose --env-file deploy/aws/.env.app -f docker-compose.aws.yml --profile smoke run --rm agent-smoke || true
+docker compose --env-file deploy/aws/.env.app -f docker/docker-compose.aws.yml --profile smoke run --rm agent-smoke || true
 
 echo "Deployment finished"

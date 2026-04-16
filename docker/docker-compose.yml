@@ -1,8 +1,8 @@
 services:
   api:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     image: optimystic-api:latest
     container_name: optimystic-api
     ports:
@@ -18,8 +18,8 @@ services:
 
   jupyterlab:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     image: optimystic-jupyterlab:latest
     container_name: optimystic-jupyterlab
     ports:
@@ -32,14 +32,14 @@ services:
       JUPYTER_ENABLE_LAB: "yes"
     command: ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root", "--ServerApp.token=", "--ServerApp.password=", "--ServerApp.root_dir=/app"]
     volumes:
-      - ./:/app
+      - ../:/app
     working_dir: /app
     restart: unless-stopped
 
   agent-loop:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     image: optimystic-agent-loop:latest
     container_name: optimystic-agent-loop
     profiles: ["agent"]

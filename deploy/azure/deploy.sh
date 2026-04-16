@@ -10,7 +10,7 @@ if [[ ! -f deploy/azure/.env.app ]]; then
 fi
 
 echo "[1/4] Build and start API"
-docker compose --env-file deploy/azure/.env.app -f docker-compose.azure.yml up -d --build api
+docker compose --env-file deploy/azure/.env.app -f docker/docker-compose.azure.yml up -d --build api
 
 echo "[2/4] Check API health"
 for i in {1..20}; do
@@ -26,7 +26,7 @@ for i in {1..20}; do
 done
 
 echo "[3/4] Optional agent smoke"
-docker compose --env-file deploy/azure/.env.app -f docker-compose.azure.yml --profile smoke run --rm agent-smoke || true
+docker compose --env-file deploy/azure/.env.app -f docker/docker-compose.azure.yml --profile smoke run --rm agent-smoke || true
 
 echo "[4/4] done"
 

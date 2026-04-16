@@ -1,12 +1,12 @@
 services:
   api:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     image: optimystic-api:${OPTIMYSTIC_IMAGE_TAG:-latest}
     container_name: optimystic-api
     env_file:
-      - deploy/aws/.env.app
+      - ../deploy/gcp/.env.app
     command:
       [
         "python3",
@@ -30,13 +30,13 @@ services:
 
   agent-smoke:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     image: optimystic-agent-loop:${OPTIMYSTIC_IMAGE_TAG:-latest}
     container_name: optimystic-agent-smoke
     profiles: ["smoke"]
     env_file:
-      - deploy/aws/.env.app
+      - ../deploy/gcp/.env.app
     command:
       [
         "python3",
