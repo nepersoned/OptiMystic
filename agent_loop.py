@@ -26,7 +26,7 @@ DEFAULT_MODEL = "gemma4:e2b"
 DEFAULT_FALLBACK_MODEL = "gemma4:e2b"
 DEFAULT_LLM_PROVIDER = "ollama"
 DEFAULT_GOOGLE_MODEL = "gemma-4-26b-a4b-it"
-MAX_STEPS = 4
+MAX_STEPS = 8
 CHAT_TIMEOUT_SEC = 45
 MAX_CONTEXT_MESSAGES = 24
 
@@ -40,7 +40,12 @@ def build_system_prompt() -> str:
         "3) After valid payload exists, call optimize.\n"
         "4) If tool returns validation_error/optimization_infeasible/optimization_unbounded, self-correct and try again.\n"
         "5) Keep answers concise and execution-focused.\n"
-        "6) Never fabricate tool outputs; rely only on tool observations."
+        "6) Never fabricate tool outputs; rely only on tool observations.\n"
+        "7) CRITICAL: Always include ALL required arguments when calling a tool. Never call a tool with empty arguments {}.\n"
+        "   - read_company_data requires: file_path\n"
+        "   - get_target_schema requires: domain\n"
+        "   - map_to_target_schema requires: file_path, domain, mapping_rule\n"
+        "   - optimize requires: request={domain, solver, params}"
     )
 
 
@@ -160,17 +165,19 @@ def _normalize_openai_tool_calls(raw_tool_calls: Any) -> List[Dict[str, Any]]:
 
     for tc in raw_tool_calls:
         fn = getattr(tc, "function", None)
+        tc_id = getattr(tc, "id", None)
         name = getattr(fn, "name", "") if fn else ""
         arguments = getattr(fn, "arguments", "{}") if fn else "{}"
-        out.append(
-            {
-                "type": "function",
-                "function": {
-                    "name": str(name),
-                    "arguments": arguments if isinstance(arguments, str) else json.dumps(_to_jsonable(arguments), ensure_ascii=False),
-                },
-            }
-        )
+        item: Dict[str, Any] = {
+            "type": "function",
+            "function": {
+                "name": str(name),
+                "arguments": arguments if isinstance(arguments, str) else json.dumps(_to_jsonable(arguments), ensure_ascii=False),
+            },
+        }
+        if tc_id:
+            item["id"] = str(tc_id)
+        out.append(item)
     return out
 
 
@@ -212,6 +219,38 @@ def _build_google_client() -> Any:
     return google_genai.Client(api_key=api_key)
 
 
+_GOOGLE_SCHEMA_ALLOWED = {
+    "type", "description", "properties", "required", "items",
+    "enum", "anyOf", "allOf", "oneOf", "not", "format",
+    "minimum", "maximum", "minLength", "maxLength",
+    "minItems", "maxItems", "additionalProperties",
+}
+
+
+def _clean_schema_for_google(schema: Any) -> Any:
+    """Recursively strip JSON Schema fields that Google SDK rejects (e.g. 'examples', '$ref')."""
+    if isinstance(schema, dict):
+        cleaned: Dict[str, Any] = {}
+        for k, v in schema.items():
+            if k not in _GOOGLE_SCHEMA_ALLOWED:
+                continue
+            cleaned[k] = _clean_schema_for_google(v)
+        # Filter 'required' to only reference properties that actually exist
+        if "required" in cleaned and "properties" in cleaned:
+            existing = set(cleaned["properties"].keys())
+            filtered_req = [r for r in cleaned["required"] if r in existing]
+            if filtered_req:
+                cleaned["required"] = filtered_req
+            else:
+                del cleaned["required"]
+        elif "required" in cleaned:
+            del cleaned["required"]
+        return cleaned
+    if isinstance(schema, list):
+        return [_clean_schema_for_google(i) for i in schema]
+    return schema
+
+
 def _convert_tools_to_google(tools: List[Dict[str, Any]]) -> Any:
     """Convert OpenAI-style tools list to a google.genai Tool object."""
     if google_types is None:
@@ -219,10 +258,11 @@ def _convert_tools_to_google(tools: List[Dict[str, Any]]) -> Any:
     fn_decls: List[Dict[str, Any]] = []
     for t in tools:
         fn = t.get("function") or {}
+        raw_params = fn.get("parameters") or {"type": "object", "properties": {}}
         fn_decls.append({
             "name": fn.get("name", ""),
             "description": fn.get("description", ""),
-            "parameters": fn.get("parameters") or {"type": "object", "properties": {}},
+            "parameters": _clean_schema_for_google(raw_params),
         })
     return google_types.Tool(function_declarations=fn_decls)
 
@@ -289,6 +329,12 @@ def _chat_google_sync(model: str, messages: List[Dict[str, Any]], tools: List[Di
     config_kwargs: Dict[str, Any] = {
         "temperature": 0.1,
     }
+    if hasattr(google_types, "ThinkingConfig"):
+        try:
+            config_kwargs["thinking_config"] = google_types.ThinkingConfig(thinking_level="high")
+        except Exception:
+            # Keep compatibility with SDK/model combinations that do not accept ThinkingConfig.
+            pass
     if google_tool:
         config_kwargs["tools"] = [google_tool]
     if system_instruction:
@@ -302,18 +348,29 @@ def _chat_google_sync(model: str, messages: List[Dict[str, Any]], tools: List[Di
     tool_calls: List[Dict[str, Any]] = []
     if response.function_calls:
         for fc in response.function_calls:
-            tool_calls.append({
+            tc: Dict[str, Any] = {
                 "type": "function",
                 "function": {
                     "name": str(fc.name),
                     "arguments": json.dumps(_to_jsonable(dict(fc.args) if fc.args else {}), ensure_ascii=False),
                 },
-            })
-    text_content = ""
-    try:
-        text_content = response.text or ""
-    except Exception:
-        pass
+            }
+            fc_id = getattr(fc, "id", None)
+            if fc_id:
+                tc["id"] = str(fc_id)
+            tool_calls.append(tc)
+
+    # Avoid response.text property warnings when response includes non-text parts.
+    text_chunks: List[str] = []
+    for cand in getattr(response, "candidates", []) or []:
+        content = getattr(cand, "content", None)
+        parts = getattr(content, "parts", None) if content is not None else None
+        for p in parts or []:
+            txt = getattr(p, "text", None)
+            if txt:
+                text_chunks.append(str(txt))
+    text_content = "\n".join(text_chunks).strip()
+
     return {
         "message": {
             "content": text_content,
@@ -433,6 +490,81 @@ def _normalize_tool_calls(raw_tool_calls: Any) -> List[Dict[str, Any]]:
     return out
 
 
+def _normalize_args_for_tool(tool_name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    normalized = dict(args) if isinstance(args, dict) else {}
+
+    if tool_name == "map_to_target_schema":
+        # This tool accepts only file_path, mapping_rule, domain.
+        normalized.pop("source_columns", None)
+        mapping_rule = normalized.get("mapping_rule")
+        if isinstance(mapping_rule, str):
+            try:
+                parsed = json.loads(mapping_rule)
+                if isinstance(parsed, dict):
+                    normalized["mapping_rule"] = parsed
+            except Exception:
+                pass
+        return normalized
+
+    if tool_name == "optimize":
+        # MCP optimize signature: optimize(request: OptimizationRequest)
+        if "request" in normalized and isinstance(normalized.get("request"), dict):
+            req = dict(normalized["request"])
+            if "params" not in req and "payload" in req:
+                req["params"] = req.pop("payload")
+            if "solver" not in req:
+                req["solver"] = "mip"
+            if isinstance(req.get("params"), dict):
+                req["params"] = _canonicalize_params(req["params"])
+            normalized = {"request": req}
+            return normalized
+
+        domain = normalized.get("domain")
+        params = normalized.get("params")
+        payload = normalized.get("payload")
+        solver = normalized.get("solver") or "mip"
+        if params is None and isinstance(payload, dict):
+            params = payload
+
+        if domain and isinstance(params, dict):
+            return {
+                "request": {
+                    "domain": domain,
+                    "solver": solver,
+                    "params": _canonicalize_params(params),
+                }
+            }
+    return normalized
+
+
+# Field name canonicalization map: lowercase → PascalCase for known domain fields
+_FIELD_CANONICAL: Dict[str, str] = {
+    "name": "Name", "weight": "Weight", "value": "Value", "demand": "Demand",
+    "capacity": "Capacity", "id": "Id",
+    "items": "Items", "vehicles": "Vehicles",
+    "nodes": "Nodes", "employees": "Employees", "shifts": "Shifts",
+    "containers": "Containers", "servers": "Servers",
+    "stocks": "Stocks", "kerf": "Kerf",
+    "maxshifts": "MaxShifts",
+    "cpu": "CPU", "ram": "RAM", "cost": "Cost",
+    "x": "X", "y": "Y",
+    "length": "Length", "limit": "Limit",
+}
+
+
+def _canonicalize_key(k: str) -> str:
+    return _FIELD_CANONICAL.get(k.lower(), k)
+
+
+def _canonicalize_params(params: Any) -> Any:
+    """Recursively rename lowercase/mixed-case keys to PascalCase for domain params."""
+    if isinstance(params, dict):
+        return {_canonicalize_key(k): _canonicalize_params(v) for k, v in params.items()}
+    if isinstance(params, list):
+        return [_canonicalize_params(i) for i in params]
+    return params
+
+
 async def run_agent_loop(
     user_query: str,
     model: str = DEFAULT_MODEL,
@@ -479,7 +611,7 @@ async def run_agent_loop(
                     "ok": False,
                     "error": {
                         "code": "llm_call_failed",
-                        "message": str(primary_exc),
+                        "message": str(primary_exc) or f"{type(primary_exc).__name__}: (empty message)",
                     },
                     "trace": trace,
                     "messages": _to_jsonable(messages),
@@ -504,15 +636,23 @@ async def run_agent_loop(
             }
 
         for tc in tool_calls:
+            tool_call_id = tc.get("id")
             fn = tc.get("function") or {}
             tool_name = str(fn.get("name", "")).strip()
             args = _normalize_tool_args(fn.get("arguments"))
+            args = _normalize_args_for_tool(tool_name, args)
 
             if tool_name == "map_to_target_schema":
                 if not args.get("file_path") and last_file_path:
                     args["file_path"] = last_file_path
                 mapping_rule = args.get("mapping_rule")
-                if not isinstance(mapping_rule, dict) or not mapping_rule:
+                # Auto-fill if: empty, not a dict, or values aren't all strings (i.e. nested/malformed)
+                mapping_rule_invalid = (
+                    not isinstance(mapping_rule, dict)
+                    or not mapping_rule
+                    or not all(isinstance(v, str) for v in mapping_rule.values())
+                )
+                if mapping_rule_invalid:
                     inferred = _infer_mapping_rule(str(args.get("domain", "")), last_columns)
                     if inferred:
                         args["mapping_rule"] = inferred
@@ -553,6 +693,7 @@ async def run_agent_loop(
                     "role": "tool",
                     "name": tool_name,
                     "content": tool_text,
+                    **({"tool_call_id": str(tool_call_id)} if tool_call_id else {}),
                 }
             )
             messages = _trim_messages(messages)
