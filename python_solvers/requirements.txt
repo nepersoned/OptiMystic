@@ -2,8 +2,11 @@
 # Used by: python_solvers/cli_solver.py, domains/, logic/
 
 pyomo==6.7.3
-pandas==2.0.3
-numpy==1.24.3
+# Keep legacy pins for <=3.11 and provide 3.12+ compatible wheels.
+pandas==2.0.3; python_version < "3.12"
+pandas==2.2.3; python_version >= "3.12"
+numpy==1.24.3; python_version < "3.12"
+numpy==1.26.4; python_version >= "3.12"
 matplotlib==3.9.2
 ortools==9.11.4210
 fastapi==0.116.1
