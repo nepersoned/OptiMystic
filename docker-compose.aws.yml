@@ -1,0 +1,56 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: optimystic-api:${OPTIMYSTIC_IMAGE_TAG:-latest}
+    container_name: optimystic-api
+    env_file:
+      - deploy/aws/.env.app
+    command:
+      [
+        "python3",
+        "-m",
+        "uvicorn",
+        "python_solvers.api.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000"
+      ]
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+
+  agent-smoke:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: optimystic-agent-loop:${OPTIMYSTIC_IMAGE_TAG:-latest}
+    container_name: optimystic-agent-smoke
+    profiles: ["smoke"]
+    env_file:
+      - deploy/aws/.env.app
+    command:
+      [
+        "python3",
+        "agent_loop.py",
+        "--llm-provider",
+        "openai",
+        "--model",
+        "${MODEL_NAME}",
+        "--fallback-model",
+        "${FALLBACK_MODEL}",
+        "--max-steps",
+        "4",
+        "--chat-timeout-sec",
+        "20",
+        "--query",
+        "examples/sample.csv를 확인하고 packing 도메인으로 매핑 후 optimize까지 실행해줘"
+      ]

@@ -1,0 +1,33 @@
+services:
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: optimystic-vllm
+    env_file:
+      - deploy/aws/.env.vllm
+    ports:
+      - "8001:8000"
+    shm_size: "8gb"
+    gpus: all
+    volumes:
+      - hf-cache:/root/.cache/huggingface
+    command:
+      [
+        "--model",
+        "${VLLM_MODEL}",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--max-model-len",
+        "${VLLM_MAX_MODEL_LEN}",
+        "--dtype",
+        "${VLLM_DTYPE}",
+        "--gpu-memory-utilization",
+        "${VLLM_GPU_MEMORY_UTILIZATION}",
+        "--served-model-name",
+        "${VLLM_SERVED_MODEL_NAME}"
+      ]
+    restart: unless-stopped
+
+volumes:
+  hf-cache:

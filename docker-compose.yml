@@ -3,7 +3,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: api
     image: optimystic-api:latest
     container_name: optimystic-api
     ports:
@@ -14,13 +13,13 @@ services:
       OPTIMYSTIC_JULIA: "julia"
       OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS: "180"
       OPTIMYSTIC_JULIA_TIMEOUT_SECONDS: "180"
+    command: ["python3", "-m", "uvicorn", "python_solvers.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     restart: unless-stopped
 
   jupyterlab:
     build:
       context: .
       dockerfile: Dockerfile
-      target: jupyterlab
     image: optimystic-jupyterlab:latest
     container_name: optimystic-jupyterlab
     ports:
@@ -31,9 +30,39 @@ services:
       OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS: "180"
       OPTIMYSTIC_JULIA_TIMEOUT_SECONDS: "180"
       JUPYTER_ENABLE_LAB: "yes"
+    command: ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root", "--ServerApp.token=", "--ServerApp.password=", "--ServerApp.root_dir=/app"]
     volumes:
       - ./:/app
     working_dir: /app
-    depends_on:
-      - api
     restart: unless-stopped
+
+  agent-loop:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: optimystic-agent-loop:latest
+    container_name: optimystic-agent-loop
+    profiles: ["agent"]
+    environment:
+      LLM_PROVIDER: "openai"
+      MODEL_NAME: "google/gemma-4-4b-it"
+      FALLBACK_MODEL: "google/gemma-4-4b-it"
+      OPENAI_BASE_URL: "http://host.docker.internal:8000/v1"
+      OPENAI_API_KEY: "EMPTY"
+    command:
+      [
+        "python3",
+        "agent_loop.py",
+        "--llm-provider",
+        "openai",
+        "--model",
+        "google/gemma-4-4b-it",
+        "--fallback-model",
+        "google/gemma-4-4b-it",
+        "--max-steps",
+        "4",
+        "--chat-timeout-sec",
+        "20",
+        "--query",
+        "examples/sample.csv를 확인하고 packing 도메인으로 매핑 후 optimize까지 실행해줘"
+      ]
