@@ -15,3 +15,5 @@ google-genai>=0.8.0
 uvicorn==0.35.0
 juliacall==0.9.24
 rpy2==3.5.16
+sqlalchemy==2.0.41
+psycopg[binary]==3.2.9

@@ -5,6 +5,7 @@ OptiMystic is a multi-domain optimization platform built on Python, Julia, and R
 ## What Is Included
 
 - FastAPI optimization API (`/health`, `/optimize`)
+- Optional PostgreSQL-backed optimization run history (`/runs`)
 - FastMCP tool server for LLM tool-calling
 - Agent orchestration loop (`agent_loop.py`) with multi-provider LLM support
 - Docker-based local/cloud runtime
@@ -59,6 +60,13 @@ Health check:
 
 ```powershell
 curl http://127.0.0.1:8000/health
+```
+
+Optional PostgreSQL persistence:
+
+```powershell
+$env:DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/optimystic"
+curl http://127.0.0.1:8000/runs
 ```
 
 ## Agent Loop Smoke (Google)
