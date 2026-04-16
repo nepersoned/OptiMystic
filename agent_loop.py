@@ -757,7 +757,7 @@ def parse_args() -> argparse.Namespace:
         "--llm-provider",
         choices=["ollama", "openai", "google"],
         default=DEFAULT_LLM_PROVIDER,
-        help="LLM backend provider: ollama (local), openai (vLLM endpoint), google (Gemini API)",
+        help="LLM backend provider: ollama (local), openai (OpenAI-compatible endpoint), google (Gemini API)",
     )
     parser.add_argument(
         "--fallback-model",

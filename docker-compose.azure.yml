@@ -42,15 +42,15 @@ services:
         "python3",
         "agent_loop.py",
         "--llm-provider",
-        "openai",
+        "${LLM_PROVIDER}",
         "--model",
         "${MODEL_NAME}",
         "--fallback-model",
         "${FALLBACK_MODEL}",
         "--max-steps",
-        "4",
+        "10",
         "--chat-timeout-sec",
-        "20",
+        "45",
         "--query",
         "examples/sample.csv를 확인하고 packing 도메인으로 매핑 후 optimize까지 실행해줘"
       ]

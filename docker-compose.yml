@@ -44,25 +44,26 @@ services:
     container_name: optimystic-agent-loop
     profiles: ["agent"]
     environment:
-      LLM_PROVIDER: "openai"
-      MODEL_NAME: "google/gemma-4-4b-it"
-      FALLBACK_MODEL: "google/gemma-4-4b-it"
-      OPENAI_BASE_URL: "http://host.docker.internal:8000/v1"
-      OPENAI_API_KEY: "EMPTY"
+      LLM_PROVIDER: "google"
+      MODEL_NAME: "gemma-4-26b-a4b-it"
+      FALLBACK_MODEL: "gemma-4-26b-a4b-it"
+      GOOGLE_API_KEY: "${GOOGLE_API_KEY:-}"
+      OPENAI_BASE_URL: "${OPENAI_BASE_URL:-http://host.docker.internal:8000/v1}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-EMPTY}"
     command:
       [
         "python3",
         "agent_loop.py",
         "--llm-provider",
-        "openai",
+        "${LLM_PROVIDER}",
         "--model",
-        "google/gemma-4-4b-it",
+        "${MODEL_NAME}",
         "--fallback-model",
-        "google/gemma-4-4b-it",
+        "${FALLBACK_MODEL}",
         "--max-steps",
-        "4",
+        "10",
         "--chat-timeout-sec",
-        "20",
+        "45",
         "--query",
         "examples/sample.csv를 확인하고 packing 도메인으로 매핑 후 optimize까지 실행해줘"
       ]

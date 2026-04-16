@@ -1,166 +1,105 @@
 # OptiMystic
 
-Multi-domain optimization platform based on Python, Julia, and R.
+OptiMystic is a multi-domain optimization platform built on Python, Julia, and R.
 
-## What This Repository Delivers
+## What Is Included
 
-- Interactive development with JupyterLab (Python/Julia/R kernels).
-- HTTP optimization API based on FastAPI.
-- Domain-mapped solver routing across CP, VRP, MIP, GA, CG, ST, NLP, MINLP.
-- Post-analysis analytics and plotting with R (expanding scope).
+- FastAPI optimization API (`/health`, `/optimize`)
+- FastMCP tool server for LLM tool-calling
+- Agent orchestration loop (`agent_loop.py`) with multi-provider LLM support
+- Docker-based local/cloud runtime
+- Domain analytics and visualization layer in R
 
-## Current Architecture
+## Current Production Direction
+
+Active stack:
+- `python_solvers/` (API + MCP + routing)
+- `julia_solvers/` (MIP/GA/CG/ST/NLP/MINLP runtime)
+- `r_solvers/` (post-analysis and plotting)
+
+Reference-only archives:
+- `_legacy/`
+- `_legacy_django/`
+- `_legacy_go/`
+
+## Architecture
 
 ```text
-HTTP Client
-  -> FastAPI endpoint (python_solvers/api/main.py)
-  -> Python solver router (python_solvers/api/solver_api.py)
-  -> Python runtime (CP/VRP) or Julia delegation (MIP/GA/CG/ST/NLP/MINLP)
-  -> JSON response
+User / App / Agent
+  -> python_solvers/api/main.py (FastAPI)
+  -> python_solvers/api/solver_api.py (domain/solver routing)
+  -> Python OR-Tools path OR Julia runtime path
+  -> Structured JSON result
+
+LLM Agent Loop
+  -> FastMCP tools (read_company_data, get_target_schema, map_to_target_schema, optimize)
+  -> self-healing retry + mapping auto-fill + argument normalization
 ```
 
-Runtime split:
-- Python (OR-Tools): scheduling (CP), vrp (routing)
-- Julia (JuMP ecosystem): mip, ga, cg, st, nlp, minlp
-- R: dedicated post-analysis layer for deeper business interpretation, diagnostics, and visualization
+## LLM Providers in `agent_loop.py`
 
-## Repository Layout
+Supported providers:
+- `ollama`
+- `openai` (OpenAI-compatible endpoints)
+- `google` (Gemini API)
 
-- `python_solvers/` - Active Python runtime and FastAPI service
-- `julia_solvers/` - Julia solver implementations
-- `r_solvers/` - R processors and visualization helpers
-- `examples/` - Integration and debugging notebooks/scripts
-- `_legacy/`, `_legacy_django/`, `_legacy_go/` - Archived implementations (reference only)
+Recommended default for cloud:
+- `--llm-provider google`
+- model `gemma-4-26b-a4b-it`
 
-## API Endpoints
-
-- `GET /health`
-- `POST /optimize`
-
-## MCP Endpoint (Phase 1, 1.5, 2)
-
-- `python_solvers/mcp_server.py` exposes OptiMystic optimize runtime as a FastMCP tool.
-- Tool names: `optimize`, `read_company_data`, `get_target_schema`
-- Input schema: `OptimizationRequest` with highly descriptive field metadata for LLM tool-use guidance.
-- Dependency note: keep `fastmcp<3` to avoid FastAPI/Starlette major-version conflicts in this repo.
-
-Phase 1.5 self-healing behavior in `optimize`:
-- Validation feedback: catches schema/type errors and returns `validation_error` with structured details.
-- Logical feedback: if solver returns `Infeasible` or `Unbounded`, returns actionable retry guidance instead of a silent fail.
-
-Phase 2 data bridge tools:
-- `read_company_data(file_path, max_rows=3)`: returns file metadata, row count, columns, and sampled rows.
-- `get_target_schema(domain)`: returns domain-specific target JSON schema for mapping.
-
-Run locally:
+## Quick Start (Local)
 
 ```powershell
-cd C:\Your\Path\OptiMystic
-pip install -r python_solvers\requirements.txt
-python -m python_solvers.mcp_server
+cd C:\Projects\OptiMystic
+.\.venv\Scripts\python.exe -m pip install -r python_solvers\requirements.txt
+.\.venv\Scripts\python.exe -m uvicorn python_solvers.api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Claude Desktop integration (example `claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "optimystic": {
-      "command": "python",
-      "args": ["-m", "python_solvers.mcp_server"],
-      "cwd": "C:/Your/Path/OptiMystic"
-    }
-  }
-}
-```
-
-Then test in Claude Desktop with prompts such as:
-- "수요 10, 용량 5인 포장 문제로 optimize 호출해줘"
-- "vrp 도메인으로 기본 라우팅 최적화 실행해줘"
-
-If Claude Desktop is not installed, run a local MCP smoke test directly in Python:
+Health check:
 
 ```powershell
-cd C:\Your\Path\OptiMystic
-.\.venv\Scripts\python.exe -c "import asyncio, json; from python_solvers.mcp_server import mcp; args={'request': {'domain':'scheduling','solver':'cp','params': {'Employees':[{'Name':'E1','MaxShifts':1},{'Name':'E2','MaxShifts':1}], 'Shifts':[{'Name':'Morning','Demand':1}], 'Values': {'E1': {'Morning': 3}, 'E2': {'Morning': 2}}, 'MaxShiftsPerEmployee':1, 'MinShiftsPerEmployee':0, 'Rules':[], 'Seed':42, 'Workers':1, 'TimeLimit':5}}}; res=asyncio.run(mcp._tool_manager.call_tool('optimize', args)); print(json.dumps(res.structured_content, ensure_ascii=False))"
+curl http://127.0.0.1:8000/health
 ```
 
-Expected signal:
-- `ok: True`
-- `result.status: Optimal` (or another solver status if your data differs)
-
-Phase 2 smoke examples:
+## Agent Loop Smoke (Google)
 
 ```powershell
-cd C:\Your\Path\OptiMystic
-.\.venv\Scripts\python.exe -c "import asyncio, json; from python_solvers.mcp_server import mcp; res=asyncio.run(mcp._tool_manager.call_tool('get_target_schema', {'domain':'packing'})); print(json.dumps(res.structured_content, ensure_ascii=False)[:800])"
+$env:GOOGLE_API_KEY="<YOUR_KEY>"
+.\.venv\Scripts\python.exe agent_loop.py --llm-provider google --max-steps 10
 ```
 
-```powershell
-cd C:\Your\Path\OptiMystic
-.\.venv\Scripts\python.exe -c "import asyncio, json; from python_solvers.mcp_server import mcp; res=asyncio.run(mcp._tool_manager.call_tool('read_company_data', {'file_path':'examples/sample.csv','max_rows':3})); print(json.dumps(res.structured_content, ensure_ascii=False))"
-```
+Expected success signal:
+- `"ok": true`
+- `"status": "Optimal"` in optimize result trace
 
-## Quick Start
+## Docker Local Run
 
-### Option 1: JupyterLab
-
-```powershell
-cd C:\Your\Path\OptiMystic
-pip install -r python_solvers\requirements.txt
-pip install jupyterlab
-jupyter lab
-```
-
-Open `examples/test_jupyterlab_full_pipeline.ipynb` and run the sections for Python, Julia, and R.
-
-### Option 2: FastAPI (Local)
+API + Jupyter:
 
 ```powershell
-cd C:\Your\Path\OptiMystic
-pip install -r python_solvers\requirements.txt
-uvicorn python_solvers.api.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-Then call `http://localhost:8000/optimize`.
-
-### Option 3: Docker Compose
-
-Docker Compose is now aligned with the current Python/Julia runtime.
-
-Run API + JupyterLab:
-
-```powershell
-cd C:\Your\Path\OptiMystic
 docker compose up --build api jupyterlab
 ```
 
-- API: `http://localhost:8000` (`/health`, `/optimize`)
-- JupyterLab: `http://localhost:8888`
-
-Optional agent-loop container (OpenAI-compatible endpoint such as vLLM):
+Agent smoke (Google):
 
 ```powershell
-cd C:\Your\Path\OptiMystic
-docker compose --profile agent run --rm \
-  -e OPENAI_BASE_URL=http://<YOUR_VLLM_HOST>:8000/v1 \
-  -e OPENAI_API_KEY=EMPTY \
-  agent-loop
+$env:GOOGLE_API_KEY="<YOUR_KEY>"
+docker compose --profile agent run --rm agent-loop
 ```
 
-You can also run the same loop against local Ollama by changing runtime args:
+## Cloud Deployment
 
-```powershell
-docker compose run --rm api \
-  python3 agent_loop.py --llm-provider ollama --model gemma4:e2b
-```
+Available runbooks:
+- AWS: `deploy/aws/README.md`
+- Azure: `deploy/azure/README.md`
+- GCP: `deploy/gcp/README.md`
 
-AWS deployment preflight runbook:
-- `deploy/aws/README.md`
+Compose files:
+- `docker-compose.aws.yml`
+- `docker-compose.azure.yml`
+- `docker-compose.gcp.yml`
 
-## Request Contract
-
-Minimal request example:
+## Minimal Request Contract
 
 ```json
 {
@@ -178,38 +117,23 @@ Minimal request example:
 }
 ```
 
-Minimal response example:
-
-```json
-{
-  "status": "Optimal",
-  "objective": 22,
-  "solve_time": 0.02,
-  "variables": {},
-  "constraints": {},
-  "details": {},
-  "sensitivity": null
-}
-```
-
 ## Domain-Solver Guide
 
 | Goal | Domain | Solver | Runtime |
 |------|--------|--------|---------|
 | Shift scheduling | `scheduling` | `cp` | Python |
-| Vehicle routing | `vrp` | `mip` (routed to OR-Tools VRP path) | Python |
+| Vehicle routing | `vrp` | `mip` (routing path) | Python |
 | Cutting stock | `cutting` | `cg` / `mip` | Julia |
 | Bin packing | `packing` | `mip` | Julia |
 | Stochastic resourcing | `resourcing` | `st` | Julia |
 | Nonlinear optimization | `generic` | `nlp` | Julia |
 | Mixed-integer nonlinear optimization | `generic` | `minlp` | Julia |
 
-## Documentation
+## Module Docs
 
-- [python_solvers/README.md](python_solvers/README.md)
-- [julia_solvers/README.md](julia_solvers/README.md)
-- [r_solvers/README.md](r_solvers/README.md)
-- [deploy/aws/README.md](deploy/aws/README.md)
-- [deploy/azure/README.md](deploy/azure/README.md)
-- [_legacy_go/README.md](_legacy_go/README.md)
-
+- `python_solvers/README.md`
+- `julia_solvers/README.md`
+- `r_solvers/README.md`
+- `deploy/aws/README.md`
+- `deploy/azure/README.md`
+- `deploy/gcp/README.md`

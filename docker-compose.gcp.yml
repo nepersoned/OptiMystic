@@ -6,7 +6,7 @@ services:
     image: optimystic-api:${OPTIMYSTIC_IMAGE_TAG:-latest}
     container_name: optimystic-api
     env_file:
-      - deploy/aws/.env.app
+      - deploy/gcp/.env.app
     command:
       [
         "python3",
@@ -36,7 +36,7 @@ services:
     container_name: optimystic-agent-smoke
     profiles: ["smoke"]
     env_file:
-      - deploy/aws/.env.app
+      - deploy/gcp/.env.app
     command:
       [
         "python3",
