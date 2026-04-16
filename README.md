@@ -27,6 +27,125 @@ Reference-only archives:
 - `_legacy_django/`
 - `_legacy_go/`
 
+## Implementation Status (As-Is, 2026-04-16)
+
+This section reflects code that is currently present in the repository (not roadmap intent).
+
+### 1) API Layer (`python_solvers/api`)
+
+Implemented:
+- `GET /health`: returns service status and DB enable flag.
+- `POST /optimize`: executes domain + solver route and returns normalized solve response.
+- `GET /runs`: returns recent persisted optimization runs (when `DATABASE_URL` is configured).
+
+Behavior details:
+- API startup initializes DB schema via SQLAlchemy.
+- `/optimize` attempts to persist run history and injects `run_id` on success.
+- If DB write fails, response keeps optimization result and adds `error_msg=database_write_failed`.
+
+### 2) Optimization Routing (`python_solvers/api/solver_api.py`)
+
+Implemented routing logic:
+- Domain `vrp` or solver `cp` -> Python runtime path (`bridge_logic.run_python_runtime`).
+- Otherwise -> Julia runtime path via `cli_solver` payload bridge.
+
+Supported output normalization fields:
+- `status`, `objective`, `variables`, `constraints`, `solve_time`, `lp_sensitivity`, `details`, `sensitivity`, `error_msg`.
+
+### 3) MCP Tool Server (`python_solvers/mcp_server.py`)
+
+Implemented tools:
+- `read_company_data`
+- `forecast_demand`
+- `bridge_forecast_to_payload`
+- `get_target_schema`
+- `map_to_target_schema`
+- `optimize`
+- `analyze_with_r`
+
+Validation/guard behavior:
+- Domain payload is validated with domain-specific Pydantic models before optimize runtime call.
+- Validation errors are transformed into actionable MCP error payloads.
+- Infeasible/unbounded solve outcomes are converted to retry hints via logical feedback helpers.
+
+### 4) Forecasting (`python_solvers/forecasting.py`)
+
+Implemented:
+- Main engine: StatsForecast `AutoARIMA`.
+- Fallback engine: lightweight last-value baseline with statistical CI approximation.
+- Multi-item and aggregated single-series modes.
+
+Output contract:
+- `forecast_rows` with `item`, `date`, `point`, `lower`, `upper`, `recommended_demand`.
+- Metadata: `horizon`, `freq`, `confidence_level`, `series_count`, `engine`.
+
+### 5) Forecast -> Optimization Bridge (`python_solvers/mcp_utils.py`)
+
+Implemented:
+- Demand injection into domain payload by forecast bound (`lower|point|upper|recommended_demand`).
+- Configurable rounding (`ceil|floor|round`) and `min_demand` floor.
+- Name-based matching plus `all` fallback.
+- Domain-aware demand update targets:
+  - `packing.Items[*].Demand`
+  - `cutting.Items[*].Demand`
+  - `scheduling.Shifts[*].Demand`
+  - `vrp.Nodes[1:].Demand`
+
+### 6) R Post-Analysis Bridge (`python_solvers/r_bridge.py`)
+
+Implemented:
+- rpy2 bridge setup with Windows DLL path handling.
+- Calls into `r_solvers` pipeline:
+  - `process_results`
+  - `process_sensitivity`
+  - `process_decision_analytics`
+  - `build_executive_summary`
+
+Returned analysis bundle:
+- `processed_result`, `sensitivity`, `decision_analytics`, `executive_summary`.
+
+### 7) Agent Loop (`agent_loop.py`, `agent_core/*`)
+
+Implemented:
+- Providers: `ollama`, `openai`-compatible, `google`.
+- Per-call timeout and fallback model failover.
+- Tool-call normalization for cross-provider formats.
+- Auto-canonicalization of optimize payload keys.
+- Auto-inference helper for packing mapping rules.
+- Retry guidance insertion on retryable tool errors.
+
+Current guardrails:
+- Context trimming (`MAX_CONTEXT_MESSAGES`).
+- Max step termination with trace output.
+- Successful early-stop on optimal solve.
+
+### 8) Persistence (`python_solvers/db.py`)
+
+Implemented:
+- Optional PostgreSQL persistence through `DATABASE_URL`.
+- Auto URL normalization to `postgresql+psycopg`.
+- Optimization run schema with request/result JSON snapshots.
+- Recent run listing endpoint support.
+
+### 9) Deployment Assets
+
+Implemented assets:
+- Local compose stack (`docker/docker-compose.yml`).
+- Cloud-target compose variants for AWS/Azure/GCP.
+- Bootstrap and deploy scripts in `deploy/*`.
+
+### 10) Known Gaps (Not Yet Implemented)
+
+Still pending in codebase:
+- End-to-end Trace ID propagation.
+- Structured JSON logging standardization across agent + tools.
+- Token/cost metering and dashboards.
+- Idempotency key enforcement for optimize path.
+- AuthN/AuthZ and secrets manager migration.
+- Circuit breaker and unified retry policy for external LLM calls.
+
+Use `TODO.md` as the execution checklist for these production-hardening items.
+
 ## Architecture
 
 ```text

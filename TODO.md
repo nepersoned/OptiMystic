@@ -15,14 +15,14 @@ This document is the single execution checklist until production readiness.
 - [ ] Standardize agent_loop and tool-call logs into structured JSON
 - [ ] Track model call cost metrics (tokens/cost per request)
 - [ ] Design and apply idempotency keys for optimize execution
-- [ ] Standardize timeout/retry/backoff policy for Google API calls
+- [~] Standardize timeout/retry/backoff policy for Google API calls
 
 ## 1. Reliability
 
 - [ ] Introduce a circuit breaker for external LLM calls
-- [ ] Define a standard fallback response for tool execution failures
+- [~] Define a standard fallback response for tool execution failures
 - [ ] Consolidate common exception handling (consistent error codes)
-- [ ] Unify timeout policies for long-running tasks
+- [~] Unify timeout policies for long-running tasks
 - [ ] Create a retryable vs non-retryable error classification table
 
 Completion Criteria:
@@ -82,6 +82,20 @@ Completion Criteria:
 - [ ] Add deployment rollback runbook
 - [ ] Finalize image tagging policy (commit SHA-based)
 - [ ] Finalize production deployment checklist
+
+## 7. Code-Verified Snapshot (2026-04-16)
+
+- [x] API endpoints available: `/health`, `/optimize`, `/runs` (DB optional)
+- [x] MCP tools available: `read_company_data`, `get_target_schema`, `map_to_target_schema`, `forecast_demand`, `bridge_forecast_to_payload`, `optimize`, `analyze_with_r`
+- [x] Agent multi-provider support (`ollama`, `openai`-compatible, `google`)
+- [x] Agent fallback-model switch + max-step guard + context trimming
+- [x] Forecasting fallback path when StatsForecast is unavailable
+- [x] R post-analysis bridge integrated via `rpy2`
+- [x] PostgreSQL persistence model for optimization runs
+
+Partial implementation notes:
+- [~] Timeout/fallback exists in agent calls, but unified retry/backoff policy is not standardized yet
+- [~] Tool error response shape is mostly standardized as `{ok:false,error:{code,message}}`, but cross-module unification is pending
 
 ## Notes
 
