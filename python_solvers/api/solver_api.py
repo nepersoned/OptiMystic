@@ -4,7 +4,7 @@ from python_solvers.cli_solver import _build_julia_payload, _run_julia_solver
 from python_solvers.utils import bridge_logic
 
 
-def run_optimization(domain: str, solver: str, params: Dict[str, Any]) -> Dict[str, Any]:
+def run_optimization(domain: str, solver: str, params: Dict[str, Any], trace_id: str | None = None) -> Dict[str, Any]:
     solver_type = (solver or "").strip().lower()
 
     if bridge_logic.should_use_python_runtime(domain, solver_type):
@@ -24,4 +24,5 @@ def run_optimization(domain: str, solver: str, params: Dict[str, Any]) -> Dict[s
         "details": result.get("details"),
         "sensitivity": result.get("sensitivity"),
         "error_msg": result.get("error_msg"),
+        "trace_id": trace_id,
     }

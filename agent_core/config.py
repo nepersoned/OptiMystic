@@ -1,3 +1,6 @@
+import os
+
+
 DEFAULT_MODEL = "gemma4:e2b"
 DEFAULT_FALLBACK_MODEL = "gemma4:e2b"
 DEFAULT_LLM_PROVIDER = "ollama"
@@ -5,6 +8,22 @@ DEFAULT_GOOGLE_MODEL = "gemma-4-26b-a4b-it"
 MAX_STEPS = 8
 CHAT_TIMEOUT_SEC = 45
 MAX_CONTEXT_MESSAGES = 24
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+# Cost rates are USD per 1M tokens for rough budgeting.
+PROMPT_USD_PER_1M = _env_float("OPTIMYSTIC_PROMPT_USD_PER_1M", 0.10)
+COMPLETION_USD_PER_1M = _env_float("OPTIMYSTIC_COMPLETION_USD_PER_1M", 0.40)
+MAX_ESTIMATED_COST_USD = _env_float("OPTIMYSTIC_MAX_ESTIMATED_COST_USD", 0.0)
 
 
 def build_system_prompt() -> str:

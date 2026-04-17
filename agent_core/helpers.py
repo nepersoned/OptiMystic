@@ -122,6 +122,7 @@ def summarize_tool_result(tool_name: str, result: Dict[str, Any]) -> Dict[str, A
         solve_result = result.get("result") if isinstance(result.get("result"), dict) else {}
         return {
             "ok": True,
+            "trace_id": result.get("trace_id") or solve_result.get("trace_id"),
             "status": solve_result.get("status"),
             "objective": solve_result.get("objective"),
             "solve_time": solve_result.get("solve_time"),

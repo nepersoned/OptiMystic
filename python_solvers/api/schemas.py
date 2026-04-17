@@ -110,6 +110,8 @@ class OptimizeResponse(BaseModel):
     sensitivity: Optional[Dict[str, Any]] = None
     error_msg: Optional[str] = None
     run_id: Optional[int] = None
+    trace_id: Optional[str] = None
+    tenant_id: Optional[str] = None
 
 
 class HealthResponse(BaseModel):
@@ -126,5 +128,6 @@ class OptimizationRunSummary(BaseModel):
     objective: Optional[float] = None
     solve_time: float = 0.0
     error_msg: Optional[str] = None
+    tenant_id: Optional[str] = None
     request: Dict[str, Any] = Field(default_factory=dict)
     result: Dict[str, Any] = Field(default_factory=dict)

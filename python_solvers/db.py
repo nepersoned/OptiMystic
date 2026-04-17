@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import hashlib
 from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Dict, Generator, Optional
@@ -38,6 +39,17 @@ class OptimizationRunRecord(Base):
     request_json: Mapped[str] = mapped_column(Text, nullable=False)
     result_json: Mapped[str] = mapped_column(Text, nullable=False)
     error_msg: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+
+class OptimizationIdempotencyRecord(Base):
+    __tablename__ = "optimization_idempotency"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), default=datetime.utcnow, nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    run_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    response_json: Mapped[str] = mapped_column(Text, nullable=False)
 
 
 engine = None
@@ -116,7 +128,95 @@ def create_optimization_run(request_payload: Dict[str, Any], result_payload: Dic
         return int(record.id)
 
 
+def _stable_json(payload: Dict[str, Any]) -> str:
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+
+
+def _request_hash(payload: Dict[str, Any]) -> str:
+    return hashlib.sha256(_stable_json(payload).encode("utf-8")).hexdigest()
+
+
+def get_idempotent_response(idempotency_key: str, request_payload: Dict[str, Any]) -> Dict[str, Any]:
+    if SessionLocal is None:
+        return {"state": "disabled"}
+
+    key = (idempotency_key or "").strip()
+    if not key:
+        return {"state": "disabled"}
+
+    req_hash = _request_hash(request_payload)
+
+    with get_db_session() as session:
+        record = (
+            session.query(OptimizationIdempotencyRecord)
+            .filter(OptimizationIdempotencyRecord.idempotency_key == key)
+            .one_or_none()
+        )
+        if record is None:
+            return {"state": "miss", "request_hash": req_hash}
+
+        if record.request_hash != req_hash:
+            return {"state": "conflict"}
+
+        try:
+            payload = json.loads(record.response_json)
+        except Exception:
+            payload = {}
+
+        return {
+            "state": "hit",
+            "response_payload": payload if isinstance(payload, dict) else {},
+            "run_id": record.run_id,
+        }
+
+
+def save_idempotent_response(
+    idempotency_key: str,
+    request_payload: Dict[str, Any],
+    response_payload: Dict[str, Any],
+    run_id: Optional[int] = None,
+) -> None:
+    if SessionLocal is None:
+        return
+
+    key = (idempotency_key or "").strip()
+    if not key:
+        return
+
+    req_hash = _request_hash(request_payload)
+
+    with get_db_session() as session:
+        record = (
+            session.query(OptimizationIdempotencyRecord)
+            .filter(OptimizationIdempotencyRecord.idempotency_key == key)
+            .one_or_none()
+        )
+
+        if record is None:
+            record = OptimizationIdempotencyRecord(
+                idempotency_key=key,
+                request_hash=req_hash,
+                run_id=run_id,
+                response_json=json.dumps(response_payload, ensure_ascii=True),
+            )
+            session.add(record)
+            return
+
+        if record.request_hash != req_hash:
+            raise ValueError("idempotency_key_conflict")
+
+        record.run_id = run_id if run_id is not None else record.run_id
+        record.response_json = json.dumps(response_payload, ensure_ascii=True)
+
+
 def serialize_optimization_run(record: OptimizationRunRecord) -> Dict[str, Any]:
+    request_payload = json.loads(record.request_json)
+    tenant_id = None
+    if isinstance(request_payload, dict):
+        raw_tenant_id = request_payload.get("tenant_id")
+        if raw_tenant_id is not None:
+            tenant_id = str(raw_tenant_id)
+
     return {
         "id": record.id,
         "created_at": record.created_at.isoformat() + "Z",
@@ -126,21 +226,31 @@ def serialize_optimization_run(record: OptimizationRunRecord) -> Dict[str, Any]:
         "objective": record.objective,
         "solve_time": record.solve_time,
         "error_msg": record.error_msg,
-        "request": json.loads(record.request_json),
+        "tenant_id": tenant_id,
+        "request": request_payload if isinstance(request_payload, dict) else {},
         "result": json.loads(record.result_json),
     }
 
 
-def list_optimization_runs(limit: int = 20) -> list[Dict[str, Any]]:
+def list_optimization_runs(limit: int = 20, tenant_id: str | None = None) -> list[Dict[str, Any]]:
     if SessionLocal is None:
         return []
 
     capped_limit = max(1, min(int(limit or 20), 100))
+    tenant_filter = (tenant_id or "").strip()
+    fetch_limit = capped_limit if not tenant_filter else min(500, capped_limit * 10)
+
     with get_db_session() as session:
         rows = (
             session.query(OptimizationRunRecord)
             .order_by(OptimizationRunRecord.created_at.desc(), OptimizationRunRecord.id.desc())
-            .limit(capped_limit)
+            .limit(fetch_limit)
             .all()
         )
-        return [serialize_optimization_run(row) for row in rows]
+
+        serialized = [serialize_optimization_run(row) for row in rows]
+        if not tenant_filter:
+            return serialized[:capped_limit]
+
+        filtered = [row for row in serialized if str(row.get("tenant_id") or "") == tenant_filter]
+        return filtered[:capped_limit]

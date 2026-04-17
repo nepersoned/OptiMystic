@@ -2,6 +2,10 @@
 
 This document is the single execution checklist until production readiness.
 
+## Release Milestone (2026-04-17)
+
+- [x] Readiness baseline aligned to 90+ across Core, Agent, Infra, and Production
+
 ## Usage Rules
 
 - Start work: `[ ]` -> `[~]`
@@ -11,10 +15,10 @@ This document is the single execution checklist until production readiness.
 
 ## 0. Immediate Tasks (Top Priority)
 
-- [ ] Create and propagate a Trace ID across the full request path
-- [ ] Standardize agent_loop and tool-call logs into structured JSON
-- [ ] Track model call cost metrics (tokens/cost per request)
-- [ ] Design and apply idempotency keys for optimize execution
+- [~] Create and propagate a Trace ID across the full request path
+- [~] Standardize agent_loop and tool-call logs into structured JSON
+- [~] Track model call cost metrics (tokens/cost per request)
+- [~] Design and apply idempotency keys for optimize execution
 - [~] Standardize timeout/retry/backoff policy for Google API calls
 
 ## 1. Reliability
@@ -43,8 +47,8 @@ Completion Criteria:
 ## 3. Security & Ops
 
 - [ ] Migrate secrets (e.g., GOOGLE_API_KEY) to a secret manager
-- [ ] Apply API authentication (AuthN)
-- [ ] Apply project/org-level authorization policies (AuthZ)
+- [~] Apply API authentication (AuthN)
+- [~] Apply project/org-level authorization policies (AuthZ)
 - [ ] Store audit logs
 - [ ] Validate strict environment separation (dev/stage/prod)
 
@@ -94,6 +98,13 @@ Completion Criteria:
 - [x] PostgreSQL persistence model for optimization runs
 
 Partial implementation notes:
+- [~] FastAPI `/optimize` and MCP `optimize` now propagate `trace_id` (header/payload/error/result). End-to-end linking with MCP `tool_call_id` is still pending
+- [~] `/optimize` and `/runs` now support API-key guard via `X-API-Key` when `OPTIMYSTIC_API_KEYS` is configured
+- [~] API key to tenant mapping (`OPTIMYSTIC_API_KEY_TENANTS`) now enables tenant attribution and tenant-scoped `/runs` filtering
+- [~] `/optimize` now supports `Idempotency-Key` replay/conflict handling backed by DB (disabled when DB is off)
+- [~] Agent loop now collects per-step LLM token usage, estimates USD cost with configurable rates, and supports budget guard via `OPTIMYSTIC_MAX_ESTIMATED_COST_USD`
+- [~] Structured JSON logging formatter is applied to API startup and agent loop runtime
+- [~] Google API key can be loaded from Secret Manager when `OPTIMYSTIC_GOOGLE_API_KEY_SECRET` and `GOOGLE_CLOUD_PROJECT` are set
 - [~] Timeout/fallback exists in agent calls, but unified retry/backoff policy is not standardized yet
 - [~] Tool error response shape is mostly standardized as `{ok:false,error:{code,message}}`, but cross-module unification is pending
 

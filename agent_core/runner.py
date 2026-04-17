@@ -1,10 +1,21 @@
 import asyncio
 import json
+import logging
 from typing import Any, Dict, List
 
 from python_solvers.mcp_server import mcp
 
-from .config import CHAT_TIMEOUT_SEC, DEFAULT_FALLBACK_MODEL, DEFAULT_LLM_PROVIDER, DEFAULT_MODEL, MAX_STEPS, build_system_prompt
+from .config import (
+    CHAT_TIMEOUT_SEC,
+    COMPLETION_USD_PER_1M,
+    DEFAULT_FALLBACK_MODEL,
+    DEFAULT_LLM_PROVIDER,
+    DEFAULT_MODEL,
+    MAX_ESTIMATED_COST_USD,
+    MAX_STEPS,
+    PROMPT_USD_PER_1M,
+    build_system_prompt,
+)
 from .helpers import (
     infer_mapping_rule,
     is_retryable_error,
@@ -16,6 +27,15 @@ from .helpers import (
     trim_messages,
 )
 from .providers import chat_with_provider
+
+
+logger = logging.getLogger(__name__)
+
+
+def _estimate_cost_usd(prompt_tokens: int, completion_tokens: int) -> float:
+    prompt_cost = (float(prompt_tokens) / 1_000_000.0) * PROMPT_USD_PER_1M
+    completion_cost = (float(completion_tokens) / 1_000_000.0) * COMPLETION_USD_PER_1M
+    return round(prompt_cost + completion_cost, 8)
 
 
 async def get_tools() -> List[Dict[str, Any]]:
@@ -65,6 +85,11 @@ async def run_agent_loop(
     trace: List[Dict[str, Any]] = []
     last_columns: List[str] = []
     last_file_path: str = ""
+    usage_totals: Dict[str, int] = {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0,
+    }
 
     for step in range(1, max_steps + 1):
         active_model = model
@@ -102,6 +127,69 @@ async def run_agent_loop(
                 }
 
         message = llm_res.get("message") or {}
+        usage = llm_res.get("usage") if isinstance(llm_res.get("usage"), dict) else None
+        if usage is not None:
+            usage_totals["prompt_tokens"] += int(usage.get("prompt_tokens") or 0)
+            usage_totals["completion_tokens"] += int(usage.get("completion_tokens") or 0)
+            usage_totals["total_tokens"] += int(usage.get("total_tokens") or 0)
+            logger.info(
+                "LLM usage captured",
+                extra={
+                    "step": step,
+                    "provider": llm_provider,
+                    "model": active_model,
+                    "prompt_tokens": int(usage.get("prompt_tokens") or 0),
+                    "completion_tokens": int(usage.get("completion_tokens") or 0),
+                    "total_tokens": int(usage.get("total_tokens") or 0),
+                },
+            )
+
+        estimated_cost_usd = _estimate_cost_usd(
+            usage_totals["prompt_tokens"],
+            usage_totals["completion_tokens"],
+        )
+
+        if MAX_ESTIMATED_COST_USD > 0 and estimated_cost_usd > MAX_ESTIMATED_COST_USD:
+            logger.warning(
+                "Estimated LLM budget exceeded",
+                extra={
+                    "provider": llm_provider,
+                    "model": active_model,
+                    "estimated_cost_usd": estimated_cost_usd,
+                    "budget_usd": MAX_ESTIMATED_COST_USD,
+                },
+            )
+            return {
+                "ok": False,
+                "error": {
+                    "code": "llm_budget_exceeded",
+                    "message": (
+                        "Estimated LLM cost exceeded configured budget. "
+                        f"estimated_cost_usd={estimated_cost_usd}, budget_usd={MAX_ESTIMATED_COST_USD}"
+                    ),
+                },
+                "trace": trace,
+                "messages": to_jsonable(messages),
+                "usage": {
+                    **usage_totals,
+                    "estimated_cost_usd": estimated_cost_usd,
+                    "prompt_usd_per_1m": PROMPT_USD_PER_1M,
+                    "completion_usd_per_1m": COMPLETION_USD_PER_1M,
+                },
+            }
+
+        trace.append(
+            {
+                "step": step,
+                "llm": {
+                    "provider": llm_provider,
+                    "model": active_model,
+                    "usage": usage,
+                    "estimated_cost_usd": estimated_cost_usd,
+                },
+            }
+        )
+
         content = (message.get("content") or "").strip()
         tool_calls = normalize_tool_calls(message.get("tool_calls") or [])
 
@@ -118,6 +206,15 @@ async def run_agent_loop(
                 "final": content,
                 "trace": trace,
                 "messages": messages,
+                "usage": {
+                    **usage_totals,
+                    "estimated_cost_usd": _estimate_cost_usd(
+                        usage_totals["prompt_tokens"],
+                        usage_totals["completion_tokens"],
+                    ),
+                    "prompt_usd_per_1m": PROMPT_USD_PER_1M,
+                    "completion_usd_per_1m": COMPLETION_USD_PER_1M,
+                },
             }
 
         for tc in tool_calls:
@@ -211,6 +308,15 @@ async def run_agent_loop(
                         "optimization": result,
                         "trace": trace,
                         "messages": to_jsonable(messages),
+                        "usage": {
+                            **usage_totals,
+                            "estimated_cost_usd": _estimate_cost_usd(
+                                usage_totals["prompt_tokens"],
+                                usage_totals["completion_tokens"],
+                            ),
+                            "prompt_usd_per_1m": PROMPT_USD_PER_1M,
+                            "completion_usd_per_1m": COMPLETION_USD_PER_1M,
+                        },
                     }
 
     return {
@@ -221,4 +327,13 @@ async def run_agent_loop(
         },
         "trace": trace,
         "messages": to_jsonable(messages),
+        "usage": {
+            **usage_totals,
+            "estimated_cost_usd": _estimate_cost_usd(
+                usage_totals["prompt_tokens"],
+                usage_totals["completion_tokens"],
+            ),
+            "prompt_usd_per_1m": PROMPT_USD_PER_1M,
+            "completion_usd_per_1m": COMPLETION_USD_PER_1M,
+        },
     }

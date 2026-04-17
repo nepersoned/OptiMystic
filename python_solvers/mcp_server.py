@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from typing import Any, Dict, List
 
 from fastmcp import FastMCP
@@ -34,6 +35,8 @@ mcp = FastMCP("OptiMystic AI COO")
 def optimize(request: OptimizationRequest) -> Dict[str, Any]:
     """Execute optimization using existing OptiMystic runtime (Python + Julia routing)."""
 
+    trace_id = str(getattr(request, "trace_id", "") or str(uuid.uuid4()))
+
     try:
         normalized_request = OptimizationRequest.model_validate(request.model_dump())
 
@@ -44,7 +47,12 @@ def optimize(request: OptimizationRequest) -> Dict[str, Any]:
         else:
             runtime_params = dict(normalized_request.params)
 
-        result = run_optimization(normalized_request.domain, normalized_request.solver, runtime_params)
+        result = run_optimization(
+            normalized_request.domain,
+            normalized_request.solver,
+            runtime_params,
+            trace_id=trace_id,
+        )
 
         logical_error = logical_error_feedback(normalized_request.domain, runtime_params, result)
         if logical_error is not None:
@@ -52,13 +60,15 @@ def optimize(request: OptimizationRequest) -> Dict[str, Any]:
                 "ok": False,
                 "error": logical_error,
                 "result": result,
+                "trace_id": trace_id,
             }
 
-        return {"ok": True, "result": result}
+        return {"ok": True, "result": result, "trace_id": trace_id}
     except ValidationError as exc:
         feedback = validation_feedback(exc)
         return {
             "ok": False,
+            "trace_id": trace_id,
             "error": {
                 "code": "validation_error",
                 "message": feedback["message"],
@@ -68,6 +78,7 @@ def optimize(request: OptimizationRequest) -> Dict[str, Any]:
     except ValueError as exc:
         return {
             "ok": False,
+            "trace_id": trace_id,
             "error": {
                 "code": "invalid_request",
                 "message": str(exc),
@@ -76,6 +87,7 @@ def optimize(request: OptimizationRequest) -> Dict[str, Any]:
     except RuntimeError as exc:
         return {
             "ok": False,
+            "trace_id": trace_id,
             "error": {
                 "code": "solver_runtime_error",
                 "message": str(exc),
@@ -84,6 +96,7 @@ def optimize(request: OptimizationRequest) -> Dict[str, Any]:
     except Exception as exc:
         return {
             "ok": False,
+            "trace_id": trace_id,
             "error": {
                 "code": "internal_error",
                 "message": str(exc),

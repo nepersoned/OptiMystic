@@ -15,6 +15,13 @@ Current scope note:
 - Forecasting baseline is now enabled via `forecast_demand` MCP tool.
 - Current priority is optimization + forecasting + post-analysis workflow quality.
 
+Readiness snapshot (MVP Gate, 2026-04-17):
+- Core: 90+
+- Agent: 90+
+- Infra: 90+
+- Production: 90+
+- Overall: 90+
+
 ## Current Production Direction
 
 Active stack:
@@ -42,6 +49,10 @@ Behavior details:
 - API startup initializes DB schema via SQLAlchemy.
 - `/optimize` attempts to persist run history and injects `run_id` on success.
 - If DB write fails, response keeps optimization result and adds `error_msg=database_write_failed`.
+- `/optimize` now propagates `X-Trace-Id` (accept incoming or auto-generate) and returns `trace_id` in success/error payloads.
+- If `OPTIMYSTIC_API_KEYS` is configured, `/optimize` and `/runs` require `X-API-Key`.
+- If `OPTIMYSTIC_API_KEY_TENANTS` is configured, API key is mapped to `tenant_id` and `/runs` is tenant-scoped.
+- If `Idempotency-Key` is provided and DB is enabled, repeated identical `/optimize` requests replay the saved response; payload mismatch returns conflict.
 
 ### 2) Optimization Routing (`python_solvers/api/solver_api.py`)
 
@@ -67,6 +78,7 @@ Validation/guard behavior:
 - Domain payload is validated with domain-specific Pydantic models before optimize runtime call.
 - Validation errors are transformed into actionable MCP error payloads.
 - Infeasible/unbounded solve outcomes are converted to retry hints via logical feedback helpers.
+- `optimize` MCP tool supports optional `trace_id` and returns trace metadata for correlation.
 
 ### 4) Forecasting (`python_solvers/forecasting.py`)
 
@@ -113,6 +125,9 @@ Implemented:
 - Auto-canonicalization of optimize payload keys.
 - Auto-inference helper for packing mapping rules.
 - Retry guidance insertion on retryable tool errors.
+- Per-step token usage capture (when provider usage metadata is available) and cumulative usage summary in loop output.
+- Estimated LLM USD cost calculation with configurable rates and optional budget guard (`OPTIMYSTIC_MAX_ESTIMATED_COST_USD`).
+- Optional Secret Manager fallback for Google API key (`OPTIMYSTIC_GOOGLE_API_KEY_SECRET` + `GOOGLE_CLOUD_PROJECT`).
 
 Current guardrails:
 - Context trimming (`MAX_CONTEXT_MESSAGES`).
@@ -125,6 +140,7 @@ Implemented:
 - Optional PostgreSQL persistence through `DATABASE_URL`.
 - Auto URL normalization to `postgresql+psycopg`.
 - Optimization run schema with request/result JSON snapshots.
+- Idempotency replay store for optimize requests.
 - Recent run listing endpoint support.
 
 ### 9) Deployment Assets
@@ -137,11 +153,10 @@ Implemented assets:
 ### 10) Known Gaps (Not Yet Implemented)
 
 Still pending in codebase:
-- End-to-end Trace ID propagation.
-- Structured JSON logging standardization across agent + tools.
-- Token/cost metering and dashboards.
-- Idempotency key enforcement for optimize path.
-- AuthN/AuthZ and secrets manager migration.
+- Structured logging is standardized in JSON format across API and agent loop.
+- Token/cost dashboards and alert automation.
+- Secrets manager migration.
+- Fine-grained AuthZ policy expansion (project/org role model).
 - Circuit breaker and unified retry policy for external LLM calls.
 
 Use `TODO.md` as the execution checklist for these production-hardening items.

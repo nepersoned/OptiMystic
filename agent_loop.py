@@ -12,6 +12,7 @@ from agent_core import (
     run_agent_loop,
 )
 from agent_core.helpers import to_jsonable
+from agent_core.logging_utils import configure_structured_logging
 
 
 def parse_args() -> argparse.Namespace:
@@ -43,6 +44,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    configure_structured_logging()
     args = parse_args()
     resolved_model = args.model
     if args.llm_provider == "google" and resolved_model == DEFAULT_MODEL:

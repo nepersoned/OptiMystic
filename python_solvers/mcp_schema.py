@@ -148,6 +148,10 @@ class OptimizationRequest(BaseModel):
             "Use numeric values for capacities/costs/time and avoid natural-language strings in numeric fields."
         ),
     )
+    trace_id: str | None = Field(
+        default=None,
+        description="Optional correlation id for end-to-end request tracing.",
+    )
 
     model_config = {
         "json_schema_extra": {

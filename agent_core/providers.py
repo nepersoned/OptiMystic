@@ -19,6 +19,11 @@ except Exception:
     google_genai = None
     google_types = None
 
+try:
+    from google.cloud import secretmanager as google_secretmanager
+except Exception:
+    google_secretmanager = None
+
 
 async def chat_ollama(model: str, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]) -> Dict[str, Any]:
     return await asyncio.to_thread(
@@ -74,11 +79,20 @@ def _chat_openai_sync(model: str, messages: List[Dict[str, Any]], tools: List[Di
     choice = response.choices[0]
     msg = choice.message
     tool_calls = _normalize_openai_tool_calls(getattr(msg, "tool_calls", None))
+    usage = getattr(response, "usage", None)
+    usage_payload = None
+    if usage is not None:
+        usage_payload = {
+            "prompt_tokens": int(getattr(usage, "prompt_tokens", 0) or 0),
+            "completion_tokens": int(getattr(usage, "completion_tokens", 0) or 0),
+            "total_tokens": int(getattr(usage, "total_tokens", 0) or 0),
+        }
     return {
         "message": {
             "content": getattr(msg, "content", "") or "",
             "tool_calls": tool_calls,
-        }
+        },
+        "usage": usage_payload,
     }
 
 
@@ -94,7 +108,20 @@ async def chat_openai(model: str, messages: List[Dict[str, Any]], tools: List[Di
 def _build_google_client() -> Any:
     if google_genai is None:
         raise RuntimeError("google-genai package is not installed. Run: pip install google-genai")
+
     api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        secret_name = os.getenv("OPTIMYSTIC_GOOGLE_API_KEY_SECRET", "").strip()
+        project_id = os.getenv("GOOGLE_CLOUD_PROJECT", "").strip()
+        if secret_name and project_id and google_secretmanager is not None:
+            client = google_secretmanager.SecretManagerServiceClient()
+            secret_path = f"projects/{project_id}/secrets/{secret_name}/versions/latest"
+            try:
+                response = client.access_secret_version(request={"name": secret_path})
+                api_key = response.payload.data.decode("utf-8").strip()
+            except Exception as exc:
+                raise RuntimeError(f"Failed to load GOOGLE_API_KEY from Secret Manager: {exc}") from exc
+
     if not api_key:
         raise RuntimeError("GOOGLE_API_KEY environment variable is not set.")
     return google_genai.Client(api_key=api_key)
@@ -250,11 +277,24 @@ def _chat_google_sync(model: str, messages: List[Dict[str, Any]], tools: List[Di
                 text_chunks.append(str(txt))
     text_content = "\n".join(text_chunks).strip()
 
+    usage_payload = None
+    usage_meta = getattr(response, "usage_metadata", None)
+    if usage_meta is not None:
+        prompt_tokens = int(getattr(usage_meta, "prompt_token_count", 0) or 0)
+        completion_tokens = int(getattr(usage_meta, "candidates_token_count", 0) or 0)
+        total_tokens = int(getattr(usage_meta, "total_token_count", prompt_tokens + completion_tokens) or 0)
+        usage_payload = {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens,
+        }
+
     return {
         "message": {
             "content": text_content,
             "tool_calls": tool_calls,
-        }
+        },
+        "usage": usage_payload,
     }
 
 
