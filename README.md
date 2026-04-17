@@ -287,6 +287,37 @@ Compose files:
 - `docker/docker-compose.azure.yml`
 - `docker/docker-compose.gcp.yml`
 
+### GCP Production Path
+
+Current production deployment is driven by Cloud Build, not by docker compose.
+
+- Trigger: `optimystic-standard-trigger`
+- Trigger source: GitHub `nepersoned/OptiMystic` on branch `main`
+- Build config: `cloudbuild.yaml`
+- Deploy target: Cloud Run service `optimystic`
+- Region: `asia-northeast3`
+- Public base URL: `https://optimystic-826180130763.asia-northeast3.run.app`
+
+Behavior:
+- Any push to `main` triggers Cloud Build automatically.
+- Cloud Build builds the container from the root `Dockerfile`.
+- The built image is pushed to `gcr.io/$PROJECT_ID/github.com/nepersoned/optimystic:$COMMIT_SHA`.
+- The deploy step updates the Cloud Run service with that image.
+
+Quick verification:
+
+```powershell
+gcloud builds triggers list --project optimystic-493605 --format="table(id,name,filename)"
+gcloud builds list --project optimystic-493605 --limit=5 --format="table(id,status,createTime,buildTriggerId)"
+Invoke-RestMethod -Uri "https://optimystic-826180130763.asia-northeast3.run.app/health"
+```
+
+Expected health response:
+
+```json
+{"status":"ok","database_enabled":false}
+```
+
 ## Minimal Request Contract
 
 ```json
