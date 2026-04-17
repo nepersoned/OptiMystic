@@ -363,3 +363,5 @@ Expected health response:
 - `deploy/aws/README.md`
 - `deploy/azure/README.md`
 - `deploy/gcp/README.md`
+
+- Last CI timing probe: 2026-04-17
