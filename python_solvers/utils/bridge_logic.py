@@ -30,9 +30,6 @@ MODES = {
     "nsp": "scheduling",
 }
 
-SOLVER_TYPES = ["cp", "vrp", "routing"]
-
-
 def map_params_by_mode(mode: str, params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Map raw payload to common solver format by domain mode.
@@ -65,6 +62,13 @@ def map_params_by_mode(mode: str, params: Dict[str, Any]) -> Dict[str, Any]:
     if isinstance(params, dict) and isinstance(params.get("NLP"), dict) and "NLP" not in mapped:
         mapped["NLP"] = params.get("NLP")
     return mapped
+
+
+def should_use_python_runtime(template_type: str, solver_type: str) -> bool:
+    mode = (template_type or "").strip().lower()
+    normalized_mode = MODES.get(mode, mode)
+    normalized_solver = (solver_type or "").strip().lower()
+    return normalized_mode == "vrp" or normalized_solver in ("cp", "vrp", "routing")
 
 
 def generate_logic(template_type: str, params: Dict[str, Any], solver_type: str = "cp") -> Tuple[Any, Any, Any]:

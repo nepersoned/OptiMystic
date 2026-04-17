@@ -19,7 +19,11 @@ from .providers import chat_with_provider
 
 
 async def get_tools() -> List[Dict[str, Any]]:
-    tools = await mcp._tool_manager.get_tools()
+    manager = getattr(mcp, "_tool_manager", None)
+    if manager is None or not hasattr(manager, "get_tools"):
+        raise RuntimeError("FastMCP tool manager is unavailable. Check FastMCP compatibility.")
+
+    tools = await manager.get_tools()
     out: List[Dict[str, Any]] = []
     for tool in tools.values():
         out.append(
@@ -37,7 +41,11 @@ async def get_tools() -> List[Dict[str, Any]]:
 
 async def dispatch_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
     safe_args = args if isinstance(args, dict) else {}
-    tool_result = await mcp._tool_manager.call_tool(name, safe_args)
+    manager = getattr(mcp, "_tool_manager", None)
+    if manager is None or not hasattr(manager, "call_tool"):
+        raise RuntimeError("FastMCP tool manager is unavailable. Check FastMCP compatibility.")
+
+    tool_result = await manager.call_tool(name, safe_args)
     return tool_result.structured_content if hasattr(tool_result, "structured_content") else {}
 
 

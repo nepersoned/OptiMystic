@@ -15,6 +15,13 @@ def _safe_list(values: List[Any], length: int, default: float = 0.0) -> List[Any
     return values + [default] * (length - len(values))
 
 
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def map_params(raw_params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Map raw packing/cargo payload to common schema.
@@ -28,14 +35,28 @@ def map_params(raw_params: Dict[str, Any]) -> Dict[str, Any]:
         names = [x.get("Name", x.get("id", f"Item_{i}")) for i, x in enumerate(items)]
         weights = [float(x.get("Weight", x.get("weight", 0))) for x in items]
         values = [float(x.get("Value", x.get("Priority", x.get("priority", 1)))) for x in items]
-        demands = raw_params.get("Demands", {})
-        if not demands and names:
-            demands = {n: 1 for n in names}
+        item_demands = {
+            str(name): max(0.0, _safe_float(item.get("Demand", item.get("demand", 1)), 1.0))
+            for name, item in zip(names, items)
+            if str(name).strip()
+        }
+        overrides = raw_params.get("Demands", {})
+        normalized_overrides = {}
+        if isinstance(overrides, dict):
+            normalized_overrides = {
+                str(k): max(0.0, _safe_float(v, item_demands.get(str(k), 1.0)))
+                for k, v in overrides.items()
+                if str(k).strip()
+            }
+        demands = {**item_demands, **normalized_overrides}
     else:
         names = list(raw_params.get("Items", []))
         weights = raw_params.get("Weights", raw_params.get("Volumes", [0] * len(names)))
         values = raw_params.get("Values", raw_params.get("Priorities", [1] * len(names)))
         demands = raw_params.get("Demands", {})
+
+    if not isinstance(demands, dict):
+        demands = {}
 
     vehicles = raw_params.get("Vehicles", raw_params.get("Trucks", [{"Capacity": 5000, "Cost": 1}]))
     if isinstance(vehicles, (int, float)):

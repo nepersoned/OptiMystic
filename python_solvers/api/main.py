@@ -1,8 +1,13 @@
+import logging
+
 from fastapi import FastAPI, HTTPException
 
 from python_solvers.api.schemas import HealthResponse, OptimizationRunSummary, OptimizeRequest, OptimizeResponse
 from python_solvers.api.solver_api import run_optimization
 from python_solvers.db import create_optimization_run, init_db, is_database_enabled, list_optimization_runs
+
+
+logger = logging.getLogger(__name__)
 
 
 app = FastAPI(
@@ -33,6 +38,7 @@ def optimize(req: OptimizeRequest) -> OptimizeResponse:
                 if run_id is not None:
                     response_payload["run_id"] = run_id
             except Exception:
+                logger.exception("Failed to persist optimization run", extra={"domain": req.domain, "solver": req.solver})
                 response_payload.setdefault("error_msg", "database_write_failed")
         return OptimizeResponse(**response_payload)
     except ValueError as exc:

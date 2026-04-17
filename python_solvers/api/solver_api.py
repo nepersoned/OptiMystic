@@ -6,11 +6,11 @@ from python_solvers.utils import bridge_logic
 
 def run_optimization(domain: str, solver: str, params: Dict[str, Any]) -> Dict[str, Any]:
     solver_type = (solver or "").strip().lower()
-    mapped_params = bridge_logic.map_params_by_mode(domain, params)
 
-    if str(domain or "").strip().lower() == "vrp" or solver_type == "cp":
+    if bridge_logic.should_use_python_runtime(domain, solver_type):
         result = bridge_logic.run_python_runtime(domain, params, solver_type)
     else:
+        mapped_params = bridge_logic.map_params_by_mode(domain, params)
         julia_payload = _build_julia_payload(mapped_params)
         result = _run_julia_solver(domain, solver_type or "mip", julia_payload)
 

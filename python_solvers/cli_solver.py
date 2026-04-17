@@ -140,13 +140,12 @@ def main():
 
     try:
         params = json.loads(args.params)
-        mapped_params = bridge_logic.map_params_by_mode(args.domain, params)
 
-        normalized_domain = (args.domain or "").strip().lower()
         solver_type = (args.solver or "").strip().lower()
-        if normalized_domain == "vrp" or solver_type == "cp":
+        if bridge_logic.should_use_python_runtime(args.domain, solver_type):
             result = bridge_logic.run_python_runtime(args.domain, params, solver_type)
         else:
+            mapped_params = bridge_logic.map_params_by_mode(args.domain, params)
             julia_payload = _build_julia_payload(mapped_params)
             result = _run_julia_solver(args.domain, solver_type or "mip", julia_payload)
 

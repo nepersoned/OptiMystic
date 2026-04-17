@@ -16,11 +16,15 @@ RUN apt-get update \
         tini \
     && rm -rf /var/lib/apt/lists/*
 
+# R packages required by python_solvers/r_bridge.py and r_solvers/processors.R
+RUN Rscript -e "install.packages(c('jsonlite','ggplot2','dplyr','tidyr'), repos='https://cloud.r-project.org')"
+
 WORKDIR /app
 COPY . /app
 
 # Python runtime dependencies (FastAPI, FastMCP, agent loop, rpy2 bridge)
 RUN python3 -m pip install --upgrade pip \
+    && python3 -m pip install --upgrade setuptools wheel \
     && python3 -m pip install -r /app/python_solvers/requirements.txt \
     && python3 -m pip install jupyterlab notebook jupyter-server ipykernel
 

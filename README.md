@@ -234,6 +234,27 @@ cd C:\Projects\OptiMystic
 .\scripts\setup_py312_forecasting.ps1
 ```
 
+Windows runtime sanity check (Julia + R):
+
+```powershell
+cd C:\Projects\OptiMystic
+
+# 1) Add Rscript path for current user/session (one-time)
+.\scripts\setup_r_path.ps1
+
+# 2) Julia module load smoke (quote-safe)
+Set-Content -Path .tmp_julia_smoke.jl -Value 'include("julia_solvers/src/main.jl"); println("julia_router_load_ok")'
+julia --project=julia_solvers .tmp_julia_smoke.jl
+Remove-Item .tmp_julia_smoke.jl -Force
+
+# 3) R processor load smoke
+Rscript -e "setwd('r_solvers'); source('utils.R'); source('processors.R'); cat('r_processors_load_ok\n')"
+```
+
+Tip:
+- On Windows PowerShell, prefer `.jl` temp-file execution over `julia -e` for complex strings.
+- For Julia CLI `--params`, pass raw JSON (avoid extra escaping layers).
+
 Recommended integration for optimization:
 1. Forecast with `forecast_demand`
 2. Bridge with `bridge_forecast_to_payload` using bound=`upper`

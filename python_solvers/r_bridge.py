@@ -16,16 +16,26 @@ def _configure_r_runtime_paths() -> None:
     if os.name != "nt":
         return
 
-    candidates = []
+    candidates: list[Path] = []
     r_home_env = os.environ.get("R_HOME")
     if r_home_env:
         candidates.append(Path(r_home_env))
 
+    base_dir = Path("C:/Program Files/R")
+    if base_dir.exists():
+        version_dirs = sorted(
+            [p for p in base_dir.glob("R-*") if p.is_dir()],
+            key=lambda p: p.name,
+            reverse=True,
+        )
+        candidates.extend(version_dirs)
+
+    # Last-resort fallback for historically used path in this project.
     candidates.append(Path("C:/Program Files/R/R-4.5.3"))
 
     r_home = None
     for candidate in candidates:
-        if (candidate / "bin" / "x64").exists():
+        if (candidate / "bin" / "x64").exists() or (candidate / "bin").exists():
             r_home = candidate
             break
 
@@ -33,7 +43,8 @@ def _configure_r_runtime_paths() -> None:
         return
 
     os.environ.setdefault("R_HOME", str(r_home))
-    r_bin = r_home / "bin" / "x64"
+    r_bin_x64 = r_home / "bin" / "x64"
+    r_bin = r_bin_x64 if r_bin_x64.exists() else (r_home / "bin")
     current_path = os.environ.get("PATH", "")
     if str(r_bin) not in current_path:
         os.environ["PATH"] = f"{r_bin};{current_path}" if current_path else str(r_bin)

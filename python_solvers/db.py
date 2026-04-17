@@ -40,15 +40,34 @@ class OptimizationRunRecord(Base):
     error_msg: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
-engine = create_engine(DATABASE_URL, future=True, pool_pre_ping=True) if DATABASE_URL else None
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True) if engine else None
+engine = None
+SessionLocal = None
+
+
+def _ensure_database_config() -> None:
+    global DATABASE_URL, engine, SessionLocal
+
+    resolved_url = _normalize_database_url(os.getenv("DATABASE_URL", "").strip())
+    if resolved_url == DATABASE_URL and engine is not None and SessionLocal is not None:
+        return
+
+    DATABASE_URL = resolved_url
+    if not DATABASE_URL:
+        engine = None
+        SessionLocal = None
+        return
+
+    engine = create_engine(DATABASE_URL, future=True, pool_pre_ping=True)
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
 
 def is_database_enabled() -> bool:
+    _ensure_database_config()
     return engine is not None and SessionLocal is not None
 
 
 def init_db() -> None:
+    _ensure_database_config()
     if engine is None:
         return
     Base.metadata.create_all(bind=engine)
