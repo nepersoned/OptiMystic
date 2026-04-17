@@ -190,12 +190,9 @@ def optimize(req: OptimizeRequest, request: Request) -> OptimizeResponse:
 
 
 @app.get("/runs", response_model=list[OptimizationRunSummary])
-def list_runs(limit: int = 20, request: Request | None = None) -> list[OptimizationRunSummary]:
-    trace_id = ""
-    tenant_id = ""
-    if request is not None:
-        trace_id = str(getattr(request.state, "trace_id", "") or "")
-        tenant_id = _require_api_key(request, trace_id)
+def list_runs(request: Request, limit: int = 20) -> list[OptimizationRunSummary]:
+    trace_id = str(getattr(request.state, "trace_id", "") or "")
+    tenant_id = _require_api_key(request, trace_id)
 
     if not is_database_enabled():
         raise HTTPException(
