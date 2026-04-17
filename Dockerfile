@@ -39,10 +39,10 @@ ENV OPTIMYSTIC_PYTHON=python3
 ENV OPTIMYSTIC_JULIA=julia
 ENV OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS=180
 ENV OPTIMYSTIC_JULIA_TIMEOUT_SECONDS=180
-ENV PORT=8000
+ENV PORT=8080
 
-EXPOSE 8000
+EXPOSE 8080
 EXPOSE 8888
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["python3", "-m", "uvicorn", "python_solvers.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python3", "-m", "uvicorn", "python_solvers.api.main:app", "--host", "0.0.0.0", "--port", "8080"]
