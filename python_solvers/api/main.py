@@ -91,8 +91,18 @@ app.add_middleware(TraceIdMiddleware)
 
 @app.on_event("startup")
 def startup() -> None:
-    configure_structured_logging()
-    init_db()
+    try:
+        configure_structured_logging()
+        logger.info("Structured logging initialized")
+    except Exception as exc:
+        print(f"[STARTUP] Logging init failed: {exc}", flush=True)
+        import traceback
+        traceback.print_exc()
+    try:
+        init_db()
+        logger.info("Database initialized")
+    except Exception as exc:
+        logger.warning(f"Database init failed (may be expected in no-DB mode): {exc}")
 
 
 @app.get("/health", response_model=HealthResponse)

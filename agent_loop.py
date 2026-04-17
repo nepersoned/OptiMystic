@@ -44,7 +44,12 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    configure_structured_logging()
+    try:
+        configure_structured_logging()
+    except Exception as exc:
+        print(f"[STARTUP] Logging init failed: {exc}", flush=True)
+        import traceback
+        traceback.print_exc()
     args = parse_args()
     resolved_model = args.model
     if args.llm_provider == "google" and resolved_model == DEFAULT_MODEL:
