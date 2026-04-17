@@ -1,10 +1,23 @@
 steps:
+  - id: Pull cache image
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - docker pull gcr.io/$PROJECT_ID/github.com/nepersoned/optimystic:latest || true
+
   - id: Build
     name: gcr.io/cloud-builders/docker
     args:
       - build
+      - --build-arg
+      - BUILDKIT_INLINE_CACHE=1
+      - --cache-from
+      - gcr.io/$PROJECT_ID/github.com/nepersoned/optimystic:latest
       - -t
       - gcr.io/$PROJECT_ID/github.com/nepersoned/optimystic:$COMMIT_SHA
+      - -t
+      - gcr.io/$PROJECT_ID/github.com/nepersoned/optimystic:latest
       - -f
       - Dockerfile
       - .
@@ -14,6 +27,12 @@ steps:
     args:
       - push
       - gcr.io/$PROJECT_ID/github.com/nepersoned/optimystic:$COMMIT_SHA
+
+  - id: Push latest
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - gcr.io/$PROJECT_ID/github.com/nepersoned/optimystic:latest
 
   - id: Deploy
     name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
@@ -35,6 +54,7 @@ substitutions:
 
 images:
   - gcr.io/$PROJECT_ID/github.com/nepersoned/optimystic:$COMMIT_SHA
+  - gcr.io/$PROJECT_ID/github.com/nepersoned/optimystic:latest
 
 options:
   logging: CLOUD_LOGGING_ONLY

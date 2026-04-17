@@ -24,7 +24,10 @@ RUN apt-get update \
 RUN Rscript -e "install.packages(c('jsonlite','ggplot2','dplyr','tidyr'), repos='https://cloud.r-project.org')"
 
 WORKDIR /app
-COPY . /app
+
+COPY python_solvers/requirements.txt /app/python_solvers/requirements.txt
+COPY julia_solvers/Project.toml /app/julia_solvers/Project.toml
+COPY julia_solvers/Manifest.toml /app/julia_solvers/Manifest.toml
 
 # Python runtime dependencies (FastAPI, FastMCP, agent loop, rpy2 bridge)
 RUN /opt/venv/bin/python -m pip install --upgrade pip \
@@ -34,6 +37,12 @@ RUN /opt/venv/bin/python -m pip install --upgrade pip \
 
 # Julia runtime dependencies
 RUN julia --project=/app/julia_solvers -e "using Pkg; Pkg.instantiate()"
+
+COPY agent_core /app/agent_core
+COPY julia_solvers /app/julia_solvers
+COPY python_solvers /app/python_solvers
+COPY r_solvers /app/r_solvers
+COPY agent_loop.py /app/agent_loop.py
 
 ENV OPTIMYSTIC_PYTHON=python3
 ENV OPTIMYSTIC_JULIA=julia

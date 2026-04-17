@@ -8,5 +8,16 @@ __pycache__
 **/*.pyc
 **/*.pyo
 **/*.pyd
+.pytest_cache
+.mypy_cache
+.ipynb_checkpoints
 _legacy
 _legacy_django
+_legacy_go
+deploy
+docker
+examples
+scripts
+TODO.md
+old_trigger.json
+old_trigger_disabled.json
