@@ -1,114 +1,132 @@
 # OptiMystic TODO
 
-This document is the single execution checklist until production readiness.
+This is the single checklist for shipping a usable internal beta (billing excluded).
 
-## Release Milestone (2026-04-17)
+## Status Legend
 
-- [x] Readiness baseline aligned to 90+ across Core, Agent, Infra, and Production
+- `[ ]` not started
+- `[~]` in progress
+- `[x]` done
 
-## Usage Rules
+## 0) Today's Wrap-up (2026-04-18)
 
-- Start work: `[ ]` -> `[~]`
-- Complete work: `[~]` -> `[x]`
-- Add new tasks directly under the relevant priority section
-- If a task is ambiguous, define the completion criteria first
+- [x] Cloud Run startup issue fixed and deployment recovered
+- [x] Health endpoint verified (`status=ok`)
+- [x] UI beta concept note added (`UI_BETA_IDEA_NOTE.md`)
+- [x] TODO reorganized for product-first beta execution
+- [ ] Monitoring setup resumed later (explicitly postponed)
+- [ ] DB integration resumed later (explicitly postponed)
 
-## 0. Immediate Tasks (Top Priority)
+## 1) Beta North Star (Must Hold)
 
-- [~] Create and propagate a Trace ID across the full request path
-- [~] Standardize agent_loop and tool-call logs into structured JSON
-- [~] Track model call cost metrics (tokens/cost per request)
-- [~] Design and apply idempotency keys for optimize execution
-- [~] Standardize timeout/retry/backoff policy for Google API calls
-
-## 1. Reliability
-
-- [ ] Introduce a circuit breaker for external LLM calls
-- [~] Define a standard fallback response for tool execution failures
-- [ ] Consolidate common exception handling (consistent error codes)
-- [~] Unify timeout policies for long-running tasks
-- [ ] Create a retryable vs non-retryable error classification table
+- [ ] Excel-like UX + strict data quality guardrails
+- [ ] Agent proposes diffs only (no auto-apply)
+- [ ] Dataset versioning + rollback always available
+- [ ] Every optimize result includes business-impact summary line
 
 Completion Criteria:
-- [ ] No duplicate execution or duplicate billing for repeated identical requests
-- [ ] Service stays available in degraded mode during external model outages
+- [ ] A non-technical tester can run upload -> edit -> optimize in under 10 minutes
+- [ ] No silent data mutation without user approval
 
-## 2. Observability
+## 2) UI Delivery (Top Priority)
 
-- [ ] Link request-level Trace ID with tool_call_id
-- [ ] Break down latency by stage (LLM, tool, solver)
-- [ ] Build dashboards for failure rate, latency, and cost
-- [ ] Configure threshold alerts (failure, latency, cost spikes)
-- [ ] Finalize log retention policy (duration/capacity)
+## 2.1 Upload / Dataset Creation
+- [ ] Build file upload UI (xlsx/csv)
+- [ ] Show sheet/column inference summary
+- [ ] Show quality badge (`good/warning/error`)
+- [ ] Block on critical schema errors
 
-Completion Criteria:
-- [ ] Root cause is traceable via Trace ID for at least 90% of incidents
+## 2.2 Excel-like Grid Editor
+- [ ] Grid with edit/filter/sort/paste support
+- [ ] Highlight changed cells
+- [ ] Save as dataset versions (`v1`, `v2`, ...)
+- [ ] Add rollback to previous version
 
-## 3. Security & Ops
+## 2.3 Agent Sidebar
+- [ ] Chat panel attached to current dataset version
+- [ ] Show AI-selected domain/solver with one-line reason
+- [ ] Render proposed diffs
+- [ ] Approve/reject per diff batch
 
-- [ ] Migrate secrets (e.g., GOOGLE_API_KEY) to a secret manager
-- [~] Apply API authentication (AuthN)
-- [~] Apply project/org-level authorization policies (AuthZ)
-- [ ] Store audit logs
-- [ ] Validate strict environment separation (dev/stage/prod)
-
-Completion Criteria:
-- [ ] Zero plaintext secrets in code/config files
-- [ ] Unauthorized data access blocking tests pass
-
-## 4. Quality
-
-- [ ] Freeze agent regression test scenarios (core domains)
-- [ ] Add MCP tool contract tests
-- [ ] Build fixture datasets for failure reproduction
-- [ ] Automate performance smoke tests
-- [ ] Configure CI quality gates (block merge on test failure)
+## 2.4 Result Dashboard
+- [ ] Status/objective/solve_time cards
+- [ ] Bottleneck TOP 3 panel
+- [ ] Delay KPI (on-time rate, avg delay)
+- [ ] Export result CSV/XLSX
+- [ ] One-line value summary (delta vs current plan)
 
 Completion Criteria:
-- [ ] Automated regression covers at least 80% of core scenarios
+- [ ] Four-screen beta flow is usable end-to-end
+- [ ] User can understand result without reading raw JSON
 
-## 5. Productization
+## 3) API/Product Contract
 
-- [ ] Define DB memory schema (session, message, tool_trace, summary)
-- [ ] Design a separate natural-language chat endpoint (`/chat`)
-- [ ] Connect asynchronous post-processing pipeline for R analytics
-- [ ] Add result report retrieval API
-- [ ] Provide an operator status page (health/recent errors/cost)
-- [x] Add optional PostgreSQL-backed optimization run history endpoint (`/runs`)
-- [x] Expose R post-analysis capability as MCP tool (`analyze_with_r`)
-- [x] Add StatsForecast-based forecasting MCP tool (`forecast_demand`) baseline
-- [x] Add forecast-to-optimization bridge MCP tool (`bridge_forecast_to_payload`)
+- [ ] `POST /datasets/upload`
+- [ ] `POST /datasets/{id}/normalize`
+- [ ] `GET /datasets/{id}/grid`
+- [ ] `PATCH /datasets/{id}/cells`
+- [ ] `POST /datasets/{id}/chat`
+- [ ] `POST /datasets/{id}/optimize`
+- [ ] `GET /datasets/{id}/versions`
+- [ ] `POST /datasets/{id}/versions/{version}/restore`
 
-## 6. Docker/Deployment Operations
+Completion Criteria:
+- [ ] Frontend can complete full workflow using only documented endpoints
 
-- [ ] Standardize documented run commands for the docker folder structure
-- [ ] Smoke-validate deployment scripts for AWS/Azure/GCP
-- [ ] Add deployment rollback runbook
-- [ ] Finalize image tagging policy (commit SHA-based)
-- [ ] Finalize production deployment checklist
+## 4) Data Normalization + Validation Layer
 
-## 7. Code-Verified Snapshot (2026-04-16)
+- [ ] Apply rule-based normalization preview before commit
+- [ ] Track rule application report (before/after)
+- [ ] Implement blocker checks:
+  - [ ] Missing process route
+  - [ ] Missing machine capacity
+  - [ ] Invalid due-date logic
+- [ ] Add warnings for non-blocking data issues
 
-- [x] API endpoints available: `/health`, `/optimize`, `/runs` (DB optional)
-- [x] MCP tools available: `read_company_data`, `get_target_schema`, `map_to_target_schema`, `forecast_demand`, `bridge_forecast_to_payload`, `optimize`, `analyze_with_r`
-- [x] Agent multi-provider support (`ollama`, `openai`-compatible, `google`)
-- [x] Agent fallback-model switch + max-step guard + context trimming
-- [x] Forecasting fallback path when StatsForecast is unavailable
-- [x] R post-analysis bridge integrated via `rpy2`
-- [x] PostgreSQL persistence model for optimization runs
+Completion Criteria:
+- [ ] "Data cannot be scheduled" reason is explicit and actionable
 
-Partial implementation notes:
-- [~] FastAPI `/optimize` and MCP `optimize` now propagate `trace_id` (header/payload/error/result). End-to-end linking with MCP `tool_call_id` is still pending
-- [~] `/optimize` and `/runs` now support API-key guard via `X-API-Key` when `OPTIMYSTIC_API_KEYS` is configured
-- [~] API key to tenant mapping (`OPTIMYSTIC_API_KEY_TENANTS`) now enables tenant attribution and tenant-scoped `/runs` filtering
-- [~] `/optimize` now supports `Idempotency-Key` replay/conflict handling backed by DB (disabled when DB is off)
-- [~] Agent loop now collects per-step LLM token usage, estimates USD cost with configurable rates, and supports budget guard via `OPTIMYSTIC_MAX_ESTIMATED_COST_USD`
-- [~] Structured JSON logging formatter is applied to API startup and agent loop runtime
-- [~] Google API key can be loaded from Secret Manager when `OPTIMYSTIC_GOOGLE_API_KEY_SECRET` and `GOOGLE_CLOUD_PROJECT` are set
-- [~] Timeout/fallback exists in agent calls, but unified retry/backoff policy is not standardized yet
-- [~] Tool error response shape is mostly standardized as `{ok:false,error:{code,message}}`, but cross-module unification is pending
+## 5) Optimization + Explainability
+
+- [ ] Keep current optimize path stable (`/optimize`)
+- [ ] Add auto domain/solver recommendation module for UI flow
+- [ ] Persist recommendation reason text
+- [ ] Add KPI delta renderer for result summary
+
+Completion Criteria:
+- [ ] Each run explains: why solver chosen, what improved, what bottleneck remains
+
+## 6) Ops and Monitoring (Postponed by decision)
+
+Decision:
+- Deferred until account migration and beta UX stabilization
+
+Deferred tasks:
+- [ ] Uptime checks
+- [ ] Alert channel/policy
+- [ ] Failure/latency/cost dashboards
+
+## 7) Database Integration (Postponed by decision)
+
+Decision:
+- Deferred until account migration and schema lock for beta
+
+Deferred tasks:
+- [ ] External PostgreSQL provision
+- [ ] `DATABASE_URL` production wiring
+- [ ] Run history and dataset persistence hardening
+
+## 8) Internal Beta Validation
+
+- [ ] Run 20+ internal workflows using real-like spreadsheets
+- [ ] Log top 10 UX frictions
+- [ ] Fix top 3 friction points before external testers
+- [ ] Freeze beta checklist and demo script
+
+Completion Criteria:
+- [ ] Internal tester can complete workflow without developer intervention
 
 ## Notes
 
-- Use this file as the single source of truth
-- Track progress via checkbox state instead of weekly plans
+- Product-first rule: do not add deep solver sophistication before workflow usability is proven.
+- Billing remains out of scope until internal beta flow is stable.
