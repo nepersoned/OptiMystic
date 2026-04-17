@@ -3,6 +3,8 @@ FROM julia:1.11-bookworm AS runtime
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV PIP_NO_CACHE_DIR=1
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH="/opt/venv/bin:${PATH}"
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -14,7 +16,8 @@ RUN apt-get update \
         ca-certificates \
         curl \
         tini \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && python3 -m venv /opt/venv
 
 # R packages required by python_solvers/r_bridge.py and r_solvers/processors.R
 RUN Rscript -e "install.packages(c('jsonlite','ggplot2','dplyr','tidyr'), repos='https://cloud.r-project.org')"
@@ -23,10 +26,10 @@ WORKDIR /app
 COPY . /app
 
 # Python runtime dependencies (FastAPI, FastMCP, agent loop, rpy2 bridge)
-RUN python3 -m pip install --upgrade pip \
-    && python3 -m pip install --upgrade setuptools wheel \
-    && python3 -m pip install -r /app/python_solvers/requirements.txt \
-    && python3 -m pip install jupyterlab notebook jupyter-server ipykernel
+RUN /opt/venv/bin/python -m pip install --upgrade pip \
+    && /opt/venv/bin/python -m pip install --upgrade setuptools wheel \
+    && /opt/venv/bin/python -m pip install -r /app/python_solvers/requirements.txt \
+    && /opt/venv/bin/python -m pip install jupyterlab notebook jupyter-server ipykernel
 
 # Julia runtime dependencies
 RUN julia --project=/app/julia_solvers -e "using Pkg; Pkg.instantiate()"
