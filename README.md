@@ -294,15 +294,22 @@ Current production deployment is driven by Cloud Build, not by docker compose.
 - Trigger: `optimystic-standard-trigger`
 - Trigger source: GitHub `nepersoned/OptiMystic` on branch `main`
 - Build config: `cloudbuild.yaml`
+- Dependency base image: `Dockerfile.deps`
+- App image: `Dockerfile`
 - Deploy target: Cloud Run service `optimystic`
 - Region: `asia-northeast3`
 - Public base URL: `https://optimystic-826180130763.asia-northeast3.run.app`
 
 Behavior:
 - Any push to `main` triggers Cloud Build automatically.
-- Cloud Build builds the container from the root `Dockerfile`.
+- Cloud Build refreshes the dependency base image from `Dockerfile.deps`.
+- Cloud Build then builds the app container from the root `Dockerfile` on top of that base.
 - The built image is pushed to `gcr.io/$PROJECT_ID/github.com/nepersoned/optimystic:$COMMIT_SHA`.
 - The deploy step updates the Cloud Run service with that image.
+
+Build-time note:
+- The first build after dependency-layer changes can still be slow because Python, R, and Julia dependencies must be baked into the base image.
+- Typical code-only pushes should get better reuse because the app image no longer reinstalls the full dependency stack.
 
 Quick verification:
 

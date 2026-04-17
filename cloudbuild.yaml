@@ -1,5 +1,40 @@
 steps:
-  - id: Pull cache image
+  - id: Pull deps cache image
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - docker pull gcr.io/$PROJECT_ID/github.com/nepersoned/optimystic-deps:latest || true
+
+  - id: Build deps
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --build-arg
+      - BUILDKIT_INLINE_CACHE=1
+      - --cache-from
+      - gcr.io/$PROJECT_ID/github.com/nepersoned/optimystic-deps:latest
+      - -t
+      - gcr.io/$PROJECT_ID/github.com/nepersoned/optimystic-deps:$COMMIT_SHA
+      - -t
+      - gcr.io/$PROJECT_ID/github.com/nepersoned/optimystic-deps:latest
+      - -f
+      - Dockerfile.deps
+      - .
+
+  - id: Push deps
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - gcr.io/$PROJECT_ID/github.com/nepersoned/optimystic-deps:$COMMIT_SHA
+
+  - id: Push deps latest
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - gcr.io/$PROJECT_ID/github.com/nepersoned/optimystic-deps:latest
+
+  - id: Pull app cache image
     name: gcr.io/cloud-builders/docker
     entrypoint: bash
     args:
@@ -14,6 +49,8 @@ steps:
       - BUILDKIT_INLINE_CACHE=1
       - --cache-from
       - gcr.io/$PROJECT_ID/github.com/nepersoned/optimystic:latest
+      - --build-arg
+      - BASE_IMAGE=gcr.io/$PROJECT_ID/github.com/nepersoned/optimystic-deps:latest
       - -t
       - gcr.io/$PROJECT_ID/github.com/nepersoned/optimystic:$COMMIT_SHA
       - -t
@@ -53,6 +90,8 @@ substitutions:
   _DEPLOY_REGION: asia-northeast3
 
 images:
+  - gcr.io/$PROJECT_ID/github.com/nepersoned/optimystic-deps:$COMMIT_SHA
+  - gcr.io/$PROJECT_ID/github.com/nepersoned/optimystic-deps:latest
   - gcr.io/$PROJECT_ID/github.com/nepersoned/optimystic:$COMMIT_SHA
   - gcr.io/$PROJECT_ID/github.com/nepersoned/optimystic:latest
 

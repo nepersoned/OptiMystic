@@ -1,54 +1,13 @@
-FROM julia:1.11-bookworm AS runtime
-
-ENV DEBIAN_FRONTEND=noninteractive
-ENV PYTHONUNBUFFERED=1
-ENV PIP_NO_CACHE_DIR=1
-ENV VIRTUAL_ENV=/opt/venv
-ENV PATH="/opt/venv/bin:${PATH}"
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        python3 \
-        python3-dev \
-        python3-pip \
-        python3-venv \
-        r-base \
-        r-base-dev \
-        ca-certificates \
-        curl \
-        tini \
-    && rm -rf /var/lib/apt/lists/* \
-    && python3 -m venv /opt/venv
-
-# R packages required by python_solvers/r_bridge.py and r_solvers/processors.R
-RUN Rscript -e "install.packages(c('jsonlite','ggplot2','dplyr','tidyr'), repos='https://cloud.r-project.org')"
+ARG BASE_IMAGE=gcr.io/optimystic-493605/github.com/nepersoned/optimystic-deps:latest
+FROM ${BASE_IMAGE} AS runtime
 
 WORKDIR /app
-
-COPY python_solvers/requirements.txt /app/python_solvers/requirements.txt
-COPY julia_solvers/Project.toml /app/julia_solvers/Project.toml
-COPY julia_solvers/Manifest.toml /app/julia_solvers/Manifest.toml
-
-# Python runtime dependencies (FastAPI, FastMCP, agent loop, rpy2 bridge)
-RUN /opt/venv/bin/python -m pip install --upgrade pip \
-    && /opt/venv/bin/python -m pip install --upgrade setuptools wheel \
-    && /opt/venv/bin/python -m pip install -r /app/python_solvers/requirements.txt \
-    && /opt/venv/bin/python -m pip install jupyterlab notebook jupyter-server ipykernel
-
-# Julia runtime dependencies
-RUN julia --project=/app/julia_solvers -e "using Pkg; Pkg.instantiate()"
 
 COPY agent_core /app/agent_core
 COPY julia_solvers /app/julia_solvers
 COPY python_solvers /app/python_solvers
 COPY r_solvers /app/r_solvers
 COPY agent_loop.py /app/agent_loop.py
-
-ENV OPTIMYSTIC_PYTHON=python3
-ENV OPTIMYSTIC_JULIA=julia
-ENV OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS=180
-ENV OPTIMYSTIC_JULIA_TIMEOUT_SECONDS=180
-ENV PORT=8080
 
 EXPOSE 8080
 EXPOSE 8888

@@ -15,6 +15,11 @@ cd C:\Projects\OptiMystic
 
 ## A) Cloud Run (Recommended)
 
+Current repository default:
+- GitHub `main` pushes go through Cloud Build using `cloudbuild.yaml`
+- `Dockerfile.deps` builds the heavy dependency base image
+- `Dockerfile` builds the application image on top of that base and deploys to Cloud Run
+
 ### 1) Prerequisites
 
 - Google Cloud SDK (`gcloud`)
