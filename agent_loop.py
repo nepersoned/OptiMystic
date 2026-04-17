@@ -9,8 +9,8 @@ from agent_core import (
     DEFAULT_LLM_PROVIDER,
     DEFAULT_MODEL,
     MAX_STEPS,
-    run_agent_loop,
 )
+from agent_core.runner import run_agent_loop
 from agent_core.helpers import to_jsonable
 from agent_core.logging_utils import configure_structured_logging
 
