@@ -56,6 +56,13 @@ def _infer_domain_solver(columns: List[str]) -> tuple[str, str]:
     return "generic", "nlp"
 
 
+def _safe_num(v: Any, default: float = 0.0) -> float:
+    try:
+        return float(v) if v is not None else default
+    except (TypeError, ValueError):
+        return default
+
+
 def _rows_to_params(domain: str, rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     if domain == "packing":
         return {"Items": rows, "Vehicles": [{"Capacity": 100}]}
@@ -64,9 +71,93 @@ def _rows_to_params(domain: str, rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     if domain == "scheduling":
         return {"Shifts": rows, "Workers": []}
     if domain == "vrp":
-        depot: Dict[str, Any] = {"Name": "Depot", "X": 0, "Y": 0, "Demand": 0}
-        return {"Nodes": [depot] + rows, "Vehicles": [{"Capacity": 100}]}
+        depot_row = next((r for r in rows if str(r.get("order_id", "")).upper() == "DEPOT"), None)
+        customer_rows = [r for r in rows if str(r.get("order_id", "")).upper() != "DEPOT"]
+
+        def to_node(row: Dict[str, Any], idx: int) -> Dict[str, Any]:
+            return {
+                "Name": str(row.get("customer_name") or row.get("name") or f"Node_{idx}"),
+                "X": _safe_num(row.get("longitude") or row.get("lon") or row.get("X") or row.get("x")),
+                "Y": _safe_num(row.get("latitude") or row.get("lat") or row.get("Y") or row.get("y")),
+                "Demand": _safe_num(row.get("demand_kg") or row.get("demand") or row.get("Demand")),
+                "ServiceTime": _safe_num(row.get("service_time_min") or row.get("service_time")),
+            }
+
+        nodes = [to_node(r, i + 1) for i, r in enumerate(customer_rows)]
+        total_demand = sum(n["Demand"] for n in nodes)
+        num_vehicles = max(4, min(10, len(nodes) // 5))
+        vehicle_capacity = max(500.0, (total_demand / max(1, num_vehicles)) * 1.5)
+
+        if depot_row:
+            depot: Dict[str, Any] = {
+                "Name": str(depot_row.get("customer_name") or "물류센터"),
+                "X": _safe_num(depot_row.get("longitude") or 126.9979),
+                "Y": _safe_num(depot_row.get("latitude") or 37.5641),
+                "Demand": 0,
+            }
+        else:
+            depot = {"Name": "물류센터", "X": 126.9979, "Y": 37.5641, "Demand": 0}
+
+        return {
+            "Nodes": [depot] + nodes,
+            "Vehicles": [{"Name": f"차량_{i + 1}", "Capacity": round(vehicle_capacity)} for i in range(num_vehicles)],
+        }
     return {"data": rows}
+
+
+def _build_chart_data(domain: str, result: Dict[str, Any]) -> Dict[str, Any]:
+    if domain == "vrp":
+        routes = result.get("routes", [])
+        if not routes:
+            return {}
+        return {
+            "route_bar": {
+                "categories": [r.get("vehicle", f"차량_{i}") for i, r in enumerate(routes)],
+                "series": [
+                    {"name": "거리 (단위)", "data": [round(r.get("distance", 0), 1) for r in routes]},
+                    {"name": "적재량 (kg)", "data": [round(r.get("load", 0), 1) for r in routes]},
+                ],
+            },
+            "kpi": {
+                "총_거리": round(result.get("total_distance", 0), 1),
+                "운행_차량_수": result.get("num_vehicles", len(routes)),
+                "미배송_건": len(result.get("unserved", [])),
+                "총_적재_kg": round(result.get("total_load", 0), 1),
+            },
+        }
+    return {}
+
+
+def _build_executive_summary(domain: str, result: Dict[str, Any]) -> Dict[str, Any]:
+    if domain == "vrp":
+        unserved = result.get("unserved", [])
+        total_dist = result.get("total_distance", 0)
+        num_v = result.get("num_vehicles", 0)
+        headline = f"VRP 최적화 완료: {num_v}개 차량 배차, 총 이동거리 {total_dist:.1f}"
+        if unserved:
+            headline += f" — 미배송 {len(unserved)}건 발생"
+        return {
+            "headline": headline,
+            "delta_pct": None,
+            "kpi_deltas": {},
+            "bottleneck": (
+                f"용량 부족으로 {len(unserved)}개 지점 미배송: {', '.join(str(u) for u in unserved[:3])}"
+                if unserved else None
+            ),
+            "recommendation": (
+                "차량 수를 늘리거나 최대 적재량을 높이면 미배송을 줄일 수 있습니다."
+                if unserved else "모든 배송지가 할당되었습니다."
+            ),
+            "feasible_rate": 1.0,
+            "run_count": 1,
+        }
+    return {
+        "headline": f"{domain} 최적화 완료 (status: {result.get('status', '?')})",
+        "delta_pct": None,
+        "kpi_deltas": {},
+        "feasible_rate": 1.0,
+        "run_count": 1,
+    }
 
 
 # ── endpoints ───────────────────────────────────────────────────────────────
@@ -212,7 +303,16 @@ def optimize_dataset(dataset_id: int, body: DatasetOptimizeRequest, request: Req
     except Exception as exc:
         raise HTTPException(status_code=500, detail={"code": "solver_error", "message": str(exc)})
 
-    return {**result, "dataset_id": dataset_id, "domain_used": domain, "solver_used": solver}
+    chart_data = _build_chart_data(domain, result)
+    executive_summary = _build_executive_summary(domain, result)
+    return {
+        **result,
+        "dataset_id": dataset_id,
+        "domain_used": domain,
+        "solver_used": solver,
+        "chart_data": chart_data,
+        "executive_summary": executive_summary,
+    }
 
 
 class ChatRequest(BaseModel):
