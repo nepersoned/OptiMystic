@@ -341,8 +341,8 @@ def chat_dataset(dataset_id: int, body: ChatRequest, request: Request) -> Dict[s
     if api_key:
         try:
             return _chat_with_google(body.message, columns, rows, inferred_domain, inferred_solver, api_key)
-        except Exception:
-            pass
+        except Exception as e:
+            return _chat_heuristic(body.message, columns, inferred_domain, inferred_solver, error=str(e))
 
     return _chat_heuristic(body.message, columns, inferred_domain, inferred_solver)
 
@@ -401,15 +401,19 @@ def _chat_with_google(
         }
 
 
-def _chat_heuristic(message: str, columns: List[str], domain: str, solver: str) -> Dict[str, Any]:
-    return {
-        "reply": (
+def _chat_heuristic(message: str, columns: List[str], domain: str, solver: str, error: str = "") -> Dict[str, Any]:
+    if error:
+        reply = f"[AI 키 오류]\n{error}\n\nAIza로 시작하는 Google AI Studio 키를 사용하세요."
+    else:
+        reply = (
             f"[AI 키 미설정 — 휴리스틱 모드]\n"
             f"질문: {message}\n\n"
             f"컬럼: {', '.join(columns)}\n"
             f"추천 도메인: {domain} / 솔버: {solver}\n\n"
             f"GOOGLE_API_KEY를 환경변수에 설정하면 실제 AI 응답을 받을 수 있습니다."
-        ),
+        )
+    return {
+        "reply": reply,
         "recommended_domain": domain,
         "recommended_solver": solver,
         "reason": "컬럼 패턴 기반 휴리스틱 (GOOGLE_API_KEY 미설정)",
