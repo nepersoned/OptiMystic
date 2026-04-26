@@ -15,6 +15,26 @@ from agent_core.helpers import to_jsonable
 from agent_core.logging_utils import configure_structured_logging
 
 
+_GOOGLE_MODEL_ALIASES = {
+    "gemini-2.0-flash": DEFAULT_GOOGLE_MODEL,
+    "models/gemini-2.0-flash": DEFAULT_GOOGLE_MODEL,
+    "gemma 4 26b": DEFAULT_GOOGLE_MODEL,
+    "gemma4 26b": DEFAULT_GOOGLE_MODEL,
+    "gemma-4-26b": DEFAULT_GOOGLE_MODEL,
+    "gemma-4-26b-it": DEFAULT_GOOGLE_MODEL,
+}
+
+
+def _normalize_google_model_name(model_name: str) -> str:
+    raw = (model_name or "").strip()
+    if not raw:
+        return DEFAULT_GOOGLE_MODEL
+    normalized = _GOOGLE_MODEL_ALIASES.get(raw.lower())
+    if normalized:
+        return normalized
+    return raw
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="OptiMystic Phase 3 orchestration loop")
     parser.add_argument(
@@ -54,10 +74,20 @@ def main() -> None:
     resolved_model = args.model
     if args.llm_provider == "google" and resolved_model == DEFAULT_MODEL:
         resolved_model = DEFAULT_GOOGLE_MODEL
+    if args.llm_provider == "google":
+        normalized_model = _normalize_google_model_name(resolved_model)
+        if normalized_model != resolved_model:
+            print(f"[CONFIG] Google model alias '{resolved_model}' -> '{normalized_model}'", flush=True)
+        resolved_model = normalized_model
 
     resolved_fallback = args.fallback_model
     if args.llm_provider == "google" and resolved_fallback == DEFAULT_FALLBACK_MODEL:
         resolved_fallback = DEFAULT_GOOGLE_MODEL
+    if args.llm_provider == "google":
+        normalized_fallback = _normalize_google_model_name(resolved_fallback)
+        if normalized_fallback != resolved_fallback:
+            print(f"[CONFIG] Google fallback model alias '{resolved_fallback}' -> '{normalized_fallback}'", flush=True)
+        resolved_fallback = normalized_fallback
 
     outcome = asyncio.run(
         run_agent_loop(

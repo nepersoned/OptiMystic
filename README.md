@@ -210,8 +210,8 @@ curl http://127.0.0.1:8000/runs
 ## Agent Loop Smoke (Google)
 
 ```powershell
-$env:GOOGLE_API_KEY="<YOUR_KEY>"
-.\.venv\Scripts\python.exe agent_loop.py --llm-provider google --max-steps 10
+$env:GOOGLE_API_KEY="AIza..."   # Google AI Studio key
+\.\.venv\Scripts\python.exe agent_loop.py --llm-provider google --model gemma-4-26b-a4b-it --fallback-model gemma-4-26b-a4b-it --max-steps 10
 ```
 
 Expected success signal:

@@ -124,6 +124,12 @@ def _build_google_client() -> Any:
 
     if not api_key:
         raise RuntimeError("GOOGLE_API_KEY environment variable is not set.")
+    if not api_key.startswith("AIza"):
+        print(
+            "[CONFIG] GOOGLE_API_KEY does not start with 'AIza'. "
+            "If Gemini Developer API auth fails, use an AI Studio key or switch to Vertex AI auth.",
+            flush=True,
+        )
     return google_genai.Client(api_key=api_key)
 
 
