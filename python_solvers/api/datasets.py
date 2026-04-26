@@ -22,7 +22,7 @@ from python_solvers.db import (
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
-CHAT_MODEL = os.getenv("OPTIMYSTIC_CHAT_MODEL", "gemini-2.0-flash")
+CHAT_MODEL = os.getenv("OPTIMYSTIC_CHAT_MODEL", "gemini-2.0-flash-001")
 
 
 def _require_db() -> None:
