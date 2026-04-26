@@ -77,6 +77,7 @@ def ensure_r_bridge() -> Dict[str, Any]:
         ro.r(f"library({package})")
 
     ro.r("source('utils.R')")
+    ro.r("source('chart_data.R')")
     ro.r("source('plotting.R')")
     ro.r("source('processors.R')")
 
@@ -129,13 +130,18 @@ def run_r_post_analysis(
         "n_boot = optimystic_n_boot, seed = optimystic_seed)"
     )
     ro.r(
-        "optimystic_summary <- build_executive_summary("
+        "optimystic_summary <- build_executive_summary_structured("
         "optimystic_processed, optimystic_sensitivity, optimystic_decision)"
+    )
+    ro.r(
+        "optimystic_chart_data <- build_chart_data("
+        "optimystic_processed, optimystic_sensitivity, optimystic_mode)"
     )
 
     return {
         "processed_result": _json_from_r_var(ro, "optimystic_processed"),
         "sensitivity": _json_from_r_var(ro, "optimystic_sensitivity"),
         "decision_analytics": _json_from_r_var(ro, "optimystic_decision"),
-        "executive_summary": str(ro.r("optimystic_summary")[0]),
+        "executive_summary": _json_from_r_var(ro, "optimystic_summary"),
+        "chart_data": _json_from_r_var(ro, "optimystic_chart_data"),
     }

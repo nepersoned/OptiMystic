@@ -4,6 +4,7 @@
 source("utils.R")
 source("plotting.R")
 source("analytics.R")
+source("chart_data.R")
 
 # Load domain-specific modules
 tryCatch({
