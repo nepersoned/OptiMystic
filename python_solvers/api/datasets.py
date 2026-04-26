@@ -22,7 +22,24 @@ from python_solvers.db import (
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
-CHAT_MODEL = os.getenv("OPTIMYSTIC_CHAT_MODEL", "gemini-2.0-flash-001")
+DEFAULT_CHAT_MODEL = "gemma-4-26b-a4b-it"
+_CHAT_MODEL_ALIASES = {
+    "gemini-2.0-flash": DEFAULT_CHAT_MODEL,
+    "models/gemini-2.0-flash": DEFAULT_CHAT_MODEL,
+    "gemini-2.0-flash-001": DEFAULT_CHAT_MODEL,
+    "models/gemini-2.0-flash-001": DEFAULT_CHAT_MODEL,
+    "gemma 4 26b": DEFAULT_CHAT_MODEL,
+}
+
+
+def _resolve_chat_model() -> str:
+    raw = os.getenv("OPTIMYSTIC_CHAT_MODEL", DEFAULT_CHAT_MODEL).strip()
+    if not raw:
+        return DEFAULT_CHAT_MODEL
+    return _CHAT_MODEL_ALIASES.get(raw.lower(), raw)
+
+
+CHAT_MODEL = _resolve_chat_model()
 
 
 def _require_db() -> None:
@@ -131,9 +148,20 @@ def _build_chart_data(domain: str, result: Dict[str, Any]) -> Dict[str, Any]:
 def _build_executive_summary(domain: str, result: Dict[str, Any]) -> Dict[str, Any]:
     if domain == "vrp":
         unserved = result.get("unserved", [])
+        routes = result.get("routes", []) or []
         total_dist = result.get("total_distance", 0)
-        num_v = result.get("num_vehicles", 0)
-        headline = f"VRP 최적화 완료: {num_v}개 차량 배차, 총 이동거리 {total_dist:.1f}"
+        num_v_raw = result.get("num_vehicles", 0)
+        try:
+            num_v = int(num_v_raw or 0)
+        except (TypeError, ValueError):
+            num_v = 0
+        if num_v <= 0 and routes:
+            num_v = len(routes)
+
+        if num_v > 0:
+            headline = f"VRP 최적화 완료: {num_v}개 차량 배차, 총 이동거리 {total_dist:.1f}"
+        else:
+            headline = f"VRP 최적화 완료: 차량 배차 수 정보 없음, 총 이동거리 {total_dist:.1f}"
         if unserved:
             headline += f" — 미배송 {len(unserved)}건 발생"
         return {
@@ -403,7 +431,13 @@ def _chat_with_google(
 
 def _chat_heuristic(message: str, columns: List[str], domain: str, solver: str, error: str = "") -> Dict[str, Any]:
     if error:
-        reply = f"[AI 키 오류]\n{error}\n\nAIza로 시작하는 Google AI Studio 키를 사용하세요."
+        if "no longer available" in error.lower() or "not_found" in error.lower():
+            reply = (
+                f"[AI 모델 오류]\n{error}\n\n"
+                f"OPTIMYSTIC_CHAT_MODEL을 '{DEFAULT_CHAT_MODEL}'로 설정해 다시 시도하세요."
+            )
+        else:
+            reply = f"[AI 키 오류]\n{error}\n\nGoogle AI Studio API 키를 확인하세요."
     else:
         reply = (
             f"[AI 키 미설정 — 휴리스틱 모드]\n"
