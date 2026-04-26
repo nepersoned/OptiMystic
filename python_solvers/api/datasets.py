@@ -44,14 +44,14 @@ def _scope_tenant(tenant_id: str) -> Optional[str]:
 
 
 def _infer_domain_solver(columns: List[str]) -> tuple[str, str]:
-    cols = {c.lower() for c in columns}
-    if cols & {"vehicle", "route", "node", "depot", "pickup", "delivery"}:
+    joined = " ".join(c.lower() for c in columns)
+    if any(kw in joined for kw in ("vehicle", "route", "node", "depot", "pickup", "delivery", "latitude", "longitude")):
         return "vrp", "mip"
-    if cols & {"shift", "worker", "employee", "schedule", "availability"}:
+    if any(kw in joined for kw in ("shift", "worker", "employee", "schedule", "availability")):
         return "scheduling", "cp"
-    if cols & {"length", "stock", "cut", "waste", "pattern"}:
+    if any(kw in joined for kw in ("length", "stock", "cut", "waste", "pattern")):
         return "cutting", "cg"
-    if cols & {"weight", "value", "item", "capacity", "demand"}:
+    if any(kw in joined for kw in ("weight", "value", "item", "capacity", "demand")):
         return "packing", "mip"
     return "generic", "nlp"
 
@@ -244,7 +244,7 @@ def chat_dataset(dataset_id: int, body: ChatRequest, request: Request) -> Dict[s
         except Exception:
             pass
 
-    return _chat_heuristic(columns, inferred_domain, inferred_solver)
+    return _chat_heuristic(body.message, columns, inferred_domain, inferred_solver)
 
 
 def _chat_with_google(
@@ -301,11 +301,17 @@ def _chat_with_google(
         }
 
 
-def _chat_heuristic(columns: List[str], domain: str, solver: str) -> Dict[str, Any]:
+def _chat_heuristic(message: str, columns: List[str], domain: str, solver: str) -> Dict[str, Any]:
     return {
-        "reply": f"컬럼 분석 완료: {columns}. 추천 도메인: {domain}, 솔버: {solver}.",
+        "reply": (
+            f"[AI 키 미설정 — 휴리스틱 모드]\n"
+            f"질문: {message}\n\n"
+            f"컬럼: {', '.join(columns)}\n"
+            f"추천 도메인: {domain} / 솔버: {solver}\n\n"
+            f"GOOGLE_API_KEY를 환경변수에 설정하면 실제 AI 응답을 받을 수 있습니다."
+        ),
         "recommended_domain": domain,
         "recommended_solver": solver,
-        "reason": "컬럼 패턴 기반 휴리스틱 추론 (GOOGLE_API_KEY 미설정)",
+        "reason": "컬럼 패턴 기반 휴리스틱 (GOOGLE_API_KEY 미설정)",
         "suggested_diffs": [],
     }

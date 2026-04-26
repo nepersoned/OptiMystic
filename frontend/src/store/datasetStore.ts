@@ -39,5 +39,8 @@ export const useDatasetStore = create<DatasetStore>((set) => ({
 
   clearChanges: () => set({ pendingChanges: [] }),
 
-  setResult: (r) => set({ lastResult: r }),
+  setResult: (r) => {
+    try { sessionStorage.setItem('om_last_result', JSON.stringify(r)) } catch {}
+    set({ lastResult: r })
+  },
 }))

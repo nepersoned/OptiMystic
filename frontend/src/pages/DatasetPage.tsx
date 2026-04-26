@@ -39,8 +39,11 @@ export default function DatasetPage() {
   const [input, setInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const [pendingDiffs, setPendingDiffs] = useState<CellChange[] | null>(null)
+  const [optimizeError, setOptimizeError] = useState<string | null>(null)
 
   const chatBottomRef = useRef<HTMLDivElement>(null)
+  const gridApiRef = useRef<import('ag-grid-community').GridApi | null>(null)
+  const changedCellsRef = useRef(new Set<string>())
 
   const loadGrid = useCallback(
     async (version?: number) => {
@@ -49,6 +52,9 @@ export default function DatasetPage() {
       setRowData(data.rows)
       setDataset(datasetId, data.name, data.version, data.columns)
       setCurrentVersionLocal(data.version)
+      changedCellsRef.current.clear()
+      setChangedCells(new Set())
+      clearChanges()
       setColDefs(
         data.columns.map((col) => ({
           field: col,
@@ -58,12 +64,12 @@ export default function DatasetPage() {
           minWidth: 100,
           cellStyle: (params) => {
             const key = `${params.rowIndex}-${col}`
-            return changedCells.has(key) ? { backgroundColor: '#fef9c3' } : null
+            return changedCellsRef.current.has(key) ? { backgroundColor: '#fef9c3' } : null
           },
         })),
       )
     },
-    [datasetId, setDataset, changedCells],
+    [datasetId, setDataset, clearChanges],
   )
 
   useEffect(() => {
@@ -75,10 +81,16 @@ export default function DatasetPage() {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  useEffect(() => {
+    gridApiRef.current?.refreshCells({ force: true })
+  }, [changedCells])
+
   const onCellValueChanged = (e: CellValueChangedEvent) => {
     const change: CellChange = { row: e.rowIndex ?? 0, col: e.colDef.field!, value: e.newValue }
     addChange(change)
-    setChangedCells((prev) => new Set(prev).add(`${change.row}-${change.col}`))
+    const key = `${change.row}-${change.col}`
+    changedCellsRef.current.add(key)
+    setChangedCells((prev) => new Set(prev).add(key))
   }
 
   const handleSave = async () => {
@@ -87,6 +99,7 @@ export default function DatasetPage() {
     try {
       const res = await datasetsApi.patchCells(datasetId, pendingChanges, 'manual edit')
       clearChanges()
+      changedCellsRef.current.clear()
       setChangedCells(new Set())
       setCurrentVersionLocal(res.version)
       setVersion(res.version)
@@ -104,30 +117,43 @@ export default function DatasetPage() {
 
   const handleOptimize = async () => {
     setOptimizing(true)
+    setOptimizeError(null)
     try {
       const res = await datasetsApi.optimize(datasetId)
       setResult(res)
       navigate(`/datasets/${datasetId}/results`)
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: { message?: string } | string } }; message?: string }
+      const detail = e?.response?.data?.detail
+      const msg = typeof detail === 'object' ? detail?.message : (detail ?? e?.message ?? '알 수 없는 오류')
+      setOptimizeError(msg ?? '최적화 오류')
     } finally {
       setOptimizing(false)
     }
   }
 
   const handleChat = async () => {
-    if (!input.trim()) return
+    if (!input.trim() || chatLoading) return
     const msg = input.trim()
     setInput('')
     setMessages((prev) => [...prev, { role: 'user', content: msg }])
     setChatLoading(true)
     try {
       const res: ChatResult = await datasetsApi.chat(datasetId, msg)
-      const assistantMsg: ChatMessage = {
-        role: 'assistant',
-        content: res.reply,
-        diffs: res.suggested_diffs.length > 0 ? res.suggested_diffs : undefined,
-      }
-      setMessages((prev) => [...prev, assistantMsg])
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: res.reply,
+          diffs: res.suggested_diffs.length > 0 ? res.suggested_diffs : undefined,
+        },
+      ])
       if (res.suggested_diffs.length > 0) setPendingDiffs(res.suggested_diffs)
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: { message?: string } | string } }; message?: string }
+      const detail = e?.response?.data?.detail
+      const errMsg = typeof detail === 'object' ? detail?.message : (detail ?? e?.message ?? '오류 발생')
+      setMessages((prev) => [...prev, { role: 'assistant', content: `오류: ${errMsg}` }])
     } finally {
       setChatLoading(false)
     }
@@ -136,8 +162,7 @@ export default function DatasetPage() {
   const applyDiffs = async (diffs: CellChange[]) => {
     diffs.forEach(addChange)
     await datasetsApi.patchCells(datasetId, diffs, 'agent suggestion')
-    clearChanges()
-    setChangedCells(new Set())
+    changedCellsRef.current.clear()
     await loadGrid()
     await datasetsApi.listVersions(datasetId).then(setVersions)
     setPendingDiffs(null)
@@ -208,12 +233,18 @@ export default function DatasetPage() {
       <div className="flex-1 flex overflow-hidden">
         {/* AG Grid */}
         <div className="flex-1 overflow-hidden ag-theme-alpine">
+          {optimizeError && (
+            <div className="bg-red-50 border-b border-red-200 text-red-700 text-xs px-4 py-2 flex items-center justify-between">
+              <span>최적화 오류: {optimizeError}</span>
+              <button onClick={() => setOptimizeError(null)} className="ml-2 text-red-400 hover:text-red-600">✕</button>
+            </div>
+          )}
           <AgGridReact
             rowData={rowData}
             columnDefs={colDefs}
             defaultColDef={{ resizable: true, sortable: true, filter: true }}
             onCellValueChanged={onCellValueChanged}
-            onGridReady={(_: GridReadyEvent) => {}}
+            onGridReady={(e: GridReadyEvent) => { gridApiRef.current = e.api }}
             animateRows
           />
         </div>

@@ -82,7 +82,10 @@ function GaugeChart({ value, title }: { value: number; title: string }) {
 export default function ResultsPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { lastResult, datasetName } = useDatasetStore()
+  const { lastResult: storeResult, datasetName } = useDatasetStore()
+  const lastResult = storeResult ?? (() => {
+    try { const s = sessionStorage.getItem('om_last_result'); return s ? JSON.parse(s) : null } catch { return null }
+  })()
 
   if (!lastResult) {
     return (
