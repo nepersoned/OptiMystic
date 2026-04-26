@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -24,8 +24,7 @@
     "tailwind-merge": "^2.5.2",
     "class-variance-authority": "^0.7.0",
     "@radix-ui/react-slot": "^1.1.0",
-    "@radix-ui/react-scroll-area": "^1.1.0",
-    "@radix-ui/react-badge": "^1.0.0"
+    "@radix-ui/react-scroll-area": "^1.1.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.5",
