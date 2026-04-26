@@ -26,6 +26,29 @@ class Base(DeclarativeBase):
     pass
 
 
+class Dataset(Base):
+    __tablename__ = "datasets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), default=datetime.utcnow, nullable=False)
+    name: Mapped[str] = mapped_column(String(256), nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(256), nullable=False)
+    tenant_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
+    current_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+
+class DatasetVersion(Base):
+    __tablename__ = "dataset_versions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    dataset_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), default=datetime.utcnow, nullable=False)
+    data_json: Mapped[str] = mapped_column(Text, nullable=False)
+    columns_json: Mapped[str] = mapped_column(Text, nullable=False)
+    note: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+
+
 class OptimizationRunRecord(Base):
     __tablename__ = "optimization_runs"
 
@@ -230,6 +253,119 @@ def serialize_optimization_run(record: OptimizationRunRecord) -> Dict[str, Any]:
         "request": request_payload if isinstance(request_payload, dict) else {},
         "result": json.loads(record.result_json),
     }
+
+
+def create_dataset(
+    name: str, filename: str, tenant_id: Optional[str], rows: list, columns: list
+) -> int:
+    with get_db_session() as session:
+        ds = Dataset(name=name, original_filename=filename, tenant_id=tenant_id, current_version=1)
+        session.add(ds)
+        session.flush()
+        ver = DatasetVersion(
+            dataset_id=ds.id,
+            version=1,
+            data_json=json.dumps(rows, ensure_ascii=True),
+            columns_json=json.dumps(columns, ensure_ascii=True),
+            note="initial upload",
+        )
+        session.add(ver)
+        return int(ds.id)
+
+
+def list_datasets(tenant_id: Optional[str] = None) -> list[Dict[str, Any]]:
+    with get_db_session() as session:
+        q = session.query(Dataset)
+        if tenant_id:
+            q = q.filter(Dataset.tenant_id == tenant_id)
+        rows = q.order_by(Dataset.created_at.desc()).limit(100).all()
+        return [
+            {
+                "id": ds.id,
+                "name": ds.name,
+                "original_filename": ds.original_filename,
+                "current_version": ds.current_version,
+                "tenant_id": ds.tenant_id,
+                "created_at": ds.created_at.isoformat() + "Z",
+            }
+            for ds in rows
+        ]
+
+
+def _load_dataset_version(session: Any, dataset_id: int, version: int) -> Optional[Dict[str, Any]]:
+    ds = session.query(Dataset).filter(Dataset.id == dataset_id).one_or_none()
+    if ds is None:
+        return None
+    ver = (
+        session.query(DatasetVersion)
+        .filter(DatasetVersion.dataset_id == dataset_id, DatasetVersion.version == version)
+        .one_or_none()
+    )
+    if ver is None:
+        return None
+    return {
+        "dataset_id": ds.id,
+        "name": ds.name,
+        "original_filename": ds.original_filename,
+        "tenant_id": ds.tenant_id,
+        "current_version": ds.current_version,
+        "version": ver.version,
+        "rows": json.loads(ver.data_json),
+        "columns": json.loads(ver.columns_json),
+        "note": ver.note,
+        "created_at": ver.created_at.isoformat() + "Z",
+    }
+
+
+def get_dataset_latest_version(dataset_id: int) -> Optional[Dict[str, Any]]:
+    with get_db_session() as session:
+        ds = session.query(Dataset).filter(Dataset.id == dataset_id).one_or_none()
+        if ds is None:
+            return None
+        return _load_dataset_version(session, dataset_id, ds.current_version)
+
+
+def get_dataset_version(dataset_id: int, version: int) -> Optional[Dict[str, Any]]:
+    with get_db_session() as session:
+        return _load_dataset_version(session, dataset_id, version)
+
+
+def add_dataset_version(
+    dataset_id: int, rows: list, columns: list, note: Optional[str] = None
+) -> int:
+    with get_db_session() as session:
+        ds = session.query(Dataset).filter(Dataset.id == dataset_id).one_or_none()
+        if ds is None:
+            raise ValueError(f"Dataset {dataset_id} not found")
+        new_version = ds.current_version + 1
+        ds.current_version = new_version
+        ver = DatasetVersion(
+            dataset_id=dataset_id,
+            version=new_version,
+            data_json=json.dumps(rows, ensure_ascii=True),
+            columns_json=json.dumps(columns, ensure_ascii=True),
+            note=note,
+        )
+        session.add(ver)
+        return new_version
+
+
+def list_dataset_versions(dataset_id: int) -> list[Dict[str, Any]]:
+    with get_db_session() as session:
+        vers = (
+            session.query(DatasetVersion)
+            .filter(DatasetVersion.dataset_id == dataset_id)
+            .order_by(DatasetVersion.version.asc())
+            .all()
+        )
+        return [
+            {
+                "version": v.version,
+                "note": v.note,
+                "created_at": v.created_at.isoformat() + "Z",
+            }
+            for v in vers
+        ]
 
 
 def list_optimization_runs(limit: int = 20, tenant_id: str | None = None) -> list[Dict[str, Any]]:

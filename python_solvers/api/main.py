@@ -3,9 +3,11 @@ import os
 import uuid
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from agent_core.logging_utils import configure_structured_logging
+from python_solvers.api.datasets import router as datasets_router
 from python_solvers.api.schemas import HealthResponse, OptimizationRunSummary, OptimizeRequest, OptimizeResponse
 from python_solvers.api.solver_api import run_optimization
 from python_solvers.db import (
@@ -86,7 +88,15 @@ app = FastAPI(
     version="0.1.0",
     description="FastAPI wrapper for python_solvers runtime",
 )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.add_middleware(TraceIdMiddleware)
+app.include_router(datasets_router)
 
 
 @app.on_event("startup")
