@@ -44,6 +44,7 @@ Implemented:
 - `GET /health`: returns service status and DB enable flag.
 - `POST /optimize`: executes domain + solver route and returns normalized solve response.
 - `GET /runs`: returns recent persisted optimization runs (when `DATABASE_URL` is configured).
+- `GET/POST/PATCH /datasets/*`: dataset upload/grid/version/chat/optimize workflow endpoints.
 
 Behavior details:
 - API startup initializes DB schema via SQLAlchemy.
@@ -53,6 +54,12 @@ Behavior details:
 - If `OPTIMYSTIC_API_KEYS` is configured, `/optimize` and `/runs` require `X-API-Key`.
 - If `OPTIMYSTIC_API_KEY_TENANTS` is configured, API key is mapped to `tenant_id` and `/runs` is tenant-scoped.
 - If `Idempotency-Key` is provided and DB is enabled, repeated identical `/optimize` requests replay the saved response; payload mismatch returns conflict.
+
+Dataset assistant behavior notes:
+- `OPTIMYSTIC_CHAT_MODEL` defaults to `gemma-4-26b-a4b-it`.
+- Legacy model names like `gemini-2.0-flash(-001)` are auto-mapped to the default model.
+- Time-shift requests like `"강남 출발 시간을 전부 1시간씩 당겨"` are handled deterministically across all matching rows in `district`.
+- `suggested_diffs` now uses zero-based integer row indices so `/datasets/{id}/cells` can apply edits reliably.
 
 ### 2) Optimization Routing (`python_solvers/api/solver_api.py`)
 

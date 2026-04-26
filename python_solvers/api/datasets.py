@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -78,6 +79,121 @@ def _safe_num(v: Any, default: float = 0.0) -> float:
         return float(v) if v is not None else default
     except (TypeError, ValueError):
         return default
+
+
+def _shift_hhmm(time_text: Any, delta_hours: int) -> Optional[str]:
+    if not isinstance(time_text, str):
+        return None
+    raw = time_text.strip()
+    m = re.fullmatch(r"(\d{1,2}):(\d{2})", raw)
+    if not m:
+        return None
+    hour = int(m.group(1))
+    minute = int(m.group(2))
+    total = hour * 60 + minute + (delta_hours * 60)
+    total %= 24 * 60
+    if total < 0:
+        total += 24 * 60
+    nh = total // 60
+    nm = total % 60
+    return f"{nh:02d}:{nm:02d}"
+
+
+def _extract_hour_shift(message: str) -> int:
+    msg = (message or "").strip()
+    if not msg:
+        return 0
+    m = re.search(r"(\d+)\s*시간", msg)
+    hours = int(m.group(1)) if m else 1
+    if any(k in msg for k in ("앞당", "당겨", "이르게", "빨리")):
+        return -hours
+    if any(k in msg for k in ("늦춰", "미뤄", "뒤로", "지연")):
+        return hours
+    return 0
+
+
+def _build_district_time_shift_response(message: str, rows: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    msg = (message or "").strip()
+    if not msg:
+        return None
+    if not any(k in msg for k in ("시간", "출발", "time_window", "window")):
+        return None
+
+    delta_hours = _extract_hour_shift(msg)
+    if delta_hours == 0:
+        return None
+
+    districts = {str(r.get("district", "")).strip() for r in rows if str(r.get("district", "")).strip()}
+    target_district = next((d for d in districts if d and d in msg), None)
+    if not target_district:
+        return None
+
+    diffs: List[Dict[str, Any]] = []
+    for idx, row in enumerate(rows):
+        if str(row.get("district", "")).strip() != target_district:
+            continue
+        shifted_open = _shift_hhmm(row.get("time_window_open"), delta_hours)
+        shifted_close = _shift_hhmm(row.get("time_window_close"), delta_hours)
+        if shifted_open is not None:
+            diffs.append({"row": idx, "col": "time_window_open", "value": shifted_open})
+        if shifted_close is not None:
+            diffs.append({"row": idx, "col": "time_window_close", "value": shifted_close})
+
+    if not diffs:
+        return None
+
+    direction = "앞당겼습니다" if delta_hours < 0 else "늦췄습니다"
+    return {
+        "reply": f"{target_district} 지역 주문의 시간 창(time_window_open, time_window_close)을 {abs(delta_hours)}시간씩 {direction}",
+        "recommended_domain": "vrp",
+        "recommended_solver": "mip",
+        "reason": f"district='{target_district}' 행 전체에 대해 시간 제약을 동일하게 이동했습니다.",
+        "suggested_diffs": diffs,
+    }
+
+
+def _normalize_suggested_diffs(result: Dict[str, Any], rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    if not isinstance(result, dict):
+        return result
+    raw_diffs = result.get("suggested_diffs")
+    if not isinstance(raw_diffs, list):
+        result["suggested_diffs"] = []
+        return result
+
+    order_to_idx: Dict[str, int] = {}
+    for idx, row in enumerate(rows):
+        oid = str(row.get("order_id", "")).strip()
+        if oid and oid not in order_to_idx:
+            order_to_idx[oid] = idx
+
+    normalized: List[Dict[str, Any]] = []
+    for diff in raw_diffs:
+        if not isinstance(diff, dict):
+            continue
+        col = diff.get("col")
+        value = diff.get("value")
+        row_ref = diff.get("row")
+        row_idx: Optional[int] = None
+
+        if isinstance(row_ref, int):
+            row_idx = row_ref
+        elif isinstance(row_ref, str):
+            row_txt = row_ref.strip()
+            if row_txt.isdigit():
+                row_idx = int(row_txt)
+            elif row_txt in order_to_idx:
+                row_idx = order_to_idx[row_txt]
+
+        if row_idx is None:
+            continue
+        if not (0 <= row_idx < len(rows)):
+            continue
+        if not isinstance(col, str) or not col:
+            continue
+        normalized.append({"row": row_idx, "col": col, "value": value})
+
+    result["suggested_diffs"] = normalized
+    return result
 
 
 def _rows_to_params(domain: str, rows: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -365,6 +481,10 @@ def chat_dataset(dataset_id: int, body: ChatRequest, request: Request) -> Dict[s
     rows = data["rows"]
     inferred_domain, inferred_solver = _infer_domain_solver(columns)
 
+    deterministic = _build_district_time_shift_response(body.message, rows)
+    if deterministic is not None:
+        return deterministic
+
     api_key = os.getenv("GOOGLE_API_KEY", "")
     if api_key:
         try:
@@ -390,15 +510,26 @@ def _chat_with_google(
         raise RuntimeError("google-genai not available") from exc
 
     client = google_genai.Client(api_key=api_key)
-    preview = rows[:5]
+    indexed_rows = [
+        {
+            "row": idx,
+            "order_id": r.get("order_id"),
+            "district": r.get("district"),
+            "time_window_open": r.get("time_window_open"),
+            "time_window_close": r.get("time_window_close"),
+        }
+        for idx, r in enumerate(rows)
+    ]
     prompt = (
         f"You are an optimization assistant. Analyze this dataset and respond.\n\n"
         f"Columns: {columns}\n"
-        f"Row preview (up to 5): {json.dumps(preview, ensure_ascii=False)}\n"
+        f"Rows (indexed): {json.dumps(indexed_rows, ensure_ascii=False)}\n"
         f"Inferred domain: {domain}, solver: {solver}\n\n"
         f"User: {message}\n\n"
         f"Reply in JSON with keys: reply (Korean ok), recommended_domain, recommended_solver, reason, "
-        f"suggested_diffs (list of {{row, col, value}} or empty list). No markdown, raw JSON only."
+        f"suggested_diffs (list of {{row, col, value}} or empty list). "
+        f"IMPORTANT: row must be zero-based integer row index from Rows (indexed). "
+        f"No markdown, raw JSON only."
     )
 
     config = google_types.GenerateContentConfig(temperature=0.1)
@@ -418,7 +549,8 @@ def _chat_with_google(
         text = parts[1].lstrip("json").strip() if len(parts) > 1 else text
 
     try:
-        return json.loads(text)
+        parsed = json.loads(text)
+        return _normalize_suggested_diffs(parsed, rows)
     except Exception:
         return {
             "reply": text,
