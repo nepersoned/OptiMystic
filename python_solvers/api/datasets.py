@@ -142,12 +142,12 @@ def _build_district_time_shift_response(message: str, rows: List[Dict[str, Any]]
     if not diffs:
         return None
 
-    direction = "앞당겼습니다" if delta_hours < 0 else "늦췄습니다"
+    direction = "earlier" if delta_hours < 0 else "later"
     return {
-        "reply": f"{target_district} 지역 주문의 시간 창(time_window_open, time_window_close)을 {abs(delta_hours)}시간씩 {direction}",
+        "reply": f"Shifted time windows for district '{target_district}' by {abs(delta_hours)}h {direction}.",
         "recommended_domain": "vrp",
         "recommended_solver": "mip",
-        "reason": f"district='{target_district}' 행 전체에 대해 시간 제약을 동일하게 이동했습니다.",
+        "reason": f"Applied uniform time window shift to all rows where district='{target_district}'.",
         "suggested_diffs": diffs,
     }
 
@@ -245,17 +245,17 @@ def _build_chart_data(domain: str, result: Dict[str, Any]) -> Dict[str, Any]:
             return {}
         return {
             "route_bar": {
-                "categories": [r.get("vehicle", f"차량_{i}") for i, r in enumerate(routes)],
+                "categories": [r.get("vehicle", f"Vehicle_{i}") for i, r in enumerate(routes)],
                 "series": [
-                    {"name": "거리 (단위)", "data": [round(r.get("distance", 0), 1) for r in routes]},
-                    {"name": "적재량 (kg)", "data": [round(r.get("load", 0), 1) for r in routes]},
+                    {"name": "Distance", "data": [round(r.get("distance", 0), 1) for r in routes]},
+                    {"name": "Load (kg)", "data": [round(r.get("load", 0), 1) for r in routes]},
                 ],
             },
             "kpi": {
-                "총_거리": round(result.get("total_distance", 0), 1),
-                "운행_차량_수": result.get("num_vehicles", len(routes)),
-                "미배송_건": len(result.get("unserved", [])),
-                "총_적재_kg": round(result.get("total_load", 0), 1),
+                "Total Distance": round(result.get("total_distance", 0), 1),
+                "Vehicles Used": result.get("num_vehicles", len(routes)),
+                "Unserved Stops": len(result.get("unserved", [])),
+                "Total Load (kg)": round(result.get("total_load", 0), 1),
             },
         }
     return {}
@@ -275,28 +275,28 @@ def _build_executive_summary(domain: str, result: Dict[str, Any]) -> Dict[str, A
             num_v = len(routes)
 
         if num_v > 0:
-            headline = f"VRP 최적화 완료: {num_v}개 차량 배차, 총 이동거리 {total_dist:.1f}"
+            headline = f"VRP solved: {num_v} vehicles dispatched, total distance {total_dist:.1f}"
         else:
-            headline = f"VRP 최적화 완료: 차량 배차 수 정보 없음, 총 이동거리 {total_dist:.1f}"
+            headline = f"VRP solved: total distance {total_dist:.1f}"
         if unserved:
-            headline += f" — 미배송 {len(unserved)}건 발생"
+            headline += f" — {len(unserved)} stop(s) unserved"
         return {
             "headline": headline,
             "delta_pct": None,
             "kpi_deltas": {},
             "bottleneck": (
-                f"용량 부족으로 {len(unserved)}개 지점 미배송: {', '.join(str(u) for u in unserved[:3])}"
+                f"Capacity exceeded — {len(unserved)} stop(s) unserved: {', '.join(str(u) for u in unserved[:3])}"
                 if unserved else None
             ),
             "recommendation": (
-                "차량 수를 늘리거나 최대 적재량을 높이면 미배송을 줄일 수 있습니다."
-                if unserved else "모든 배송지가 할당되었습니다."
+                "Increase vehicle count or capacity to eliminate unserved stops."
+                if unserved else "All stops successfully assigned."
             ),
             "feasible_rate": 1.0,
             "run_count": 1,
         }
     return {
-        "headline": f"{domain} 최적화 완료 (status: {result.get('status', '?')})",
+        "headline": f"{domain} optimization complete (status: {result.get('status', '?')})",
         "delta_pct": None,
         "kpi_deltas": {},
         "feasible_rate": 1.0,
@@ -459,13 +459,20 @@ def optimize_dataset(dataset_id: int, body: DatasetOptimizeRequest, request: Req
     }
 
 
+class ChatHistoryMessage(BaseModel):
+    role: str
+    content: str
+
+
 class ChatRequest(BaseModel):
     message: str
     version: Optional[int] = None
+    history: List[ChatHistoryMessage] = []
 
 
 @router.post("/{dataset_id}/chat")
-def chat_dataset(dataset_id: int, body: ChatRequest, request: Request) -> Dict[str, Any]:
+async def chat_dataset(dataset_id: int, body: ChatRequest, request: Request) -> Dict[str, Any]:
+    import asyncio as _aio
     _require_db()
     _get_tenant(request)
 
@@ -485,14 +492,120 @@ def chat_dataset(dataset_id: int, body: ChatRequest, request: Request) -> Dict[s
     if deterministic is not None:
         return deterministic
 
-    api_key = os.getenv("GOOGLE_API_KEY", "")
-    if api_key:
-        try:
-            return _chat_with_google(body.message, columns, rows, inferred_domain, inferred_solver, api_key)
-        except Exception as e:
-            return _chat_heuristic(body.message, columns, inferred_domain, inferred_solver, error=str(e))
+    history = [{"role": m.role, "content": m.content} for m in body.history]
 
-    return _chat_heuristic(body.message, columns, inferred_domain, inferred_solver)
+    api_key = os.getenv("GOOGLE_API_KEY", "")
+    if not api_key:
+        return _chat_heuristic(body.message, columns, inferred_domain, inferred_solver)
+
+    # Full agent loop (has access to MCP tools: forecast, R analysis, optimize)
+    try:
+        return await _chat_with_agent(body.message, columns, rows, inferred_domain, inferred_solver, api_key, history)
+    except Exception:
+        pass
+
+    # Fallback: simple Gemini chat (no tools, but still multi-turn)
+    try:
+        return await _aio.to_thread(
+            _chat_with_google, body.message, columns, rows, inferred_domain, inferred_solver, api_key, history
+        )
+    except Exception as e:
+        return _chat_heuristic(body.message, columns, inferred_domain, inferred_solver, error=str(e))
+
+
+def _parse_suggested_diffs_from_text(text: str, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    m = re.search(r'SUGGESTED_DIFFS:\s*(\[.*?\])', text, re.DOTALL)
+    if not m:
+        return []
+    try:
+        diffs = json.loads(m.group(1))
+        return _normalize_suggested_diffs({"suggested_diffs": diffs}, rows)["suggested_diffs"]
+    except Exception:
+        return []
+
+
+async def _chat_with_agent(
+    message: str,
+    columns: List[str],
+    rows: List[Dict[str, Any]],
+    domain: str,
+    solver: str,
+    api_key: str,
+    history: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    import tempfile
+    try:
+        from agent_core.runner import run_agent_loop
+    except ImportError as exc:
+        raise RuntimeError("agent_core not available") from exc
+
+    df = pd.DataFrame(rows)
+    tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, encoding='utf-8', newline='')
+    try:
+        df.to_csv(tmp, index=False)
+        tmp.close()
+        temp_path = tmp.name
+    except Exception:
+        tmp.close()
+        os.unlink(tmp.name)
+        raise
+
+    try:
+        history_ctx = ""
+        if history:
+            recent = history[-6:]
+            history_ctx = "Recent conversation:\n" + "\n".join(
+                f"{'User' if m['role'] == 'user' else 'Assistant'}: {m['content']}"
+                for m in recent
+            ) + "\n\n"
+
+        enriched_query = (
+            f"Dataset file: {temp_path}\n"
+            f"Columns: {columns}\n"
+            f"Domain: {domain}, Solver: {solver}, Rows: {len(rows)}\n\n"
+            f"{history_ctx}"
+            f"User: {message}\n\n"
+            f"If you want to suggest specific cell edits, append at the very end of your response:\n"
+            f"SUGGESTED_DIFFS:[{{\"row\":<int>,\"col\":\"<col_name>\",\"value\":<new_value>}},...]\n"
+            f"Row indices are 0-based as they appear in the CSV."
+        )
+
+        result = await run_agent_loop(
+            user_query=enriched_query,
+            model=CHAT_MODEL,
+            llm_provider="google",
+            max_steps=5,
+            chat_timeout_sec=30,
+        )
+
+        if not result.get("ok"):
+            err = ((result.get("error") or {}).get("message") or "")
+            raise RuntimeError(err or "Agent failed")
+
+        if result.get("optimization") and result["optimization"].get("ok"):
+            opt_res = result["optimization"].get("result") or {}
+            status = opt_res.get("status", "?")
+            total_dist = opt_res.get("total_distance")
+            base = result.get("final") or f"Optimization complete — status: {status}"
+            agent_reply = base + (f" (total distance: {total_dist:.1f})" if total_dist else "")
+        else:
+            agent_reply = str(result.get("final") or "Analysis complete.")
+
+        suggested_diffs = _parse_suggested_diffs_from_text(agent_reply, rows)
+        clean_reply = re.sub(r'\s*SUGGESTED_DIFFS:\s*\[.*?\]\s*$', '', agent_reply, flags=re.DOTALL).strip()
+
+        return {
+            "reply": clean_reply or agent_reply,
+            "recommended_domain": domain,
+            "recommended_solver": solver,
+            "reason": f"Agent ({result.get('step', '?')} steps)",
+            "suggested_diffs": suggested_diffs,
+        }
+    finally:
+        try:
+            os.unlink(temp_path)
+        except Exception:
+            pass
 
 
 def _chat_with_google(
@@ -502,6 +615,7 @@ def _chat_with_google(
     domain: str,
     solver: str,
     api_key: str,
+    history: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     try:
         from google import genai as google_genai
@@ -510,40 +624,44 @@ def _chat_with_google(
         raise RuntimeError("google-genai not available") from exc
 
     client = google_genai.Client(api_key=api_key)
-    indexed_rows = [
-        {
-            "row": idx,
-            "order_id": r.get("order_id"),
-            "district": r.get("district"),
-            "time_window_open": r.get("time_window_open"),
-            "time_window_close": r.get("time_window_close"),
-        }
-        for idx, r in enumerate(rows)
-    ]
-    prompt = (
-        f"You are an optimization assistant. Analyze this dataset and respond.\n\n"
-        f"Columns: {columns}\n"
-        f"Rows (indexed): {json.dumps(indexed_rows, ensure_ascii=False)}\n"
-        f"Inferred domain: {domain}, solver: {solver}\n\n"
-        f"User: {message}\n\n"
-        f"Reply in JSON with keys: reply (Korean ok), recommended_domain, recommended_solver, reason, "
-        f"suggested_diffs (list of {{row, col, value}} or empty list). "
-        f"IMPORTANT: row must be zero-based integer row index from Rows (indexed). "
-        f"No markdown, raw JSON only."
+
+    indexed_rows = [{"row": idx, **r} for idx, r in enumerate(rows)]
+
+    system_instruction = (
+        "You are OptiMystic, a friendly operations AI assistant. "
+        "You help users understand and edit their optimization dataset through natural conversation. "
+        f"The dataset has columns: {columns}. Domain: {domain}, solver: {solver}.\n\n"
+        "Rules:\n"
+        "- Respond ONLY in raw JSON (no markdown, no ```json). No other text outside the JSON.\n"
+        "- JSON keys: reply, recommended_domain, recommended_solver, reason, suggested_diffs.\n"
+        "- reply: short and natural. Match the language the user writes in (Korean → Korean, English → English). "
+        "Talk like a helpful colleague — no analysis narration, no 'I am thinking...', no reasoning steps. Just say what you found or what you changed.\n"
+        "- suggested_diffs: list of {row (zero-based integer), col (string), value}. Empty list if no changes.\n"
+        f"- row index must come from the indexed rows provided (0 to {len(rows)-1}).\n"
+        "- If unsure, ask a clarifying question in reply instead of guessing."
     )
 
-    config = google_types.GenerateContentConfig(temperature=0.1)
-    response = client.models.generate_content(model=CHAT_MODEL, contents=prompt, config=config)
+    chat_history = []
+    for msg in (history or []):
+        role = "user" if msg.get("role") == "user" else "model"
+        chat_history.append(
+            google_types.Content(role=role, parts=[google_types.Part(text=msg["content"])])
+        )
 
-    text = ""
-    for cand in getattr(response, "candidates", []) or []:
-        content = getattr(cand, "content", None)
-        for part in getattr(content, "parts", []) or []:
-            txt = getattr(part, "text", None)
-            if txt:
-                text += txt
+    config = google_types.GenerateContentConfig(
+        temperature=0.3,
+        system_instruction=system_instruction,
+    )
 
-    text = text.strip()
+    user_message = (
+        f"Dataset rows: {json.dumps(indexed_rows, ensure_ascii=False)}\n\n"
+        f"User: {message}"
+    )
+
+    chat = client.chats.create(model=CHAT_MODEL, config=config, history=chat_history)
+    response = chat.send_message(user_message)
+
+    text = (response.text or "").strip()
     if text.startswith("```"):
         parts = text.split("```")
         text = parts[1].lstrip("json").strip() if len(parts) > 1 else text
@@ -553,10 +671,10 @@ def _chat_with_google(
         return _normalize_suggested_diffs(parsed, rows)
     except Exception:
         return {
-            "reply": text,
+            "reply": text if text else "Sorry, something went wrong processing the response.",
             "recommended_domain": domain,
             "recommended_solver": solver,
-            "reason": "LLM 응답 파싱 실패",
+            "reason": "Failed to parse LLM response as JSON",
             "suggested_diffs": [],
         }
 
@@ -565,23 +683,22 @@ def _chat_heuristic(message: str, columns: List[str], domain: str, solver: str, 
     if error:
         if "no longer available" in error.lower() or "not_found" in error.lower():
             reply = (
-                f"[AI 모델 오류]\n{error}\n\n"
-                f"OPTIMYSTIC_CHAT_MODEL을 '{DEFAULT_CHAT_MODEL}'로 설정해 다시 시도하세요."
+                f"[Model error]\n{error}\n\n"
+                f"Try setting OPTIMYSTIC_CHAT_MODEL to '{DEFAULT_CHAT_MODEL}'."
             )
         else:
-            reply = f"[AI 키 오류]\n{error}\n\nGoogle AI Studio API 키를 확인하세요."
+            reply = f"[API key error]\n{error}\n\nPlease check your Google AI Studio API key."
     else:
         reply = (
-            f"[AI 키 미설정 — 휴리스틱 모드]\n"
-            f"질문: {message}\n\n"
-            f"컬럼: {', '.join(columns)}\n"
-            f"추천 도메인: {domain} / 솔버: {solver}\n\n"
-            f"GOOGLE_API_KEY를 환경변수에 설정하면 실제 AI 응답을 받을 수 있습니다."
+            f"[No API key — heuristic mode]\n"
+            f"Columns: {', '.join(columns)}\n"
+            f"Inferred domain: {domain} / solver: {solver}\n\n"
+            f"Set GOOGLE_API_KEY to enable AI responses."
         )
     return {
         "reply": reply,
         "recommended_domain": domain,
         "recommended_solver": solver,
-        "reason": "컬럼 패턴 기반 휴리스틱 (GOOGLE_API_KEY 미설정)",
+        "reason": "Heuristic (GOOGLE_API_KEY not set)",
         "suggested_diffs": [],
     }

@@ -11,12 +11,12 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { datasetsApi, type GridData, type ChatResult, type CellChange } from '@/api/datasets'
 import { useDatasetStore } from '@/store/datasetStore'
+import { useLangStore } from '@/store/langStore'
 
 interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   diffs?: CellChange[]
-  pending?: boolean
 }
 
 export default function DatasetPage() {
@@ -25,6 +25,7 @@ export default function DatasetPage() {
   const navigate = useNavigate()
 
   const { setDataset, setVersion, addChange, clearChanges, pendingChanges, setResult } = useDatasetStore()
+  const { lang, t, toggleLang } = useLangStore()
 
   const [grid, setGrid] = useState<GridData | null>(null)
   const [rowData, setRowData] = useState<Record<string, unknown>[]>([])
@@ -38,7 +39,6 @@ export default function DatasetPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
-  const [pendingDiffs, setPendingDiffs] = useState<CellChange[] | null>(null)
   const [optimizeError, setOptimizeError] = useState<string | null>(null)
 
   const chatBottomRef = useRef<HTMLDivElement>(null)
@@ -125,8 +125,8 @@ export default function DatasetPage() {
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: { message?: string } | string } }; message?: string }
       const detail = e?.response?.data?.detail
-      const msg = typeof detail === 'object' ? detail?.message : (detail ?? e?.message ?? '알 수 없는 오류')
-      setOptimizeError(msg ?? '최적화 오류')
+      const msg = typeof detail === 'object' ? detail?.message : (detail ?? e?.message ?? 'Unknown error')
+      setOptimizeError(msg ?? 'Optimization failed')
     } finally {
       setOptimizing(false)
     }
@@ -136,10 +136,11 @@ export default function DatasetPage() {
     if (!input.trim() || chatLoading) return
     const msg = input.trim()
     setInput('')
+    const history = messages.map((m) => ({ role: m.role, content: m.content }))
     setMessages((prev) => [...prev, { role: 'user', content: msg }])
     setChatLoading(true)
     try {
-      const res: ChatResult = await datasetsApi.chat(datasetId, msg)
+      const res: ChatResult = await datasetsApi.chat(datasetId, msg, undefined, history)
       setMessages((prev) => [
         ...prev,
         {
@@ -148,12 +149,11 @@ export default function DatasetPage() {
           diffs: res.suggested_diffs.length > 0 ? res.suggested_diffs : undefined,
         },
       ])
-      if (res.suggested_diffs.length > 0) setPendingDiffs(res.suggested_diffs)
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: { message?: string } | string } }; message?: string }
       const detail = e?.response?.data?.detail
-      const errMsg = typeof detail === 'object' ? detail?.message : (detail ?? e?.message ?? '오류 발생')
-      setMessages((prev) => [...prev, { role: 'assistant', content: `오류: ${errMsg}` }])
+      const errMsg = typeof detail === 'object' ? detail?.message : (detail ?? e?.message ?? 'An error occurred')
+      setMessages((prev) => [...prev, { role: 'assistant', content: `Error: ${errMsg}` }])
     } finally {
       setChatLoading(false)
     }
@@ -165,7 +165,6 @@ export default function DatasetPage() {
     changedCellsRef.current.clear()
     await loadGrid()
     await datasetsApi.listVersions(datasetId).then(setVersions)
-    setPendingDiffs(null)
   }
 
   if (!grid) {
@@ -178,7 +177,6 @@ export default function DatasetPage() {
 
   return (
     <div className="h-screen flex flex-col bg-slate-50">
-      {/* Top bar */}
       <header className="bg-slate-900 text-white px-4 py-3 flex items-center gap-3 shrink-0">
         <button onClick={() => navigate('/')} className="text-slate-400 hover:text-white">
           <ChevronLeft className="w-5 h-5" />
@@ -187,16 +185,22 @@ export default function DatasetPage() {
         <span className="font-medium">{grid.name}</span>
         <Badge variant="secondary" className="text-xs">v{currentVersion}</Badge>
         {pendingChanges.length > 0 && (
-          <Badge variant="warning" className="text-xs">{pendingChanges.length}개 변경</Badge>
+          <Badge variant="warning" className="text-xs">{pendingChanges.length} {t('unsaved')}</Badge>
         )}
         <div className="ml-auto flex items-center gap-2">
-          {/* Version history */}
+          <button
+            onClick={toggleLang}
+            className="text-xs font-mono text-slate-400 hover:text-white border border-slate-600 hover:border-slate-400 rounded px-2 py-1 transition-colors"
+          >
+            {lang === 'en' ? 'KR' : 'EN'}
+          </button>
+
           <div className="relative group">
             <Button variant="ghost" size="sm" className="text-slate-300 hover:text-white">
               <History className="w-4 h-4" />
             </Button>
             <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border z-10 hidden group-hover:block">
-              <div className="p-2 text-xs text-slate-500 font-medium border-b">버전 기록</div>
+              <div className="p-2 text-xs text-slate-500 font-medium border-b">{t('versionHistory')}</div>
               <div className="max-h-48 overflow-y-auto">
                 {versions.map((v) => (
                   <button
@@ -204,7 +208,7 @@ export default function DatasetPage() {
                     onClick={() => handleRestore(v.version)}
                     className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex justify-between text-slate-700"
                   >
-                    <span>v{v.version} — {v.note ?? '편집'}</span>
+                    <span>v{v.version} — {v.note ?? t('editNote')}</span>
                     <RotateCcw className="w-3 h-3 text-slate-400" />
                   </button>
                 ))}
@@ -220,22 +224,20 @@ export default function DatasetPage() {
             disabled={!pendingChanges.length || saving}
           >
             {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-            저장
+            {t('save')}
           </Button>
           <Button size="sm" className="text-xs" onClick={handleOptimize} disabled={optimizing}>
             {optimizing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
-            최적화 실행
+            {t('runOptimization')}
           </Button>
         </div>
       </header>
 
-      {/* Body: grid + sidebar */}
       <div className="flex-1 flex overflow-hidden">
-        {/* AG Grid */}
         <div className="flex-1 overflow-hidden ag-theme-alpine">
           {optimizeError && (
             <div className="bg-red-50 border-b border-red-200 text-red-700 text-xs px-4 py-2 flex items-center justify-between">
-              <span>최적화 오류: {optimizeError}</span>
+              <span>{t('optimizationError')}: {optimizeError}</span>
               <button onClick={() => setOptimizeError(null)} className="ml-2 text-red-400 hover:text-red-600">✕</button>
             </div>
           )}
@@ -249,53 +251,47 @@ export default function DatasetPage() {
           />
         </div>
 
-        {/* Agent sidebar */}
         <div className="w-80 border-l bg-white flex flex-col shrink-0">
           <div className="px-4 py-3 border-b flex items-center gap-2">
             <div className="w-2 h-2 bg-green-400 rounded-full" />
-            <span className="text-sm font-medium text-slate-700">AI 에이전트</span>
+            <span className="text-sm font-medium text-slate-700">{t('aiAgent')}</span>
           </div>
 
-          {/* Messages */}
           <div className="flex-1 overflow-y-auto p-3 space-y-3">
             {messages.length === 0 && (
-              <p className="text-xs text-slate-400 text-center mt-4">
-                데이터에 대해 질문하거나 변경을 요청하세요
-              </p>
+              <p className="text-xs text-slate-400 text-center mt-4">{t('chatPlaceholder')}</p>
             )}
             {messages.map((m, i) => (
               <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div
                   className={`max-w-[90%] rounded-lg px-3 py-2 text-xs ${
-                    m.role === 'user'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-100 text-slate-800'
+                    m.role === 'user' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-800'
                   }`}
                 >
                   <p className="whitespace-pre-wrap">{m.content}</p>
                   {m.diffs && m.diffs.length > 0 && (
                     <div className="mt-2 border-t border-slate-200 pt-2 space-y-1">
-                      <p className="text-slate-500 font-medium">제안 변경 ({m.diffs.length}건)</p>
+                      <p className="text-slate-500 font-medium">{t('suggestedChanges')} ({m.diffs.length})</p>
                       {m.diffs.slice(0, 3).map((d, j) => (
                         <div key={j} className="font-mono text-slate-600">
-                          행{d.row} · {d.col} → {String(d.value)}
+                          {t('row')} {d.row} · {d.col} → {String(d.value)}
                         </div>
                       ))}
                       {m.diffs.length > 3 && (
-                        <p className="text-slate-400">외 {m.diffs.length - 3}건...</p>
+                        <p className="text-slate-400">+{m.diffs.length - 3} more...</p>
                       )}
                       <div className="flex gap-1 mt-2">
                         <button
                           onClick={() => applyDiffs(m.diffs!)}
                           className="flex-1 bg-green-600 text-white rounded px-2 py-1 text-xs flex items-center justify-center gap-1"
                         >
-                          <Check className="w-3 h-3" /> 승인
+                          <Check className="w-3 h-3" /> {t('apply')}
                         </button>
                         <button
-                          onClick={() => setPendingDiffs(null)}
+                          onClick={() => {/* diffs stay but no action */}}
                           className="flex-1 bg-slate-200 text-slate-700 rounded px-2 py-1 text-xs flex items-center justify-center gap-1"
                         >
-                          <X className="w-3 h-3" /> 거절
+                          <X className="w-3 h-3" /> {t('reject')}
                         </button>
                       </div>
                     </div>
@@ -313,12 +309,11 @@ export default function DatasetPage() {
             <div ref={chatBottomRef} />
           </div>
 
-          {/* Input */}
           <div className="border-t p-3 flex gap-2">
             <textarea
               className="flex-1 border rounded-lg px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
               rows={2}
-              placeholder="메시지 입력..."
+              placeholder={t('inputPlaceholder')}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {

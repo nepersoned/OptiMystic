@@ -92,8 +92,13 @@ export const datasetsApi = {
     return data
   },
 
-  chat: async (id: number, message: string, version?: number): Promise<ChatResult> => {
-    const { data } = await api.post(`/datasets/${id}/chat`, { message, version })
+  chat: async (
+    id: number,
+    message: string,
+    version?: number,
+    history?: { role: string; content: string }[],
+  ): Promise<ChatResult> => {
+    const { data } = await api.post(`/datasets/${id}/chat`, { message, version, history: history ?? [] })
     return data
   },
 }

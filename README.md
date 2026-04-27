@@ -1,391 +1,263 @@
 # OptiMystic
 
-OptiMystic is a multi-domain optimization platform built on Python, Julia, and R.
+**Conversational operations optimization.** Upload a spreadsheet, talk to the AI, get an optimized plan.
 
-## What Is Included
+OptiMystic lets operations teams solve complex logistics, scheduling, and resource problems through natural conversation — no solver expertise required. The AI reads your data, asks when it needs clarification, and runs the full optimization pipeline on your behalf.
 
-- FastAPI optimization API (`/health`, `/optimize`)
-- Optional PostgreSQL-backed optimization run history (`/runs`)
-- FastMCP tool server for LLM tool-calling
-- Agent orchestration loop (`agent_loop.py`) with multi-provider LLM support
-- Docker-based local/cloud runtime
-- Domain analytics and visualization layer in R
+---
 
-Current scope note:
-- Forecasting baseline is now enabled via `forecast_demand` MCP tool.
-- Current priority is optimization + forecasting + post-analysis workflow quality.
+## What It Does
 
-Readiness snapshot (MVP Gate, 2026-04-17):
-- Core: 90+
-- Agent: 90+
-- Infra: 90+
-- Production: 90+
-- Overall: 90+
+**The loop:**
 
-## Current Production Direction
+```
+User uploads messy Excel/CSV
+  → AI reads the data and identifies the problem domain
+  → AI asks one clarifying question at a time when data is ambiguous
+  → User fills in what only they know (column meanings, constraints, context)
+  → AI runs: ARIMA forecast → optimization solver → R post-analysis
+  → Results and recommendations delivered in plain language
+```
 
-Active stack:
-- `python_solvers/` (API + MCP + routing)
-- `julia_solvers/` (MIP/GA/CG/ST/NLP/MINLP runtime)
-- `r_solvers/` (post-analysis and plotting)
+**Example conversation:**
 
-Reference-only archives:
-- `_legacy/`
-- `_legacy_django/`
-- `_legacy_go/`
+> User: "Our delivery routes are taking way too long."
+>
+> AI: "I can see order locations, but I don't see a depot row. Which location should trucks start from?"
+>
+> User: "First row is the depot."
+>
+> AI: "Got it. Running VRP optimization now... Done. 6 vehicles, total distance reduced by 18%. Route 3 is overloaded — want me to split it?"
 
-## Implementation Status (As-Is, 2026-04-16)
-
-This section reflects code that is currently present in the repository (not roadmap intent).
-
-### 1) API Layer (`python_solvers/api`)
-
-Implemented:
-- `GET /health`: returns service status and DB enable flag.
-- `POST /optimize`: executes domain + solver route and returns normalized solve response.
-- `GET /runs`: returns recent persisted optimization runs (when `DATABASE_URL` is configured).
-- `GET/POST/PATCH /datasets/*`: dataset upload/grid/version/chat/optimize workflow endpoints.
-
-Behavior details:
-- API startup initializes DB schema via SQLAlchemy.
-- `/optimize` attempts to persist run history and injects `run_id` on success.
-- If DB write fails, response keeps optimization result and adds `error_msg=database_write_failed`.
-- `/optimize` now propagates `X-Trace-Id` (accept incoming or auto-generate) and returns `trace_id` in success/error payloads.
-- If `OPTIMYSTIC_API_KEYS` is configured, `/optimize` and `/runs` require `X-API-Key`.
-- If `OPTIMYSTIC_API_KEY_TENANTS` is configured, API key is mapped to `tenant_id` and `/runs` is tenant-scoped.
-- If `Idempotency-Key` is provided and DB is enabled, repeated identical `/optimize` requests replay the saved response; payload mismatch returns conflict.
-
-Dataset assistant behavior notes:
-- `OPTIMYSTIC_CHAT_MODEL` defaults to `gemma-4-26b-a4b-it`.
-- Legacy model names like `gemini-2.0-flash(-001)` are auto-mapped to the default model.
-- Time-shift requests like `"강남 출발 시간을 전부 1시간씩 당겨"` are handled deterministically across all matching rows in `district`.
-- `suggested_diffs` now uses zero-based integer row indices so `/datasets/{id}/cells` can apply edits reliably.
-
-### 2) Optimization Routing (`python_solvers/api/solver_api.py`)
-
-Implemented routing logic:
-- Domain `vrp` or solver `cp` -> Python runtime path (`bridge_logic.run_python_runtime`).
-- Otherwise -> Julia runtime path via `cli_solver` payload bridge.
-
-Supported output normalization fields:
-- `status`, `objective`, `variables`, `constraints`, `solve_time`, `lp_sensitivity`, `details`, `sensitivity`, `error_msg`.
-
-### 3) MCP Tool Server (`python_solvers/mcp_server.py`)
-
-Implemented tools:
-- `read_company_data`
-- `forecast_demand`
-- `bridge_forecast_to_payload`
-- `get_target_schema`
-- `map_to_target_schema`
-- `optimize`
-- `analyze_with_r`
-
-Validation/guard behavior:
-- Domain payload is validated with domain-specific Pydantic models before optimize runtime call.
-- Validation errors are transformed into actionable MCP error payloads.
-- Infeasible/unbounded solve outcomes are converted to retry hints via logical feedback helpers.
-- `optimize` MCP tool supports optional `trace_id` and returns trace metadata for correlation.
-
-### 4) Forecasting (`python_solvers/forecasting.py`)
-
-Implemented:
-- Main engine: StatsForecast `AutoARIMA`.
-- Fallback engine: lightweight last-value baseline with statistical CI approximation.
-- Multi-item and aggregated single-series modes.
-
-Output contract:
-- `forecast_rows` with `item`, `date`, `point`, `lower`, `upper`, `recommended_demand`.
-- Metadata: `horizon`, `freq`, `confidence_level`, `series_count`, `engine`.
-
-### 5) Forecast -> Optimization Bridge (`python_solvers/mcp_utils.py`)
-
-Implemented:
-- Demand injection into domain payload by forecast bound (`lower|point|upper|recommended_demand`).
-- Configurable rounding (`ceil|floor|round`) and `min_demand` floor.
-- Name-based matching plus `all` fallback.
-- Domain-aware demand update targets:
-  - `packing.Items[*].Demand`
-  - `cutting.Items[*].Demand`
-  - `scheduling.Shifts[*].Demand`
-  - `vrp.Nodes[1:].Demand`
-
-### 6) R Post-Analysis Bridge (`python_solvers/r_bridge.py`)
-
-Implemented:
-- rpy2 bridge setup with Windows DLL path handling.
-- Calls into `r_solvers` pipeline:
-  - `process_results`
-  - `process_sensitivity`
-  - `process_decision_analytics`
-  - `build_executive_summary`
-
-Returned analysis bundle:
-- `processed_result`, `sensitivity`, `decision_analytics`, `executive_summary`.
-
-### 7) Agent Loop (`agent_loop.py`, `agent_core/*`)
-
-Implemented:
-- Providers: `ollama`, `openai`-compatible, `google`.
-- Per-call timeout and fallback model failover.
-- Tool-call normalization for cross-provider formats.
-- Auto-canonicalization of optimize payload keys.
-- Auto-inference helper for packing mapping rules.
-- Retry guidance insertion on retryable tool errors.
-- Per-step token usage capture (when provider usage metadata is available) and cumulative usage summary in loop output.
-- Estimated LLM USD cost calculation with configurable rates and optional budget guard (`OPTIMYSTIC_MAX_ESTIMATED_COST_USD`).
-- Optional Secret Manager fallback for Google API key (`OPTIMYSTIC_GOOGLE_API_KEY_SECRET` + `GOOGLE_CLOUD_PROJECT`).
-
-Current guardrails:
-- Context trimming (`MAX_CONTEXT_MESSAGES`).
-- Max step termination with trace output.
-- Successful early-stop on optimal solve.
-
-### 8) Persistence (`python_solvers/db.py`)
-
-Implemented:
-- Optional PostgreSQL persistence through `DATABASE_URL`.
-- Auto URL normalization to `postgresql+psycopg`.
-- Optimization run schema with request/result JSON snapshots.
-- Idempotency replay store for optimize requests.
-- Recent run listing endpoint support.
-
-### 9) Deployment Assets
-
-Implemented assets:
-- Local compose stack (`docker/docker-compose.yml`).
-- Cloud-target compose variants for AWS/Azure/GCP.
-- Bootstrap and deploy scripts in `deploy/*`.
-
-### 10) Known Gaps (Not Yet Implemented)
-
-Still pending in codebase:
-- Structured logging is standardized in JSON format across API and agent loop.
-- Token/cost dashboards and alert automation.
-- Secrets manager migration.
-- Fine-grained AuthZ policy expansion (project/org role model).
-- Circuit breaker and unified retry policy for external LLM calls.
-
-Use `TODO.md` as the execution checklist for these production-hardening items.
+---
 
 ## Architecture
 
-```text
-User / App / Agent
-  -> python_solvers/api/main.py (FastAPI)
-  -> python_solvers/api/solver_api.py (domain/solver routing)
-  -> Python OR-Tools path OR Julia runtime path
-  -> Structured JSON result
+```
+Frontend (React + TypeScript)
+  └─ Dataset grid editor (AG Grid)
+  └─ AI chat sidebar (multi-turn, history-aware)
+  └─ Results dashboard (ECharts)
 
-LLM Agent Loop
-  -> FastMCP tools (read_company_data, forecast_demand, bridge_forecast_to_payload, get_target_schema, map_to_target_schema, optimize, analyze_with_r)
-  -> self-healing retry + mapping auto-fill + argument normalization
+Backend (FastAPI + Python)
+  └─ Dataset API: upload / version / patch / optimize / chat
+  └─ Chat endpoint → agent loop (MCP tools) → simple Gemini fallback
+  └─ Solver routing: Python (VRP, CP) | Julia (MIP, GA, CG, ST, NLP, MINLP)
+  └─ R post-analysis bridge (sensitivity, decision analytics, executive summary)
+
+Agent Core
+  └─ Multi-step tool-calling loop (up to 8 steps)
+  └─ Tools: read_company_data, forecast_demand, bridge_forecast_to_payload,
+            get_target_schema, map_to_target_schema, optimize, analyze_with_r
+  └─ LLM providers: Google (Gemini/Gemma), Ollama (local), OpenAI-compatible
+
+LLM Roadmap
+  └─ Now: Google Gemini API (cloud)
+  └─ Target: Gemma 4 on-device via Ollama (no API cost, no data egress)
 ```
 
-## LLM Providers in `agent_loop.py`
+---
 
-Supported providers:
-- `ollama`
-- `openai` (OpenAI-compatible endpoints)
-- `google` (Gemini API)
+## Domain Coverage
 
-Recommended default for cloud:
-- `--llm-provider google`
-- model `gemma-4-26b-a4b-it`
+| Problem | Domain | Solver | Runtime |
+|---------|--------|--------|---------|
+| Vehicle routing | `vrp` | `mip` | Python |
+| Shift scheduling | `scheduling` | `cp` | Python |
+| Cutting stock | `cutting` | `cg` / `mip` | Julia |
+| Bin packing | `packing` | `mip` | Julia |
+| Stochastic resourcing | `resourcing` | `st` | Julia |
+| Nonlinear optimization | `generic` | `nlp` / `minlp` | Julia |
+
+---
 
 ## Quick Start (Local)
 
-```powershell
-cd C:\Projects\OptiMystic
-.\.venv\Scripts\python.exe -m pip install -r python_solvers\requirements.txt
-.\.venv\Scripts\python.exe -m uvicorn python_solvers.api.main:app --host 0.0.0.0 --port 8000 --reload
+**1. Install and run the API:**
+
+```bash
+pip install -r python_solvers/requirements.txt
+uvicorn python_solvers.api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Health check:
+**2. Run the frontend:**
 
-```powershell
-curl http://127.0.0.1:8000/health
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
-Optional PostgreSQL persistence:
+**3. Set environment variables:**
 
-```powershell
-$env:DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/optimystic"
-curl http://127.0.0.1:8000/runs
+```bash
+# Required for AI chat
+export GOOGLE_API_KEY="AIza..."
+
+# Required for dataset persistence
+export DATABASE_URL="postgresql://user:pass@localhost:5432/optimystic"
 ```
 
-## Agent Loop Smoke (Google)
+**4. Health check:**
 
-```powershell
-$env:GOOGLE_API_KEY="AIza..."   # Google AI Studio key
-\.\.venv\Scripts\python.exe agent_loop.py --llm-provider google --model gemma-4-26b-a4b-it --fallback-model gemma-4-26b-a4b-it --max-steps 10
+```bash
+curl http://localhost:8000/health
+# {"status":"ok","database_enabled":true}
 ```
 
-Expected success signal:
-- `"ok": true`
-- `"status": "Optimal"` in optimize result trace
+---
 
-## R Post-Analysis via MCP
+## Agent Loop (CLI)
 
-The MCP server now exposes `analyze_with_r` for post-analysis on solver outputs.
+Run the full optimization pipeline from the command line:
 
-- Required: `mode` and one of `run_result` or `run_results`
-- Optional: `store`, `confidence`, `n_boot`, `seed`
-- Returns: `processed_result`, `sensitivity`, `decision_analytics`, `executive_summary`
-
-This is intended for diagnostics/reporting after optimization, not for forecasting.
-
-## Forecasting via MCP
-
-The MCP server exposes `forecast_demand` powered by StatsForecast AutoARIMA.
-
-- Required: `file_path`, `time_col`, `target_col`
-- Optional: `item_col`, `horizon`, `freq`, `confidence_level`
-- Returns: point/lower/upper forecast rows and `recommended_demand` (upper bound)
-
-Runtime note:
-- If `statsforecast` is available, it uses AutoARIMA.
-- If not installed, it falls back to a lightweight CPU baseline (`fallback-last-value`) so the pipeline remains available.
-
-Windows + Python 3.13 note:
-- `statsforecast` can fail to install in some Python 3.13 environments.
-- Recommended path is a dedicated Python 3.12 env for forecasting engine activation.
-
-```powershell
-cd C:\Projects\OptiMystic
-.\scripts\setup_py312_forecasting.ps1
+```bash
+export GOOGLE_API_KEY="AIza..."
+python agent_loop.py \
+  --llm-provider google \
+  --model gemma-4-26b-a4b-it \
+  --max-steps 8
 ```
 
-Windows runtime sanity check (Julia + R):
+The agent will:
+1. Read company data from a file
+2. Ask clarifying questions if data is ambiguous
+3. Run demand forecasting (AutoARIMA via StatsForecast)
+4. Map data to the solver schema
+5. Run the appropriate solver
+6. Run R post-analysis and return an executive summary
 
-```powershell
-cd C:\Projects\OptiMystic
+---
 
-# 1) Add Rscript path for current user/session (one-time)
-.\scripts\setup_r_path.ps1
+## API Reference
 
-# 2) Julia module load smoke (quote-safe)
-Set-Content -Path .tmp_julia_smoke.jl -Value 'include("julia_solvers/src/main.jl"); println("julia_router_load_ok")'
-julia --project=julia_solvers .tmp_julia_smoke.jl
-Remove-Item .tmp_julia_smoke.jl -Force
+### Dataset Workflow
 
-# 3) R processor load smoke
-Rscript -e "setwd('r_solvers'); source('utils.R'); source('processors.R'); cat('r_processors_load_ok\n')"
-```
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/datasets/upload` | Upload CSV/Excel, infers domain automatically |
+| `GET` | `/datasets/{id}/grid` | Fetch dataset rows + columns (with optional version) |
+| `PATCH` | `/datasets/{id}/cells` | Apply cell edits, creates new version |
+| `GET` | `/datasets/{id}/versions` | List version history |
+| `POST` | `/datasets/{id}/versions/{v}/restore` | Restore a previous version |
+| `POST` | `/datasets/{id}/chat` | AI chat — multi-turn, agent-powered |
+| `POST` | `/datasets/{id}/optimize` | Run solver on current dataset version |
 
-Tip:
-- On Windows PowerShell, prefer `.jl` temp-file execution over `julia -e` for complex strings.
-- For Julia CLI `--params`, pass raw JSON (avoid extra escaping layers).
-
-Recommended integration for optimization:
-1. Forecast with `forecast_demand`
-2. Bridge with `bridge_forecast_to_payload` using bound=`upper`
-3. Run `optimize`
-
-## Docker Local Run
-
-API + Jupyter:
-
-```powershell
-docker compose -f docker/docker-compose.yml up --build api jupyterlab
-```
-
-Agent smoke (Google):
-
-```powershell
-$env:GOOGLE_API_KEY="<YOUR_KEY>"
-docker compose -f docker/docker-compose.yml --profile agent run --rm agent-loop
-```
-
-## Cloud Deployment
-
-Available runbooks:
-- AWS: `deploy/aws/README.md`
-- Azure: `deploy/azure/README.md`
-- GCP: `deploy/gcp/README.md`
-
-Compose files:
-- `docker/docker-compose.aws.yml`
-- `docker/docker-compose.azure.yml`
-- `docker/docker-compose.gcp.yml`
-
-### GCP Production Path
-
-Current production deployment is driven by Cloud Build, not by docker compose.
-
-- Trigger: `optimystic-standard-trigger`
-- Trigger source: GitHub `nepersoned/OptiMystic` on branch `main`
-- Build config: `cloudbuild.yaml`
-- Dependency base image: `Dockerfile.deps`
-- App image: `Dockerfile`
-- Deploy target: Cloud Run service `optimystic`
-- Region: `asia-northeast3`
-- Public base URL: `https://optimystic-826180130763.asia-northeast3.run.app`
-
-Behavior:
-- Any push to `main` triggers Cloud Build automatically.
-- Cloud Build refreshes the dependency base image from `Dockerfile.deps`.
-- Cloud Build then builds the app container from the root `Dockerfile` on top of that base.
-- The built image is pushed to `gcr.io/$PROJECT_ID/github.com/nepersoned/optimystic:$COMMIT_SHA`.
-- The deploy step updates the Cloud Run service with that image.
-
-Build-time note:
-- The first build after dependency-layer changes can still be slow because Python, R, and Julia dependencies must be baked into the base image.
-- Typical code-only pushes should get better reuse because the app image no longer reinstalls the full dependency stack.
-
-Quick verification:
-
-```powershell
-gcloud builds triggers list --project optimystic-493605 --format="table(id,name,filename)"
-gcloud builds list --project optimystic-493605 --limit=5 --format="table(id,status,createTime,buildTriggerId)"
-Invoke-RestMethod -Uri "https://optimystic-826180130763.asia-northeast3.run.app/health"
-```
-
-Expected health response:
+### Direct Optimization
 
 ```json
-{"status":"ok","database_enabled":false}
-```
-
-## Minimal Request Contract
-
-```json
+POST /optimize
 {
-  "domain": "packing",
+  "domain": "vrp",
   "solver": "mip",
   "params": {
-    "Items": [
-      {"Name": "A", "Weight": 2, "Value": 10, "Demand": 2},
-      {"Name": "B", "Weight": 3, "Value": 12, "Demand": 1}
+    "Nodes": [
+      {"Name": "Depot", "X": 126.99, "Y": 37.56, "Demand": 0},
+      {"Name": "Stop A", "X": 127.02, "Y": 37.50, "Demand": 120}
     ],
-    "Vehicles": [
-      {"Capacity": 5}
-    ]
+    "Vehicles": [{"Name": "Truck 1", "Capacity": 500}]
   }
 }
 ```
 
-## Domain-Solver Guide
+---
 
-| Goal | Domain | Solver | Runtime |
-|------|--------|--------|---------|
-| Shift scheduling | `scheduling` | `cp` | Python |
-| Vehicle routing | `vrp` | `mip` (routing path) | Python |
-| Cutting stock | `cutting` | `cg` / `mip` | Julia |
-| Bin packing | `packing` | `mip` | Julia |
-| Stochastic resourcing | `resourcing` | `st` | Julia |
-| Nonlinear optimization | `generic` | `nlp` | Julia |
-| Mixed-integer nonlinear optimization | `generic` | `minlp` | Julia |
+## Chat Endpoint
 
-## Module Docs
+`POST /datasets/{id}/chat`
 
-- `python_solvers/README.md`
-- `julia_solvers/README.md`
-- `r_solvers/README.md`
-- `deploy/aws/README.md`
-- `deploy/azure/README.md`
-- `deploy/gcp/README.md`
+```json
+{
+  "message": "Our Gangnam deliveries are always delayed.",
+  "history": [
+    {"role": "user", "content": "..."},
+    {"role": "assistant", "content": "..."}
+  ]
+}
+```
 
-- Last CI timing probe: 2026-04-17
+**Response:**
 
-- Last CI timing probe: 2026-04-17 (repeated)
+```json
+{
+  "reply": "I can see the time windows for Gangnam are quite tight. Want me to run a VRP solve and see where the bottleneck is?",
+  "recommended_domain": "vrp",
+  "recommended_solver": "mip",
+  "suggested_diffs": []
+}
+```
+
+The chat endpoint runs a full agent loop with tool access (forecast, optimize, R analysis) first, and falls back to a direct Gemini call if the agent fails.
+
+---
+
+## MCP Tools
+
+The agent uses these tools internally during chat and CLI runs:
+
+| Tool | What it does |
+|------|-------------|
+| `read_company_data` | Load and inspect a CSV/Excel file |
+| `forecast_demand` | AutoARIMA demand forecast (StatsForecast) |
+| `bridge_forecast_to_payload` | Inject forecast results into solver input |
+| `get_target_schema` | Fetch the required schema for a domain |
+| `map_to_target_schema` | Map source columns to target schema |
+| `optimize` | Run the solver with validation and retry hints |
+| `analyze_with_r` | Post-solve sensitivity and decision analytics |
+
+---
+
+## Forecasting
+
+Powered by StatsForecast AutoARIMA. Falls back to a lightweight last-value baseline if StatsForecast is unavailable.
+
+**Python 3.13 note:** StatsForecast may fail to install. Use Python 3.12:
+
+```bash
+.\scripts\setup_py312_forecasting.ps1
+```
+
+---
+
+## Docker
+
+```bash
+# Local stack (API + JupyterLab)
+docker compose -f docker/docker-compose.yml up --build api jupyterlab
+
+# Agent smoke test
+GOOGLE_API_KEY="..." docker compose -f docker/docker-compose.yml --profile agent run --rm agent-loop
+```
+
+---
+
+## Cloud Deployment (GCP)
+
+Production runs on Google Cloud Run (`asia-northeast3`), deployed via Cloud Build on every push to `main`.
+
+```bash
+# Check build status
+gcloud builds list --project optimystic-493605 --limit=5
+
+# Verify deployment
+curl https://optimystic-826180130763.asia-northeast3.run.app/health
+```
+
+Build config: `cloudbuild.yaml` | App image: `Dockerfile` | Deps image: `Dockerfile.deps`
+
+---
+
+## Project Structure
+
+```
+OptiMystic/
+├── frontend/          # React + TypeScript + Vite
+├── python_solvers/    # FastAPI + MCP server + Python solvers
+├── julia_solvers/     # MIP / GA / CG / ST / NLP / MINLP
+├── r_solvers/         # Post-analysis and visualization
+├── agent_core/        # LLM agent loop + providers
+├── deploy/            # AWS / Azure / GCP runbooks
+└── docker/            # Compose files
+```
+
+Sub-module docs: [`python_solvers/`](python_solvers/README.md) · [`julia_solvers/`](julia_solvers/README.md) · [`r_solvers/`](r_solvers/README.md)
