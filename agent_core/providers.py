@@ -243,11 +243,6 @@ def _chat_google_sync(model: str, messages: List[Dict[str, Any]], tools: List[Di
     config_kwargs: Dict[str, Any] = {
         "temperature": 0.1,
     }
-    if hasattr(google_types, "ThinkingConfig"):
-        try:
-            config_kwargs["thinking_config"] = google_types.ThinkingConfig(thinking_level="high")
-        except Exception:
-            pass
     if google_tool:
         config_kwargs["tools"] = [google_tool]
     if system_instruction:
@@ -278,6 +273,9 @@ def _chat_google_sync(model: str, messages: List[Dict[str, Any]], tools: List[Di
         content = getattr(cand, "content", None)
         parts = getattr(content, "parts", None) if content is not None else None
         for p in parts or []:
+            # thinking 파트(내부 추론)는 응답에 포함하지 않음
+            if getattr(p, "thought", False):
+                continue
             txt = getattr(p, "text", None)
             if txt:
                 text_chunks.append(str(txt))

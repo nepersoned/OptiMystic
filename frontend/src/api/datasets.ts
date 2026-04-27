@@ -42,6 +42,7 @@ export interface OptimizeResult {
   details?: unknown
   chart_data?: unknown
   executive_summary?: unknown
+  r_analysis?: unknown
   error_msg?: string | null
 }
 

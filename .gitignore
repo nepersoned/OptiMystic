@@ -78,3 +78,7 @@ _legacy_django/*
 !_legacy_django/README.md
 _legacy_go/*
 !_legacy_go/README.md
+
+# local SQLite DB
+optimystic.db
+*.db

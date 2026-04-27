@@ -102,8 +102,13 @@ export default function ResultsPage() {
 
   const chart = lastResult.chart_data as ChartData | undefined
   const summary = lastResult.executive_summary as ExecutiveSummary | undefined
+  const rAnalysis = (lastResult.r_analysis ?? null) as Record<string, unknown> | null
   const kpi = chart?.kpi as Record<string, unknown> | undefined
   const deltaPct = summary?.delta_pct as number | null | undefined
+  const routeCount = Array.isArray((lastResult as Record<string, unknown>).routes)
+    ? (((lastResult as Record<string, unknown>).routes as unknown[])?.length ?? 0)
+    : 0
+  const hasAnyChart = Boolean(chart && Object.keys(chart).length > 0)
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -134,6 +139,32 @@ export default function ResultsPage() {
           </div>
         )}
 
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">실행 해석</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm space-y-2 text-slate-700">
+            <p>
+              이번 실행은 <span className="font-medium">{lastResult.domain_used} / {lastResult.solver_used}</span> 기준으로 수행됐고,
+              상태는 <span className="font-medium">{lastResult.status}</span> 입니다.
+            </p>
+            <p>
+              목적함수는 <span className="font-medium">{lastResult.objective != null ? Number(lastResult.objective).toFixed(4) : 'N/A'}</span>,
+              계산 시간은 <span className="font-medium">{Number(lastResult.solve_time ?? 0).toFixed(2)}s</span> 입니다.
+            </p>
+            {routeCount > 0 && (
+              <p>생성된 경로 수: <span className="font-medium">{routeCount}</span></p>
+            )}
+            <div className="pt-1">
+              {rAnalysis && rAnalysis.ok === false ? (
+                <Badge variant="warning">R 분석 미적용</Badge>
+              ) : (
+                <Badge variant="success">R 분석 적용됨</Badge>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard label="Status" value={lastResult.status} icon={Target} t={t} />
           <KpiCard
@@ -152,6 +183,12 @@ export default function ResultsPage() {
             {Object.entries(kpi).map(([k, v]) => (
               <KpiCard key={k} label={k.replace(/_/g, ' ')} value={v != null ? String(v) : 'N/A'} t={t} />
             ))}
+          </div>
+        )}
+
+        {!hasAnyChart && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800">
+            시각화 데이터가 충분하지 않아 차트가 비어 있습니다. 대신 아래 실행 요약을 확인해 주세요.
           </div>
         )}
 

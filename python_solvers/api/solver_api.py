@@ -14,7 +14,8 @@ def run_optimization(domain: str, solver: str, params: Dict[str, Any], trace_id:
         julia_payload = _build_julia_payload(mapped_params)
         result = _run_julia_solver(domain, solver_type or "mip", julia_payload)
 
-    return {
+    # 표준 필드는 유지하되, 도메인별 상세 필드(VRP routes/total_distance 등)도 전달한다.
+    normalized = {
         "status": result.get("status", "Error"),
         "objective": result.get("objective"),
         "variables": result.get("variables", []),
@@ -26,3 +27,10 @@ def run_optimization(domain: str, solver: str, params: Dict[str, Any], trace_id:
         "error_msg": result.get("error_msg"),
         "trace_id": trace_id,
     }
+
+    if isinstance(result, dict):
+        for key, value in result.items():
+            if key not in normalized:
+                normalized[key] = value
+
+    return normalized

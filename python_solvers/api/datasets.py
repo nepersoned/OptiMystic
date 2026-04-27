@@ -4,6 +4,7 @@ import io
 import json
 import os
 import re
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -11,6 +12,7 @@ from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
 from python_solvers.api.solver_api import run_optimization
+from python_solvers.r_bridge import ensure_r_bridge, run_r_post_analysis
 from python_solvers.db import (
     add_dataset_version,
     create_dataset,
@@ -43,6 +45,98 @@ def _resolve_chat_model() -> str:
 CHAT_MODEL = _resolve_chat_model()
 
 
+# DATABASE_URL 미설정 환경에서도 UI 기능을 사용할 수 있도록 인메모리 저장소를 제공한다.
+_MEM_DATASETS: Dict[int, Dict[str, Any]] = {}
+_MEM_NEXT_DATASET_ID = 1
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _mem_create_dataset(name: str, filename: str, rows: List[Dict[str, Any]], columns: List[str]) -> int:
+    global _MEM_NEXT_DATASET_ID
+    dataset_id = _MEM_NEXT_DATASET_ID
+    _MEM_NEXT_DATASET_ID += 1
+    _MEM_DATASETS[dataset_id] = {
+        "dataset_id": dataset_id,
+        "name": name,
+        "filename": filename,
+        "versions": [
+            {
+                "version": 1,
+                "rows": rows,
+                "columns": columns,
+                "note": "upload",
+                "created_at": _now_iso(),
+            }
+        ],
+    }
+    return dataset_id
+
+
+def _mem_get_dataset(dataset_id: int) -> Optional[Dict[str, Any]]:
+    return _MEM_DATASETS.get(dataset_id)
+
+
+def _mem_get_version(dataset_id: int, version: Optional[int] = None) -> Optional[Dict[str, Any]]:
+    ds = _mem_get_dataset(dataset_id)
+    if ds is None:
+        return None
+    versions = ds.get("versions") or []
+    if not versions:
+        return None
+    if version is None:
+        v = versions[-1]
+    else:
+        matched = [item for item in versions if int(item.get("version", 0)) == int(version)]
+        if not matched:
+            return None
+        v = matched[-1]
+    return {
+        "dataset_id": dataset_id,
+        "name": ds.get("name", "dataset"),
+        "version": int(v.get("version", 1)),
+        "columns": list(v.get("columns") or []),
+        "rows": list(v.get("rows") or []),
+        "row_count": len(v.get("rows") or []),
+    }
+
+
+def _mem_add_version(dataset_id: int, rows: List[Dict[str, Any]], columns: List[str], note: Optional[str] = None) -> int:
+    ds = _mem_get_dataset(dataset_id)
+    if ds is None:
+        raise KeyError(f"Dataset {dataset_id} not found")
+    versions = ds.setdefault("versions", [])
+    new_version = (int(versions[-1].get("version", 1)) + 1) if versions else 1
+    versions.append(
+        {
+            "version": new_version,
+            "rows": rows,
+            "columns": columns,
+            "note": note,
+            "created_at": _now_iso(),
+        }
+    )
+    return new_version
+
+
+def _mem_list_versions(dataset_id: int) -> List[Dict[str, Any]]:
+    ds = _mem_get_dataset(dataset_id)
+    if ds is None:
+        return []
+    out: List[Dict[str, Any]] = []
+    for v in ds.get("versions") or []:
+        out.append(
+            {
+                "version": int(v.get("version", 1)),
+                "note": v.get("note"),
+                "created_at": str(v.get("created_at") or _now_iso()),
+            }
+        )
+    return out
+
+
 def _require_db() -> None:
     if not is_database_enabled():
         raise HTTPException(
@@ -63,13 +157,25 @@ def _scope_tenant(tenant_id: str) -> Optional[str]:
 
 def _infer_domain_solver(columns: List[str]) -> tuple[str, str]:
     joined = " ".join(c.lower() for c in columns)
-    if any(kw in joined for kw in ("vehicle", "route", "node", "depot", "pickup", "delivery", "latitude", "longitude")):
+    if any(kw in joined for kw in (
+        "vehicle", "route", "node", "depot", "pickup", "delivery", "latitude", "longitude",
+        "위도", "경도", "배송", "주문번호", "거래처", "time_window", "배송가능", "마감시간",
+    )):
         return "vrp", "mip"
-    if any(kw in joined for kw in ("shift", "worker", "employee", "schedule", "availability")):
+    if any(kw in joined for kw in (
+        "shift", "worker", "employee", "schedule", "availability",
+        "근무", "시프트", "작업자", "스케줄",
+    )):
         return "scheduling", "cp"
-    if any(kw in joined for kw in ("length", "stock", "cut", "waste", "pattern")):
+    if any(kw in joined for kw in (
+        "length", "stock", "cut", "waste", "pattern",
+        "절단", "원자재", "재단",
+    )):
         return "cutting", "cg"
-    if any(kw in joined for kw in ("weight", "value", "item", "capacity", "demand")):
+    if any(kw in joined for kw in (
+        "weight", "value", "item", "capacity", "packing",
+        "무게", "용량", "적재",
+    )):
         return "packing", "mip"
     return "generic", "nlp"
 
@@ -79,6 +185,66 @@ def _safe_num(v: Any, default: float = 0.0) -> float:
         return float(v) if v is not None else default
     except (TypeError, ValueError):
         return default
+
+
+def _parse_number(v: Any, default: float = 0.0) -> float:
+    if v is None:
+        return default
+    if isinstance(v, (int, float)):
+        return float(v)
+    if isinstance(v, str):
+        raw = v.strip()
+        if not raw:
+            return default
+        m = re.search(r"[-+]?\d+(?:\.\d+)?", raw.replace(",", ""))
+        if m:
+            try:
+                return float(m.group(0))
+            except (TypeError, ValueError):
+                return default
+    return default
+
+
+def _parse_time_to_minutes(v: Any, default: float = 0.0) -> float:
+    if v is None:
+        return default
+    if isinstance(v, (int, float)):
+        n = float(v)
+        if n >= 100 and float(int(n)) == n:
+            hh = int(n) // 100
+            mm = int(n) % 100
+            if 0 <= hh < 24 and 0 <= mm < 60:
+                return float(hh * 60 + mm)
+        return n
+    if not isinstance(v, str):
+        return default
+
+    txt = v.strip().lower()
+    if not txt:
+        return default
+
+    m = re.match(r"^(\d{1,2})\s*[:시]\s*(\d{1,2})\s*분?$", txt)
+    if m:
+        hh = int(m.group(1))
+        mm = int(m.group(2))
+        if 0 <= hh < 24 and 0 <= mm < 60:
+            return float(hh * 60 + mm)
+
+    m = re.match(r"^(\d{3,4})$", txt)
+    if m:
+        n = int(m.group(1))
+        hh = n // 100
+        mm = n % 100
+        if 0 <= hh < 24 and 0 <= mm < 60:
+            return float(hh * 60 + mm)
+
+    m = re.match(r"^(\d{1,2})\s*시$", txt)
+    if m:
+        hh = int(m.group(1))
+        if 0 <= hh < 24:
+            return float(hh * 60)
+
+    return default
 
 
 def _shift_hhmm(time_text: Any, delta_hours: int) -> Optional[str]:
@@ -155,6 +321,12 @@ def _build_district_time_shift_response(message: str, rows: List[Dict[str, Any]]
 def _normalize_suggested_diffs(result: Dict[str, Any], rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     if not isinstance(result, dict):
         return result
+
+    # 데이터가 사실상 비어 있으면 어떤 경우에도 수정 제안을 생성하지 않는다.
+    if _rows_effectively_empty(rows):
+        result["suggested_diffs"] = []
+        return result
+
     raw_diffs = result.get("suggested_diffs")
     if not isinstance(raw_diffs, list):
         result["suggested_diffs"] = []
@@ -196,6 +368,26 @@ def _normalize_suggested_diffs(result: Dict[str, Any], rows: List[Dict[str, Any]
     return result
 
 
+def _rows_effectively_empty(rows: List[Dict[str, Any]]) -> bool:
+    if not rows:
+        return True
+
+    def _is_blank(value: Any) -> bool:
+        if value is None:
+            return True
+        if isinstance(value, str):
+            return value.strip() == ""
+        return False
+
+    for row in rows:
+        if not isinstance(row, dict):
+            return False
+        # 한 셀이라도 값이 있으면 "비어 있음"으로 보지 않는다.
+        if any(not _is_blank(v) for v in row.values()):
+            return False
+    return True
+
+
 def _rows_to_params(domain: str, rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     if domain == "packing":
         return {"Items": rows, "Vehicles": [{"Capacity": 100}]}
@@ -208,12 +400,39 @@ def _rows_to_params(domain: str, rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         customer_rows = [r for r in rows if str(r.get("order_id", "")).upper() != "DEPOT"]
 
         def to_node(row: Dict[str, Any], idx: int) -> Dict[str, Any]:
+            demand_val = _parse_number(
+                row.get("demand_kg")
+                or row.get("demand")
+                or row.get("Demand")
+                or row.get("배송중량")
+                or row.get("배송 중량")
+                or row.get("중량")
+                or row.get("무게")
+            )
+            service_val = _parse_number(
+                row.get("service_time_min")
+                or row.get("service_time")
+                or row.get("작업시간(분)")
+                or row.get("작업시간")
+            )
+            ready_time = _parse_time_to_minutes(
+                row.get("time_window_open")
+                or row.get("배송가능시작")
+                or row.get("배송 가능 시작")
+            )
+            due_time = _parse_time_to_minutes(
+                row.get("time_window_close")
+                or row.get("마감시간")
+                or row.get("배송마감")
+            )
             return {
-                "Name": str(row.get("customer_name") or row.get("name") or f"Node_{idx}"),
-                "X": _safe_num(row.get("longitude") or row.get("lon") or row.get("X") or row.get("x")),
-                "Y": _safe_num(row.get("latitude") or row.get("lat") or row.get("Y") or row.get("y")),
-                "Demand": _safe_num(row.get("demand_kg") or row.get("demand") or row.get("Demand")),
-                "ServiceTime": _safe_num(row.get("service_time_min") or row.get("service_time")),
+                "Name": str(row.get("customer_name") or row.get("name") or row.get("거래처명") or f"Node_{idx}"),
+                "X": _parse_number(row.get("longitude") or row.get("lon") or row.get("X") or row.get("x") or row.get("경도")),
+                "Y": _parse_number(row.get("latitude") or row.get("lat") or row.get("Y") or row.get("y") or row.get("위도")),
+                "Demand": demand_val,
+                "ServiceTime": service_val,
+                "ReadyTime": ready_time,
+                "DueTime": due_time,
             }
 
         nodes = [to_node(r, i + 1) for i, r in enumerate(customer_rows)]
@@ -266,6 +485,7 @@ def _build_executive_summary(domain: str, result: Dict[str, Any]) -> Dict[str, A
         unserved = result.get("unserved", [])
         routes = result.get("routes", []) or []
         total_dist = result.get("total_distance", 0)
+        total_load = result.get("total_load", 0)
         num_v_raw = result.get("num_vehicles", 0)
         try:
             num_v = int(num_v_raw or 0)
@@ -280,10 +500,15 @@ def _build_executive_summary(domain: str, result: Dict[str, Any]) -> Dict[str, A
             headline = f"VRP solved: total distance {total_dist:.1f}"
         if unserved:
             headline += f" — {len(unserved)} stop(s) unserved"
+        domain_kpi_line = (
+            f"Total distance {float(total_dist or 0):.1f}, total load {float(total_load or 0):.1f}kg, "
+            f"vehicles used {num_v if num_v > 0 else len(routes)}"
+        )
         return {
             "headline": headline,
             "delta_pct": None,
             "kpi_deltas": {},
+            "domain_kpi_line": domain_kpi_line,
             "bottleneck": (
                 f"Capacity exceeded — {len(unserved)} stop(s) unserved: {', '.join(str(u) for u in unserved[:3])}"
                 if unserved else None
@@ -299,8 +524,16 @@ def _build_executive_summary(domain: str, result: Dict[str, Any]) -> Dict[str, A
         "headline": f"{domain} optimization complete (status: {result.get('status', '?')})",
         "delta_pct": None,
         "kpi_deltas": {},
+        "domain_kpi_line": None,
         "feasible_rate": 1.0,
         "run_count": 1,
+    }
+
+
+def _build_store_for_r(params: Dict[str, Any], result: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "parameters": params if isinstance(params, dict) else {},
+        "variables": result.get("variables", []) if isinstance(result, dict) else [],
     }
 
 
@@ -308,14 +541,23 @@ def _build_executive_summary(domain: str, result: Dict[str, Any]) -> Dict[str, A
 
 @router.get("")
 def list_datasets_endpoint(request: Request) -> List[Dict[str, Any]]:
-    _require_db()
     tenant_id = _get_tenant(request)
-    return list_datasets(tenant_id=_scope_tenant(tenant_id))
+    if is_database_enabled():
+        return list_datasets(tenant_id=_scope_tenant(tenant_id))
+    return [
+        {
+            "id": ds_id,
+            "name": ds.get("name", f"dataset_{ds_id}"),
+            "filename": ds.get("filename", "upload.csv"),
+            "created_at": (ds.get("versions") or [{}])[0].get("created_at", _now_iso()),
+            "latest_version": int((ds.get("versions") or [{}])[-1].get("version", 1)),
+        }
+        for ds_id, ds in sorted(_MEM_DATASETS.items())
+    ]
 
 
 @router.post("/upload")
 async def upload_dataset(request: Request, file: UploadFile = File(...)) -> Dict[str, Any]:
-    _require_db()
     tenant_id = _get_tenant(request)
 
     content = await file.read()
@@ -334,13 +576,16 @@ async def upload_dataset(request: Request, file: UploadFile = File(...)) -> Dict
     rows: List[Dict[str, Any]] = df.to_dict(orient="records")
 
     name = filename.rsplit(".", 1)[0]
-    dataset_id = create_dataset(
-        name=name,
-        filename=filename,
-        tenant_id=_scope_tenant(tenant_id),
-        rows=rows,
-        columns=columns,
-    )
+    if is_database_enabled():
+        dataset_id = create_dataset(
+            name=name,
+            filename=filename,
+            tenant_id=_scope_tenant(tenant_id),
+            rows=rows,
+            columns=columns,
+        )
+    else:
+        dataset_id = _mem_create_dataset(name=name, filename=filename, rows=rows, columns=columns)
 
     inferred_domain, inferred_solver = _infer_domain_solver(columns)
     return {
@@ -357,10 +602,12 @@ async def upload_dataset(request: Request, file: UploadFile = File(...)) -> Dict
 
 @router.get("/{dataset_id}/grid")
 def get_grid(dataset_id: int, request: Request, version: Optional[int] = None) -> Dict[str, Any]:
-    _require_db()
     _get_tenant(request)
 
-    data = get_dataset_version(dataset_id, version) if version is not None else get_dataset_latest_version(dataset_id)
+    if is_database_enabled():
+        data = get_dataset_version(dataset_id, version) if version is not None else get_dataset_latest_version(dataset_id)
+    else:
+        data = _mem_get_version(dataset_id, version)
     if data is None:
         raise HTTPException(status_code=404, detail={"code": "not_found", "message": f"Dataset {dataset_id} not found"})
     return data
@@ -379,10 +626,12 @@ class PatchCellsRequest(BaseModel):
 
 @router.patch("/{dataset_id}/cells")
 def patch_cells(dataset_id: int, body: PatchCellsRequest, request: Request) -> Dict[str, Any]:
-    _require_db()
     _get_tenant(request)
 
-    data = get_dataset_latest_version(dataset_id)
+    if is_database_enabled():
+        data = get_dataset_latest_version(dataset_id)
+    else:
+        data = _mem_get_version(dataset_id)
     if data is None:
         raise HTTPException(status_code=404, detail={"code": "not_found", "message": f"Dataset {dataset_id} not found"})
 
@@ -393,27 +642,39 @@ def patch_cells(dataset_id: int, body: PatchCellsRequest, request: Request) -> D
             rows[change.row][change.col] = change.value
             applied += 1
 
-    new_version = add_dataset_version(dataset_id, rows, data["columns"], note=body.note or "cell edit")
+    if is_database_enabled():
+        new_version = add_dataset_version(dataset_id, rows, data["columns"], note=body.note or "cell edit")
+    else:
+        new_version = _mem_add_version(dataset_id, rows, data["columns"], note=body.note or "cell edit")
     return {"dataset_id": dataset_id, "version": new_version, "changes_applied": applied}
 
 
 @router.get("/{dataset_id}/versions")
 def list_versions(dataset_id: int, request: Request) -> List[Dict[str, Any]]:
-    _require_db()
     _get_tenant(request)
-    return list_dataset_versions(dataset_id)
+    if is_database_enabled():
+        return list_dataset_versions(dataset_id)
+    versions = _mem_list_versions(dataset_id)
+    if not versions:
+        raise HTTPException(status_code=404, detail={"code": "not_found", "message": f"Dataset {dataset_id} not found"})
+    return versions
 
 
 @router.post("/{dataset_id}/versions/{version}/restore")
 def restore_version(dataset_id: int, version: int, request: Request) -> Dict[str, Any]:
-    _require_db()
     _get_tenant(request)
 
-    data = get_dataset_version(dataset_id, version)
+    if is_database_enabled():
+        data = get_dataset_version(dataset_id, version)
+    else:
+        data = _mem_get_version(dataset_id, version)
     if data is None:
         raise HTTPException(status_code=404, detail={"code": "not_found", "message": f"Version {version} not found"})
 
-    new_version = add_dataset_version(dataset_id, data["rows"], data["columns"], note=f"restored from v{version}")
+    if is_database_enabled():
+        new_version = add_dataset_version(dataset_id, data["rows"], data["columns"], note=f"restored from v{version}")
+    else:
+        new_version = _mem_add_version(dataset_id, data["rows"], data["columns"], note=f"restored from v{version}")
     return {"dataset_id": dataset_id, "restored_from": version, "new_version": new_version}
 
 
@@ -425,11 +686,13 @@ class DatasetOptimizeRequest(BaseModel):
 
 @router.post("/{dataset_id}/optimize")
 def optimize_dataset(dataset_id: int, body: DatasetOptimizeRequest, request: Request) -> Dict[str, Any]:
-    _require_db()
     trace_id = str(getattr(request.state, "trace_id", "") or "")
     _get_tenant(request)
 
-    data = get_dataset_latest_version(dataset_id)
+    if is_database_enabled():
+        data = get_dataset_latest_version(dataset_id)
+    else:
+        data = _mem_get_version(dataset_id)
     if data is None:
         raise HTTPException(status_code=404, detail={"code": "not_found", "message": f"Dataset {dataset_id} not found"})
 
@@ -449,6 +712,30 @@ def optimize_dataset(dataset_id: int, body: DatasetOptimizeRequest, request: Req
 
     chart_data = _build_chart_data(domain, result)
     executive_summary = _build_executive_summary(domain, result)
+    r_analysis: Dict[str, Any] | None = None
+
+    try:
+        ensure_r_bridge()
+        r_analysis = run_r_post_analysis(
+            mode=domain,
+            run_result=result,
+            run_results=[result],
+            store=_build_store_for_r(params if isinstance(params, dict) else {}, result),
+        )
+
+        r_chart = r_analysis.get("chart_data") if isinstance(r_analysis, dict) else None
+        if isinstance(r_chart, dict) and r_chart:
+            chart_data = r_chart
+
+        r_summary = r_analysis.get("executive_summary") if isinstance(r_analysis, dict) else None
+        if isinstance(r_summary, dict) and r_summary:
+            executive_summary = r_summary
+    except Exception as exc:
+        r_analysis = {
+            "ok": False,
+            "error": str(exc),
+        }
+
     return {
         **result,
         "dataset_id": dataset_id,
@@ -456,6 +743,7 @@ def optimize_dataset(dataset_id: int, body: DatasetOptimizeRequest, request: Req
         "solver_used": solver,
         "chart_data": chart_data,
         "executive_summary": executive_summary,
+        "r_analysis": r_analysis,
     }
 
 
@@ -473,14 +761,16 @@ class ChatRequest(BaseModel):
 @router.post("/{dataset_id}/chat")
 async def chat_dataset(dataset_id: int, body: ChatRequest, request: Request) -> Dict[str, Any]:
     import asyncio as _aio
-    _require_db()
     _get_tenant(request)
 
-    data = (
-        get_dataset_version(dataset_id, body.version)
-        if body.version is not None
-        else get_dataset_latest_version(dataset_id)
-    )
+    if is_database_enabled():
+        data = (
+            get_dataset_version(dataset_id, body.version)
+            if body.version is not None
+            else get_dataset_latest_version(dataset_id)
+        )
+    else:
+        data = _mem_get_version(dataset_id, body.version)
     if data is None:
         raise HTTPException(status_code=404, detail={"code": "not_found", "message": f"Dataset {dataset_id} not found"})
 
@@ -511,6 +801,42 @@ async def chat_dataset(dataset_id: int, body: ChatRequest, request: Request) -> 
         )
     except Exception as e:
         return _chat_heuristic(body.message, columns, inferred_domain, inferred_solver, error=str(e))
+
+
+def _extract_json_from_text(text: str) -> Optional[Dict[str, Any]]:
+    """모델이 추론 텍스트 앞에 쓰더라도 마지막 JSON 객체를 추출한다."""
+    # 1) 전체 텍스트가 바로 JSON인 경우
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, dict):
+            return parsed
+    except Exception:
+        pass
+    # 2) 텍스트 내 마지막 { ... } 블록 추출
+    last_brace = text.rfind("{")
+    if last_brace == -1:
+        return None
+    candidate = text[last_brace:]
+    # 닫히는 } 위치 찾기 (중첩 고려)
+    depth = 0
+    end = -1
+    for i, ch in enumerate(candidate):
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    if end == -1:
+        return None
+    try:
+        parsed = json.loads(candidate[:end])
+        if isinstance(parsed, dict):
+            return parsed
+    except Exception:
+        pass
+    return None
 
 
 def _parse_suggested_diffs_from_text(text: str, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -565,6 +891,7 @@ async def _chat_with_agent(
             f"Domain: {domain}, Solver: {solver}, Rows: {len(rows)}\n\n"
             f"{history_ctx}"
             f"User: {message}\n\n"
+            f"Important: If dataset rows are empty/null, suggested diffs MUST be an empty list ([]).\n"
             f"If you want to suggest specific cell edits, append at the very end of your response:\n"
             f"SUGGESTED_DIFFS:[{{\"row\":<int>,\"col\":\"<col_name>\",\"value\":<new_value>}},...]\n"
             f"Row indices are 0-based as they appear in the CSV."
@@ -628,17 +955,20 @@ def _chat_with_google(
     indexed_rows = [{"row": idx, **r} for idx, r in enumerate(rows)]
 
     system_instruction = (
-        "You are OptiMystic, a friendly operations AI assistant. "
-        "You help users understand and edit their optimization dataset through natural conversation. "
-        f"The dataset has columns: {columns}. Domain: {domain}, solver: {solver}.\n\n"
-        "Rules:\n"
-        "- Respond ONLY in raw JSON (no markdown, no ```json). No other text outside the JSON.\n"
-        "- JSON keys: reply, recommended_domain, recommended_solver, reason, suggested_diffs.\n"
-        "- reply: short and natural. Match the language the user writes in (Korean → Korean, English → English). "
-        "Talk like a helpful colleague — no analysis narration, no 'I am thinking...', no reasoning steps. Just say what you found or what you changed.\n"
-        "- suggested_diffs: list of {row (zero-based integer), col (string), value}. Empty list if no changes.\n"
-        f"- row index must come from the indexed rows provided (0 to {len(rows)-1}).\n"
-        "- If unsure, ask a clarifying question in reply instead of guessing."
+        "You are OptiMystic, an operations optimization assistant.\n"
+        "CRITICAL: Your response MUST start immediately with `{`. "
+        "Output ONLY a single JSON object — no text before or after it. "
+        "NEVER write Role:, Input:, Self-Correction, bullet points, or any reasoning/planning text.\n"
+        "CRITICAL: If dataset rows are empty/null, suggested_diffs must be [] and you must not invent sample values.\n"
+        f"Dataset columns: {columns}. Domain: {domain}, solver: {solver}.\n"
+        "JSON keys:\n"
+        "  reply: short natural sentence in user's language (Korean→Korean, English→English). "
+        "Talk like a knowledgeable colleague. No analysis narration.\n"
+        "  recommended_domain: string\n"
+        "  recommended_solver: string\n"
+        "  reason: one short sentence\n"
+        f"  suggested_diffs: list of {{\"row\": int (0–{len(rows)-1}), \"col\": string, \"value\": any}} or []\n"
+        "If unsure about something, ask a single clarifying question in reply."
     )
 
     chat_history = []
@@ -648,10 +978,12 @@ def _chat_with_google(
             google_types.Content(role=role, parts=[google_types.Part(text=msg["content"])])
         )
 
-    config = google_types.GenerateContentConfig(
-        temperature=0.3,
-        system_instruction=system_instruction,
-    )
+    config_kwargs: Dict[str, Any] = {
+        "temperature": 0.3,
+        "system_instruction": system_instruction,
+        "response_mime_type": "application/json",
+    }
+    config = google_types.GenerateContentConfig(**config_kwargs)
 
     user_message = (
         f"Dataset rows: {json.dumps(indexed_rows, ensure_ascii=False)}\n\n"
@@ -661,22 +993,36 @@ def _chat_with_google(
     chat = client.chats.create(model=CHAT_MODEL, config=config, history=chat_history)
     response = chat.send_message(user_message)
 
-    text = (response.text or "").strip()
+    # thinking 파트(내부 추론)는 응답에 포함하지 않음
+    text_parts = []
+    for cand in getattr(response, "candidates", []) or []:
+        cand_content = getattr(cand, "content", None)
+        cand_parts = getattr(cand_content, "parts", None) if cand_content is not None else None
+        for p in cand_parts or []:
+            if getattr(p, "thought", False):
+                continue
+            txt = getattr(p, "text", None)
+            if txt:
+                text_parts.append(str(txt))
+    text = "\n".join(text_parts).strip()
+    if not text:
+        text = (response.text or "").strip()
     if text.startswith("```"):
         parts = text.split("```")
         text = parts[1].lstrip("json").strip() if len(parts) > 1 else text
 
-    try:
-        parsed = json.loads(text)
+    # 모델이 추론 텍스트를 앞에 쓰고 JSON을 나중에 출력하는 경우 처리
+    parsed = _extract_json_from_text(text)
+    if parsed is not None:
         return _normalize_suggested_diffs(parsed, rows)
-    except Exception:
-        return {
-            "reply": text if text else "Sorry, something went wrong processing the response.",
-            "recommended_domain": domain,
-            "recommended_solver": solver,
-            "reason": "Failed to parse LLM response as JSON",
-            "suggested_diffs": [],
-        }
+
+    return {
+        "reply": text if text else "Sorry, something went wrong processing the response.",
+        "recommended_domain": domain,
+        "recommended_solver": solver,
+        "reason": "Failed to parse LLM response as JSON",
+        "suggested_diffs": [],
+    }
 
 
 def _chat_heuristic(message: str, columns: List[str], domain: str, solver: str, error: str = "") -> Dict[str, Any]:

@@ -15,6 +15,19 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         return default
 
 
+_CITY_SPEED_KMH = 30.0  # 도시 평균 속도
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """두 위경도 좌표 사이의 Haversine 거리 (km)"""
+    R = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = (math.sin(dlat / 2) ** 2
+         + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2)
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
 def _safe_int(value: Any, default: int = 0) -> int:
     try:
         return int(round(float(value)))
@@ -61,8 +74,9 @@ def _build_distance_matrix(nodes: List[Dict[str, Any]], raw_params: Dict[str, An
     for left in nodes:
         row = []
         for right in nodes:
-            distance = math.hypot(left["x"] - right["x"], left["y"] - right["y"])
-            row.append(int(round(distance * 1000)))
+            # x=경도, y=위도 → Haversine 거리(m 단위로 저장)
+            dist_km = _haversine_km(left["y"], left["x"], right["y"], right["x"])
+            row.append(int(round(dist_km * 1000)))  # 내부 단위: m
         matrix.append(row)
     return matrix
 
@@ -85,8 +99,10 @@ def _build_time_matrix(nodes: List[Dict[str, Any]], raw_params: Dict[str, Any]) 
     for left in nodes:
         row = []
         for right in nodes:
-            travel = math.hypot(left["x"] - right["x"], left["y"] - right["y"])
-            row.append(max(0, int(round(travel))))
+            # 거리(km) / 속도(km/h) * 60 = 분 단위 이동 시간
+            dist_km = _haversine_km(left["y"], left["x"], right["y"], right["x"])
+            travel_min = dist_km / _CITY_SPEED_KMH * 60.0
+            row.append(max(0, int(round(travel_min))))
         matrix.append(row)
     return matrix
 
