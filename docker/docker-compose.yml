@@ -47,8 +47,8 @@ services:
     profiles: ["agent"]
     environment:
       LLM_PROVIDER: "google"
-      MODEL_NAME: "gemma-4-26b-a4b-it"
-      FALLBACK_MODEL: "gemma-4-26b-a4b-it"
+      MODEL_NAME: "gemini-2.5-flash"
+      FALLBACK_MODEL: "gemini-2.5-flash"
       GOOGLE_API_KEY: "${GOOGLE_API_KEY:-}"
       OPENAI_BASE_URL: "${OPENAI_BASE_URL:-http://host.docker.internal:8000/v1}"
       OPENAI_API_KEY: "${OPENAI_API_KEY:-EMPTY}"

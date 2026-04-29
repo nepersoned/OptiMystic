@@ -22,6 +22,7 @@ _GOOGLE_MODEL_ALIASES = {
     "gemma4 26b": DEFAULT_GOOGLE_MODEL,
     "gemma-4-26b": DEFAULT_GOOGLE_MODEL,
     "gemma-4-26b-it": DEFAULT_GOOGLE_MODEL,
+    "gemma-4-26b-a4b-it": DEFAULT_GOOGLE_MODEL,
 }
 
 
@@ -45,7 +46,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--model",
         default=DEFAULT_MODEL,
-        help="Model name (Ollama: 'gemma4:e2b', Google: 'gemma-4-26b-a4b-it', OpenAI-compat: any)",
+        help="Model name (Ollama: 'gemma4:e2b', Google: 'gemini-2.5-flash', OpenAI-compat: any)",
     )
     parser.add_argument(
         "--llm-provider",

@@ -25,13 +25,14 @@ from python_solvers.db import (
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
-DEFAULT_CHAT_MODEL = "gemma-4-26b-a4b-it"
+DEFAULT_CHAT_MODEL = "gemini-2.5-flash"
 _CHAT_MODEL_ALIASES = {
     "gemini-2.0-flash": DEFAULT_CHAT_MODEL,
     "models/gemini-2.0-flash": DEFAULT_CHAT_MODEL,
     "gemini-2.0-flash-001": DEFAULT_CHAT_MODEL,
     "models/gemini-2.0-flash-001": DEFAULT_CHAT_MODEL,
     "gemma 4 26b": DEFAULT_CHAT_MODEL,
+    "gemma-4-26b-a4b-it": DEFAULT_CHAT_MODEL,
 }
 
 
