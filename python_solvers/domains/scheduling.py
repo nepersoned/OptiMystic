@@ -4,15 +4,7 @@ Maps raw employee/shift input → common schema.
 """
 from typing import Any, Dict, List
 
-from python_solvers.domains.ir_utils import finalize_ir
-
-
-def _safe_list(values: List[Any], length: int, default: float = 0.0) -> List[Any]:
-    if not isinstance(values, list):
-        return [default] * length
-    if len(values) >= length:
-        return values[:length]
-    return values + [default] * (length - len(values))
+from python_solvers.domains.ir_utils import finalize_ir, _safe_list
 
 
 def map_params(raw_params: Dict[str, Any]) -> Dict[str, Any]:

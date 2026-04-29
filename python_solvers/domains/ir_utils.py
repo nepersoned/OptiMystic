@@ -8,6 +8,14 @@ VALID_RELATIONS = {"<=", ">=", "==", "="}
 VALID_SENSES = {"minimize", "maximize"}
 
 
+def _safe_list(values: Any, length: int, default: float = 0.0) -> List[Any]:
+    if not isinstance(values, list):
+        return [default] * length
+    if len(values) >= length:
+        return values[:length]
+    return values + [default] * (length - len(values))
+
+
 def _safe_float(value: Any, default: float = 0.0) -> float:
     try:
         return float(value)

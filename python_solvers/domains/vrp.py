@@ -7,6 +7,8 @@ from __future__ import annotations
 import math
 from typing import Any, Dict, List
 
+from python_solvers.domains.ir_utils import _safe_list
+
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
     try:
@@ -33,14 +35,6 @@ def _safe_int(value: Any, default: int = 0) -> int:
         return int(round(float(value)))
     except (TypeError, ValueError):
         return default
-
-
-def _safe_list(values: Any, length: int, default: float = 0.0) -> List[Any]:
-    if not isinstance(values, list):
-        return [default] * length
-    if len(values) >= length:
-        return values[:length]
-    return values + [default] * (length - len(values))
 
 
 def _normalize_node(raw_node: Dict[str, Any], index: int) -> Dict[str, Any]:
