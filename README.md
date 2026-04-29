@@ -1,6 +1,6 @@
 # OptiMystic
 
-**Conversational operations optimization.** Upload a spreadsheet, talk to the AI, get an optimized plan.
+**Conversational operations optimization.** Use a Google Sheets sidebar, talk to the AI, get an optimized plan.
 
 OptiMystic lets operations teams solve complex logistics, scheduling, and resource problems through natural conversation — no solver expertise required. The AI reads your data, asks when it needs clarification, and runs the full optimization pipeline on your behalf.
 
@@ -34,10 +34,13 @@ User uploads messy Excel/CSV
 ## Architecture
 
 ```
-Frontend (React + TypeScript)
-  └─ Upload page    — file upload, domain inference summary
-  └─ Dataset page   — AG Grid editor, version history, chat sidebar
-  └─ Results page   — ECharts dashboard, KPI cards, executive summary
+Frontend (Google Sheets Add-on, target)
+  └─ Sidebar chat UI — user request, clarification, optimization trigger
+  └─ Active sheet I/O — read selected range, write result tables/KPI summary
+  └─ Distribution — Google Workspace (internal first, Marketplace later)
+
+Legacy frontend (archived)
+  └─ React + TypeScript UI moved to _legacy_frontend (reference only)
 
 Backend (FastAPI + Python)
   └─ Dataset API: upload / grid / cells / versions / optimize / chat
@@ -82,15 +85,7 @@ pip install -r python_solvers/requirements.txt
 uvicorn python_solvers.api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-**2. Run the frontend:**
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-**3. Set environment variables:**
+**2. Set environment variables:**
 
 ```bash
 # Required for AI chat
@@ -100,7 +95,7 @@ export GOOGLE_API_KEY="AIza..."
 export DATABASE_URL="postgresql://user:pass@localhost:5432/optimystic"
 ```
 
-**4. Health check:**
+**3. Health check:**
 
 ```bash
 curl http://localhost:8000/health
@@ -117,7 +112,7 @@ Run the full optimization pipeline from the command line:
 export GOOGLE_API_KEY="AIza..."
 python agent_loop.py \
   --llm-provider google \
-  --model gemma-4-26b-a4b-it \
+  --model gemini-2.5-flash \
   --max-steps 8
 ```
 
@@ -128,6 +123,15 @@ The agent will:
 4. Map data to the solver schema
 5. Run the appropriate solver
 6. Run R post-analysis and return an executive summary
+
+---
+
+## Product Direction (2026-04)
+
+- Primary UX is Google Sheets Add-on (documentation finalized, implementation pending).
+- Existing React UI is intentionally archived as legacy in _legacy_frontend.
+- Backend stack (FastAPI + Python/Julia/R + MCP tools) remains the core execution engine.
+- This repository is now managed as Sheets-first, backend-strong architecture.
 
 ---
 

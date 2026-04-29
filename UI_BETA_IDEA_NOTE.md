@@ -3,17 +3,17 @@
 ## Product Direction (Beta)
 
 Goal:
-- Keep Excel-like usability
+- Operate directly inside Google Sheets (sidebar-first)
 - Keep strict data control for optimization quality
 - Keep agent actions approval-based
 
 Core flow:
-1. Upload Excel/CSV
-2. Rule-based normalization + validation
-3. Web spreadsheet editing
-4. Agent chat proposes changes as diffs
-5. User approves changes
-6. Optimize and review KPI/dashboard
+1. User opens sidebar in Google Sheets
+2. Sidebar reads selected range and validates schema
+3. Agent chat proposes changes as diffs
+4. User approves changes
+5. Backend optimize + R analysis
+6. Results/KPIs are written back to result tabs
 
 ## Non-Negotiable Principles
 
@@ -33,34 +33,21 @@ Core flow:
 - Original uploaded file is immutable.
 - Normalization always supports preview before apply.
 
-## Beta UI (4 Screens)
+## Beta UX (Sheets + Sidebar)
 
-## 1) Upload / Dataset Creation
+## 1) Sheet Input + Validation
 
 Main jobs:
-- File upload (xlsx/csv)
-- Sheet detection
+- Read selected range (or named range)
 - Column-type inference
 - Data quality summary (`good`, `warning`, `error`)
 
 Must show:
-- File name, row/col count, detected sheets
+- Active sheet and range
 - Rule set to be applied
 - Validation blockers (if any)
 
-## 2) Data Grid (Excel-like)
-
-Main jobs:
-- Cell edit, paste, filter, sort
-- Highlight changed cells
-- Save as new version
-
-Must show:
-- Current version label
-- Changed cells count
-- Validation panel (missing required fields, invalid types)
-
-## 3) Agent Panel (Right Sidebar)
+## 2) Sidebar Conversation Panel
 
 Main jobs:
 - Natural language requests
@@ -68,22 +55,33 @@ Main jobs:
 - Let user approve/reject per change set
 
 Must show:
-- "Recommended domain/solver" + one-line reason
+- Recommended domain/solver + one-line reason
 - Diff preview before apply
 - Apply/Reject buttons
 
-## 4) Result Dashboard
+## 3) Optimization Output Writer
 
 Main jobs:
-- Run optimize
-- Show core KPI and schedule output
-- Export results
+- Run optimize against backend
+- Write results to dedicated tabs/ranges
+- Show concise summary in sidebar
 
 Must show:
 - Status, objective, solve_time
 - Bottleneck TOP 3
-- Delay KPI (on-time rate, avg delay)
 - One-line value statement (example: "Expected delay reduced by 28% vs current plan")
+
+## 4) Deployment Shape
+
+Main jobs:
+- Internal Workspace deployment first
+- External Marketplace distribution later
+- Keep backend API as the single compute layer
+
+Must show:
+- Environment setup checklist
+- Auth mode decision
+- Error-handling and retry policy
 
 ## Backend Contract (Beta)
 
@@ -100,7 +98,7 @@ Suggested endpoints:
 ## Beta Scope (No Billing)
 
 In scope:
-- Dataset pipeline (upload -> normalize -> edit -> optimize)
+- Sheet range -> normalize -> optimize -> writeback
 - Agent diff workflow with approvals
 - Runs/history visibility
 - Basic monitoring and error visibility
@@ -123,7 +121,7 @@ Risk 3: User confusion on value
 
 ## Success Criteria for Internal Beta
 
-- Upload success rate >= 90%
+- Selected-range parse success rate >= 90%
 - First successful optimization within 10 minutes
 - At least 1 complete workflow run/day by internal tester
 - Zero silent data mutation incidents

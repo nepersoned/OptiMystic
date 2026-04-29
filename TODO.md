@@ -1,6 +1,7 @@
 # OptiMystic TODO
 
 This is the single checklist for shipping a usable internal beta (billing excluded).
+Current strategy is Google Sheets Add-on first, with React frontend archived.
 
 ## Status Legend
 
@@ -8,14 +9,12 @@ This is the single checklist for shipping a usable internal beta (billing exclud
 - `[~]` in progress
 - `[x]` done
 
-## 0) Today's Wrap-up (2026-04-18)
+## 0) Today's Wrap-up (2026-04-29)
 
-- [x] Cloud Run startup issue fixed and deployment recovered
-- [x] Health endpoint verified (`status=ok`)
-- [x] UI beta concept note added (`UI_BETA_IDEA_NOTE.md`)
-- [x] TODO reorganized for product-first beta execution
-- [ ] Monitoring setup resumed later (explicitly postponed)
-- [ ] DB integration resumed later (explicitly postponed)
+- [x] React frontend archived to legacy folder
+- [x] LLM default moved to Gemini 2.5 Flash path
+- [x] Sheets-first direction confirmed (documentation)
+- [ ] Google Sheets Add-on implementation (not started)
 
 ## 1) Beta North Star (Must Hold)
 
@@ -28,36 +27,35 @@ Completion Criteria:
 - [ ] A non-technical tester can run upload -> edit -> optimize in under 10 minutes
 - [ ] No silent data mutation without user approval
 
-## 2) UI Delivery (Top Priority)
+## 2) Google Sheets Add-on Delivery (Top Priority)
 
-## 2.1 Upload / Dataset Creation
-- [x] Build file upload UI (xlsx/csv)
-- [x] Show sheet/column inference summary
+## 2.1 Sidebar UX
+- [ ] Sidebar chat UI (KR/EN)
+- [ ] Intent split: conversation vs action request
+- [ ] Show recommended domain/solver and one-line reason
+- [ ] Render and confirm diff proposal (approve/reject)
+
+## 2.2 Sheet Data Bridge
+- [ ] Read selected range as structured payload
+- [ ] Validate schema and block critical errors
 - [ ] Show quality badge (`good/warning/error`)
-- [ ] Block on critical schema errors
+- [ ] Write normalized/optimized output to target tabs
 
-## 2.2 Excel-like Grid Editor
-- [x] Grid with edit/filter/sort/paste support (AG Grid)
-- [ ] Highlight changed cells
-- [x] Save as dataset versions (`v1`, `v2`, ...)
-- [x] Add rollback to previous version
+## 2.3 Result Rendering in Sheets
+- [ ] KPI summary block (objective, solve_time, status)
+- [ ] KPI delta line (improvement vs baseline)
+- [ ] Bottleneck top 3 and next action line
+- [ ] Export-ready result tab structure
 
-## 2.3 Agent Sidebar
-- [x] Chat panel attached to current dataset version
-- [x] Show AI-selected domain/solver with one-line reason
-- [ ] Render proposed diffs
-- [ ] Approve/reject per diff batch
-
-## 2.4 Result Dashboard
-- [x] Status/objective/solve_time cards
-- [x] Chart builders complete for all 6 domains
-- [x] Executive summary for all 6 domains
-- [ ] Export result CSV/XLSX
-- [ ] One-line value summary (delta vs current plan)
+## 2.4 Packaging and Deployment
+- [ ] Apps Script project bootstrap
+- [ ] Internal deployment guide (workspace admin)
+- [ ] Auth mode decision (API key vs service auth)
+- [ ] Marketplace readiness checklist (later)
 
 Completion Criteria:
-- [~] Four-screen beta flow is usable end-to-end
-- [ ] User can understand result without reading raw JSON
+- [ ] Spreadsheet user can run input -> optimize -> output in under 10 minutes
+- [ ] No silent mutation without explicit approval
 
 ## 3) API/Product Contract
 
@@ -71,7 +69,7 @@ Completion Criteria:
 - [x] `POST /datasets/{id}/versions/{version}/restore`
 
 Completion Criteria:
-- [~] Frontend can complete full workflow using only documented endpoints
+- [ ] Sheets Add-on can complete full workflow using only documented endpoints
 
 ## 4) Data Normalization + Validation Layer
 
@@ -130,5 +128,5 @@ Completion Criteria:
 
 ## Notes
 
-- Product-first rule: do not add deep solver sophistication before workflow usability is proven.
+- Product-first rule: do not add deep solver sophistication before Sheets workflow usability is proven.
 - Billing remains out of scope until internal beta flow is stable.
