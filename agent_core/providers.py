@@ -31,7 +31,7 @@ async def chat_ollama(model: str, messages: List[Dict[str, Any]], tools: List[Di
         model=model,
         messages=messages,
         tools=tools,
-        options={"temperature": 0.1},
+        options={"temperature": 0.35},
     )
 
 
@@ -73,7 +73,7 @@ def _chat_openai_sync(model: str, messages: List[Dict[str, Any]], tools: List[Di
         model=model,
         messages=messages,
         tools=tools,
-        temperature=0.1,
+        temperature=0.35,
     )
 
     choice = response.choices[0]
@@ -241,7 +241,7 @@ def _chat_google_sync(model: str, messages: List[Dict[str, Any]], tools: List[Di
     google_tool = _convert_tools_to_google(tools)
     system_instruction, contents = _convert_messages_to_google(messages)
     config_kwargs: Dict[str, Any] = {
-        "temperature": 0.1,
+        "temperature": 0.35,
     }
     if google_tool:
         config_kwargs["tools"] = [google_tool]

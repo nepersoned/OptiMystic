@@ -1071,6 +1071,18 @@ def _parse_suggested_diffs_from_text(text: str, rows: List[Dict[str, Any]]) -> L
         return []
 
 
+_ACTION_KEYWORDS = {
+    "최적화", "분석", "최적", "실행", "돌려", "해줘", "해봐", "계산", "구해", "예측", "확인해",
+    "운영", "루트", "배차", "스케줄", "적재", "절단", "수요", "재고",
+    "optimize", "analyse", "analyze", "run", "compute", "solve", "forecast", "check data",
+}
+
+
+def _has_action_intent(message: str) -> bool:
+    msg = message.lower()
+    return any(kw in msg for kw in _ACTION_KEYWORDS)
+
+
 async def _chat_with_agent(
     message: str,
     columns: List[str],
@@ -1086,6 +1098,41 @@ async def _chat_with_agent(
     except ImportError as exc:
         raise RuntimeError("agent_core not available") from exc
 
+    history_ctx = ""
+    if history:
+        recent = history[-6:]
+        history_ctx = "Recent conversation:\n" + "\n".join(
+            f"{'User' if m['role'] == 'user' else 'Assistant'}: {m['content']}"
+            for m in recent
+        ) + "\n\n"
+
+    action_intent = _has_action_intent(message)
+
+    if not action_intent:
+        # 대화/브레인스토밍 — 파일 없이 컨텍스트만 전달
+        enriched_query = (
+            f"Dataset context: columns={columns}, domain={domain}, rows={len(rows)}\n\n"
+            f"{history_ctx}"
+            f"User: {message}"
+        )
+        result = await run_agent_loop(
+            user_query=enriched_query,
+            model=CHAT_MODEL,
+            llm_provider="google",
+            max_steps=2,
+            chat_timeout_sec=20,
+        )
+        if not result.get("ok"):
+            raise RuntimeError((result.get("error") or {}).get("message") or "Agent failed")
+        return {
+            "reply": str(result.get("final") or ""),
+            "recommended_domain": domain,
+            "recommended_solver": solver,
+            "reason": "conversation",
+            "suggested_diffs": [],
+        }
+
+    # 액션 인텐트 — 파일 붙여서 풀 파이프라인
     df = pd.DataFrame(rows)
     tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, encoding='utf-8', newline='')
     try:
@@ -1098,24 +1145,15 @@ async def _chat_with_agent(
         raise
 
     try:
-        history_ctx = ""
-        if history:
-            recent = history[-6:]
-            history_ctx = "Recent conversation:\n" + "\n".join(
-                f"{'User' if m['role'] == 'user' else 'Assistant'}: {m['content']}"
-                for m in recent
-            ) + "\n\n"
-
         enriched_query = (
             f"Dataset file: {temp_path}\n"
             f"Columns: {columns}\n"
             f"Domain: {domain}, Solver: {solver}, Rows: {len(rows)}\n\n"
             f"{history_ctx}"
             f"User: {message}\n\n"
-            f"Important: If dataset rows are empty/null, suggested diffs MUST be an empty list ([]).\n"
-            f"If you want to suggest specific cell edits, append at the very end of your response:\n"
-            f"SUGGESTED_DIFFS:[{{\"row\":<int>,\"col\":\"<col_name>\",\"value\":<new_value>}},...]\n"
-            f"Row indices are 0-based as they appear in the CSV."
+            f"If you suggest cell edits, append at the end: "
+            f"SUGGESTED_DIFFS:[{{\"row\":<int>,\"col\":\"<col>\",\"value\":<val>}},...]\n"
+            f"Row indices are 0-based. If rows are empty, suggested_diffs must be []."
         )
 
         result = await run_agent_loop(
