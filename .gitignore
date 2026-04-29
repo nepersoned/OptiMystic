@@ -64,6 +64,7 @@ Thumbs.db
 
 # Local development artifacts
 frontend/node_modules/
+_legacy_frontend/node_modules/
 .claude/
 
 # Compiled files
@@ -78,6 +79,8 @@ _legacy_django/*
 !_legacy_django/README.md
 _legacy_go/*
 !_legacy_go/README.md
+_legacy_frontend/**
+!_legacy_frontend/README.md
 
 # local SQLite DB
 optimystic.db
