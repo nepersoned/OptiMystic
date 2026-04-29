@@ -8,6 +8,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from agent_core.logging_utils import configure_structured_logging
 from python_solvers.api.datasets import router as datasets_router
+from python_solvers.api.sheets import router as sheets_router
 from python_solvers.api.schemas import HealthResponse, OptimizationRunSummary, OptimizeRequest, OptimizeResponse
 from python_solvers.api.solver_api import run_optimization
 from python_solvers.db import (
@@ -97,6 +98,7 @@ app.add_middleware(
 )
 app.add_middleware(TraceIdMiddleware)
 app.include_router(datasets_router)
+app.include_router(sheets_router)
 
 
 @app.on_event("startup")
