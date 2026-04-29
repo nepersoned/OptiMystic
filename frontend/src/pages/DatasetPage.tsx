@@ -17,6 +17,7 @@ interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   diffs?: CellChange[]
+  diffsRejected?: boolean
 }
 
 export default function DatasetPage() {
@@ -36,7 +37,13 @@ export default function DatasetPage() {
   const [optimizing, setOptimizing] = useState(false)
   const [changedCells, setChangedCells] = useState<Set<string>>(new Set())
 
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const chatStorageKey = `om_chat_${datasetId}`
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    try {
+      const saved = sessionStorage.getItem(`om_chat_${datasetId}`)
+      return saved ? JSON.parse(saved) : []
+    } catch { return [] }
+  })
   const [input, setInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const [optimizeError, setOptimizeError] = useState<string | null>(null)
@@ -80,6 +87,10 @@ export default function DatasetPage() {
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  useEffect(() => {
+    try { sessionStorage.setItem(chatStorageKey, JSON.stringify(messages)) } catch {}
+  }, [messages, chatStorageKey])
 
   useEffect(() => {
     gridApiRef.current?.refreshCells({ force: true })
@@ -271,29 +282,37 @@ export default function DatasetPage() {
                   <p className="whitespace-pre-wrap">{m.content}</p>
                   {m.diffs && m.diffs.length > 0 && (
                     <div className="mt-2 border-t border-slate-200 pt-2 space-y-1">
-                      <p className="text-slate-500 font-medium">{t('suggestedChanges')} ({m.diffs.length})</p>
-                      {m.diffs.slice(0, 3).map((d, j) => (
-                        <div key={j} className="font-mono text-slate-600">
-                          {t('row')} {d.row} · {d.col} → {String(d.value)}
-                        </div>
-                      ))}
-                      {m.diffs.length > 3 && (
-                        <p className="text-slate-400">+{m.diffs.length - 3} more...</p>
+                      {m.diffsRejected ? (
+                        <p className="text-slate-400 text-xs italic">{t('changesRejected')}</p>
+                      ) : (
+                        <>
+                          <p className="text-slate-500 font-medium">{t('suggestedChanges')} ({m.diffs.length})</p>
+                          {m.diffs.slice(0, 3).map((d, j) => (
+                            <div key={j} className="font-mono text-slate-600">
+                              {t('row')} {d.row} · {d.col} → {String(d.value)}
+                            </div>
+                          ))}
+                          {m.diffs.length > 3 && (
+                            <p className="text-slate-400">+{m.diffs.length - 3} more...</p>
+                          )}
+                          <div className="flex gap-1 mt-2">
+                            <button
+                              onClick={() => applyDiffs(m.diffs!)}
+                              className="flex-1 bg-green-600 text-white rounded px-2 py-1 text-xs flex items-center justify-center gap-1"
+                            >
+                              <Check className="w-3 h-3" /> {t('apply')}
+                            </button>
+                            <button
+                              onClick={() => setMessages((prev) =>
+                                prev.map((msg, idx) => idx === i ? { ...msg, diffsRejected: true } : msg)
+                              )}
+                              className="flex-1 bg-slate-200 text-slate-700 rounded px-2 py-1 text-xs flex items-center justify-center gap-1"
+                            >
+                              <X className="w-3 h-3" /> {t('reject')}
+                            </button>
+                          </div>
+                        </>
                       )}
-                      <div className="flex gap-1 mt-2">
-                        <button
-                          onClick={() => applyDiffs(m.diffs!)}
-                          className="flex-1 bg-green-600 text-white rounded px-2 py-1 text-xs flex items-center justify-center gap-1"
-                        >
-                          <Check className="w-3 h-3" /> {t('apply')}
-                        </button>
-                        <button
-                          onClick={() => {/* diffs stay but no action */}}
-                          className="flex-1 bg-slate-200 text-slate-700 rounded px-2 py-1 text-xs flex items-center justify-center gap-1"
-                        >
-                          <X className="w-3 h-3" /> {t('reject')}
-                        </button>
-                      </div>
                     </div>
                   )}
                 </div>
@@ -301,8 +320,10 @@ export default function DatasetPage() {
             ))}
             {chatLoading && (
               <div className="flex justify-start">
-                <div className="bg-slate-100 rounded-lg px-3 py-2">
-                  <Loader2 className="w-3 h-3 animate-spin text-slate-500" />
+                <div className="bg-slate-100 rounded-lg px-3 py-2 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                 </div>
               </div>
             )}
