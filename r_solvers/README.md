@@ -11,10 +11,32 @@ R layer for post-processing and visualization of OptiMystic optimization outputs
 ## Core Files
 
 - `utils.R`: shared helpers and mode normalization
-- `processors.R`: main result dispatch and summary creation
-- `analytics.R`: repeated-run diagnostics and comparison helpers
+- `processors.R`: main result dispatch — handles all 6 domains
+- `analytics.R`: repeated-run diagnostics, bootstrap confidence intervals
+- `chart_data.R`: ECharts/Recharts JSON builders, KPI calculations
 - `plotting.R`: common plotting utilities
-- `domains/*.R`: domain-specific enrichments
+
+## Integration
+
+R analysis is invoked via `r_bridge.analyze_with_r()` in Python — do not call
+R scripts directly from application code. The bridge handles:
+
+- Cross-platform R_HOME discovery (Windows + Linux/Docker)
+- `ensure_r_bridge()` — sources all 4 scripts into the R global env
+- `run_r_post_analysis()` — executes the full analysis pipeline
+- Error wrapping — returns `{"ok": False, "error": {...}}` on failure
+
+## Returned Structure
+
+```python
+{
+    "processed_result": {...},   # domain-specific KPIs and summaries
+    "sensitivity": {...},        # shadow prices and slack analysis
+    "decision_analytics": {...}, # bootstrap CI, run comparisons
+    "executive_summary": {...},  # structured plain-language summary
+    "chart_data": {...},         # ECharts-ready JSON
+}
+```
 
 ## Typical Notebook Use
 
@@ -37,6 +59,13 @@ print(processed)
 install.packages(c('dplyr', 'ggplot2', 'jsonlite', 'tidyr'))
 ```
 
+## Docker / Linux
+
+R is installed via `r-base` in the Docker image. `R_HOME` is set to `/usr/lib/R`
+via `ENV R_HOME=/usr/lib/R` in both `Dockerfile.deps` and `docker/Dockerfile`.
+No manual configuration needed in containerized environments.
+
 ## Scope Note
 
-R is an analytics layer, not a primary optimizer runtime. Optimization execution remains in Python/Julia.
+R is an analytics layer, not a primary optimizer runtime. Optimization execution
+remains in Python (OR-Tools) and Julia (JuMP).

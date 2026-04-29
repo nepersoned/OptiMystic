@@ -13,6 +13,8 @@ services:
       OPTIMYSTIC_JULIA: "julia"
       OPTIMYSTIC_PYTHON_TIMEOUT_SECONDS: "180"
       OPTIMYSTIC_JULIA_TIMEOUT_SECONDS: "180"
+      GOOGLE_API_KEY: "${GOOGLE_API_KEY:-}"
+      DATABASE_URL: "${DATABASE_URL:-}"
     command: ["python3", "-m", "uvicorn", "python_solvers.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     restart: unless-stopped
 

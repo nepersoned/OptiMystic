@@ -12,7 +12,7 @@ from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
 from python_solvers.api.solver_api import run_optimization
-from python_solvers.r_bridge import ensure_r_bridge, run_r_post_analysis
+from python_solvers.r_bridge import analyze_with_r as _r_analyze
 from python_solvers.db import (
     add_dataset_version,
     create_dataset,
@@ -457,7 +457,36 @@ def _rows_to_params(domain: str, rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     return {"data": rows}
 
 
+def _top_variable_bar(variables: List[Dict[str, Any]], limit: int = 15) -> Dict[str, Any] | None:
+    nonzero = [v for v in variables if isinstance(v, dict) and v.get("Value") not in (None, 0, 0.0)]
+    top = sorted(nonzero, key=lambda v: abs(float(v.get("Value", 0))), reverse=True)[:limit]
+    if not top:
+        return None
+    return {
+        "categories": [str(v.get("Variable", f"var_{i}")) for i, v in enumerate(top)],
+        "series": [{"name": "Value", "data": [round(float(v.get("Value", 0)), 4) for v in top]}],
+    }
+
+
+def _shadow_price_bar(constraints: List[Dict[str, Any]], limit: int = 10) -> Dict[str, Any] | None:
+    nonzero = [c for c in constraints if isinstance(c, dict) and c.get("Shadow Price") not in (None, 0, 0.0)]
+    top = sorted(nonzero, key=lambda c: abs(float(c.get("Shadow Price", 0))), reverse=True)[:limit]
+    if not top:
+        return None
+    return {
+        "categories": [str(c.get("Constraint", f"c_{i}")) for i, c in enumerate(top)],
+        "series": [{"name": "Shadow Price", "data": [round(float(c.get("Shadow Price", 0)), 4) for c in top]}],
+    }
+
+
 def _build_chart_data(domain: str, result: Dict[str, Any]) -> Dict[str, Any]:
+    variables: List[Dict[str, Any]] = result.get("variables") or []
+    constraints: List[Dict[str, Any]] = result.get("constraints") or []
+    details: Dict[str, Any] = result.get("details") or {}
+    status = result.get("status", "unknown")
+    objective = result.get("objective")
+    solve_time = result.get("solve_time", 0)
+
     if domain == "vrp":
         routes = result.get("routes", [])
         if not routes:
@@ -477,38 +506,139 @@ def _build_chart_data(domain: str, result: Dict[str, Any]) -> Dict[str, Any]:
                 "Total Load (kg)": round(result.get("total_load", 0), 1),
             },
         }
-    return {}
+
+    if domain == "scheduling":
+        assigned = [v for v in variables if isinstance(v, dict) and float(v.get("Value", 0)) > 0.5]
+        obj_val = int(objective) if objective is not None else len(assigned)
+        chart: Dict[str, Any] = {
+            "kpi": {
+                "Status": status,
+                "Assignments Made": len(assigned),
+                "Objective": obj_val,
+                "Solve Time (s)": round(float(solve_time), 3),
+            }
+        }
+        var_bar = _top_variable_bar(assigned)
+        if var_bar:
+            chart["assignment_bar"] = var_bar
+        shadow = _shadow_price_bar(constraints)
+        if shadow:
+            chart["shadow_price_bar"] = shadow
+        return chart
+
+    if domain == "packing":
+        obj_val = int(round(float(objective))) if objective is not None else None
+        chart = {
+            "kpi": {
+                "Status": status,
+                "Bins Used": obj_val,
+                "Variables": len(variables),
+                "Solve Time (s)": round(float(solve_time), 3),
+            }
+        }
+        var_bar = _top_variable_bar(variables)
+        if var_bar:
+            chart["packing_bar"] = var_bar
+        shadow = _shadow_price_bar(constraints)
+        if shadow:
+            chart["shadow_price_bar"] = shadow
+        return chart
+
+    if domain == "cutting":
+        pattern_count = details.get("pattern_count")
+        iterations = details.get("iterations")
+        obj_val = round(float(objective), 4) if objective is not None else None
+        chart = {
+            "kpi": {
+                "Status": status,
+                "Objective (waste)": obj_val,
+                "Patterns Generated": pattern_count,
+                "CG Iterations": iterations,
+                "Solve Time (s)": round(float(solve_time), 3),
+            }
+        }
+        var_bar = _top_variable_bar(variables)
+        if var_bar:
+            chart["pattern_usage_bar"] = var_bar
+        shadow = _shadow_price_bar(constraints)
+        if shadow:
+            chart["shadow_price_bar"] = shadow
+        return chart
+
+    if domain == "resourcing":
+        scenario_count = details.get("scenario_count")
+        hotspot_count = details.get("hotspot_count")
+        obj_val = round(float(objective), 4) if objective is not None else None
+        chart = {
+            "kpi": {
+                "Status": status,
+                "Objective": obj_val,
+                "Scenarios": scenario_count,
+                "Hotspots": hotspot_count,
+                "Solve Time (s)": round(float(solve_time), 3),
+            }
+        }
+        var_bar = _top_variable_bar(variables)
+        if var_bar:
+            chart["resource_bar"] = var_bar
+        shadow = _shadow_price_bar(constraints)
+        if shadow:
+            chart["shadow_price_bar"] = shadow
+        return chart
+
+    # generic / nlp / minlp
+    engine = details.get("engine", details.get("solver", ""))
+    var_count = details.get("variable_count") or len(variables)
+    nonlinear = details.get("nonlinear_term_count")
+    obj_val = round(float(objective), 6) if objective is not None else None
+    chart = {
+        "kpi": {
+            "Status": status,
+            "Objective": obj_val,
+            "Variables": var_count,
+            "Nonlinear Terms": nonlinear,
+            "Engine": engine or None,
+            "Solve Time (s)": round(float(solve_time), 3),
+        }
+    }
+    var_bar = _top_variable_bar(variables)
+    if var_bar:
+        chart["variable_bar"] = var_bar
+    shadow = _shadow_price_bar(constraints)
+    if shadow:
+        chart["shadow_price_bar"] = shadow
+    return chart
 
 
 def _build_executive_summary(domain: str, result: Dict[str, Any]) -> Dict[str, Any]:
+    status = result.get("status", "unknown")
+    objective = result.get("objective")
+    solve_time = result.get("solve_time", 0)
+    details: Dict[str, Any] = result.get("details") or {}
+    feasible = status in ("optimal", "feasible")
+
     if domain == "vrp":
         unserved = result.get("unserved", [])
         routes = result.get("routes", []) or []
         total_dist = result.get("total_distance", 0)
         total_load = result.get("total_load", 0)
-        num_v_raw = result.get("num_vehicles", 0)
         try:
-            num_v = int(num_v_raw or 0)
+            num_v = int(result.get("num_vehicles") or 0)
         except (TypeError, ValueError):
             num_v = 0
         if num_v <= 0 and routes:
             num_v = len(routes)
-
-        if num_v > 0:
-            headline = f"VRP solved: {num_v} vehicles dispatched, total distance {total_dist:.1f}"
-        else:
-            headline = f"VRP solved: total distance {total_dist:.1f}"
+        headline = f"VRP solved: {num_v} vehicles dispatched, total distance {float(total_dist):.1f}"
         if unserved:
             headline += f" — {len(unserved)} stop(s) unserved"
-        domain_kpi_line = (
-            f"Total distance {float(total_dist or 0):.1f}, total load {float(total_load or 0):.1f}kg, "
-            f"vehicles used {num_v if num_v > 0 else len(routes)}"
-        )
         return {
             "headline": headline,
             "delta_pct": None,
             "kpi_deltas": {},
-            "domain_kpi_line": domain_kpi_line,
+            "domain_kpi_line": (
+                f"Total distance {float(total_dist or 0):.1f}, total load {float(total_load or 0):.1f}kg, "
+                f"vehicles used {num_v if num_v > 0 else len(routes)}"
+            ),
             "bottleneck": (
                 f"Capacity exceeded — {len(unserved)} stop(s) unserved: {', '.join(str(u) for u in unserved[:3])}"
                 if unserved else None
@@ -520,12 +650,111 @@ def _build_executive_summary(domain: str, result: Dict[str, Any]) -> Dict[str, A
             "feasible_rate": 1.0,
             "run_count": 1,
         }
+
+    if domain == "scheduling":
+        variables: List[Dict[str, Any]] = result.get("variables") or []
+        assigned = sum(1 for v in variables if isinstance(v, dict) and float(v.get("Value", 0)) > 0.5)
+        obj_val = int(objective) if objective is not None else assigned
+        infeasible_count = len(variables) - assigned
+        return {
+            "headline": f"Scheduling solved: {assigned} assignments made (objective {obj_val})",
+            "delta_pct": None,
+            "kpi_deltas": {},
+            "domain_kpi_line": f"{assigned} shifts assigned, solve time {float(solve_time):.2f}s",
+            "bottleneck": (
+                f"{infeasible_count} variables unassigned — constraints may be over-constrained"
+                if infeasible_count > 0 and not feasible else None
+            ),
+            "recommendation": (
+                "All shift requirements satisfied."
+                if feasible else "Review constraint tightness — consider relaxing coverage requirements."
+            ),
+            "feasible_rate": 1.0 if feasible else 0.0,
+            "run_count": 1,
+        }
+
+    if domain == "packing":
+        obj_val = int(round(float(objective))) if objective is not None else None
+        bins_str = f"{obj_val} bins" if obj_val is not None else "unknown bins"
+        return {
+            "headline": f"Bin packing solved: {bins_str} required (status: {status})",
+            "delta_pct": None,
+            "kpi_deltas": {},
+            "domain_kpi_line": f"Optimal bins: {obj_val}, solve time {float(solve_time):.2f}s",
+            "bottleneck": None if feasible else f"No feasible packing found (status: {status})",
+            "recommendation": (
+                f"Minimum {obj_val} bins required to pack all items."
+                if feasible else "Check item sizes vs. bin capacity constraints."
+            ),
+            "feasible_rate": 1.0 if feasible else 0.0,
+            "run_count": 1,
+        }
+
+    if domain == "cutting":
+        pattern_count = details.get("pattern_count")
+        iterations = details.get("iterations")
+        obj_val = round(float(objective), 4) if objective is not None else None
+        pattern_str = f"{pattern_count} patterns" if pattern_count is not None else "patterns"
+        return {
+            "headline": f"Cutting stock solved: {pattern_str} generated, waste {obj_val} (status: {status})",
+            "delta_pct": None,
+            "kpi_deltas": {},
+            "domain_kpi_line": (
+                f"Objective (waste): {obj_val}, patterns: {pattern_count}, "
+                f"CG iterations: {iterations}, solve time {float(solve_time):.2f}s"
+            ),
+            "bottleneck": None if feasible else f"Infeasible cutting plan (status: {status})",
+            "recommendation": (
+                "Cutting plan is optimal — use generated patterns to minimize material waste."
+                if feasible else "Review stock lengths and demand requirements."
+            ),
+            "feasible_rate": 1.0 if feasible else 0.0,
+            "run_count": 1,
+        }
+
+    if domain == "resourcing":
+        scenario_count = details.get("scenario_count")
+        hotspot_count = details.get("hotspot_count")
+        obj_val = round(float(objective), 4) if objective is not None else None
+        scenario_str = f"{scenario_count} scenarios" if scenario_count is not None else "stochastic scenarios"
+        return {
+            "headline": f"Resource planning solved across {scenario_str} (objective {obj_val})",
+            "delta_pct": None,
+            "kpi_deltas": {},
+            "domain_kpi_line": (
+                f"Expected cost: {obj_val}, scenarios: {scenario_count}, "
+                f"hotspots: {hotspot_count}, solve time {float(solve_time):.2f}s"
+            ),
+            "bottleneck": (
+                f"{hotspot_count} hotspot(s) detected — high-variance scenarios requiring attention"
+                if hotspot_count else None
+            ),
+            "recommendation": (
+                "Resource plan is robust across all scenarios."
+                if feasible and not hotspot_count else
+                "Review hotspot scenarios and consider adding buffer capacity."
+            ),
+            "feasible_rate": 1.0 if feasible else 0.0,
+            "run_count": 1,
+        }
+
+    # generic / nlp / minlp
+    engine = details.get("engine", details.get("solver", domain.upper()))
+    obj_val = round(float(objective), 6) if objective is not None else None
+    var_count = details.get("variable_count") or len(result.get("variables") or [])
     return {
-        "headline": f"{domain} optimization complete (status: {result.get('status', '?')})",
+        "headline": f"Optimization solved via {engine}: objective {obj_val} (status: {status})",
         "delta_pct": None,
         "kpi_deltas": {},
-        "domain_kpi_line": None,
-        "feasible_rate": 1.0,
+        "domain_kpi_line": (
+            f"Objective: {obj_val}, variables: {var_count}, solve time {float(solve_time):.2f}s"
+        ),
+        "bottleneck": None if feasible else f"Solver returned {status} — problem may be infeasible or unbounded",
+        "recommendation": (
+            "Solution found — review variable values for business interpretation."
+            if feasible else "Check problem formulation: bounds, constraints, and initial values."
+        ),
+        "feasible_rate": 1.0 if feasible else 0.0,
         "run_count": 1,
     }
 
@@ -712,29 +941,21 @@ def optimize_dataset(dataset_id: int, body: DatasetOptimizeRequest, request: Req
 
     chart_data = _build_chart_data(domain, result)
     executive_summary = _build_executive_summary(domain, result)
-    r_analysis: Dict[str, Any] | None = None
+    r_analysis = _r_analyze(
+        mode=domain,
+        run_result=result,
+        run_results=[result],
+        store=_build_store_for_r(params if isinstance(params, dict) else {}, result),
+    )
 
-    try:
-        ensure_r_bridge()
-        r_analysis = run_r_post_analysis(
-            mode=domain,
-            run_result=result,
-            run_results=[result],
-            store=_build_store_for_r(params if isinstance(params, dict) else {}, result),
-        )
-
-        r_chart = r_analysis.get("chart_data") if isinstance(r_analysis, dict) else None
+    if r_analysis.get("ok"):
+        analysis = r_analysis.get("analysis", {})
+        r_chart = analysis.get("chart_data")
         if isinstance(r_chart, dict) and r_chart:
             chart_data = r_chart
-
-        r_summary = r_analysis.get("executive_summary") if isinstance(r_analysis, dict) else None
+        r_summary = analysis.get("executive_summary")
         if isinstance(r_summary, dict) and r_summary:
             executive_summary = r_summary
-    except Exception as exc:
-        r_analysis = {
-            "ok": False,
-            "error": str(exc),
-        }
 
     return {
         **result,

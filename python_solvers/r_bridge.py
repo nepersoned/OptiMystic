@@ -11,38 +11,46 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 R_SOLVERS_DIR = PROJECT_ROOT / "r_solvers"
 
 
-def _configure_r_runtime_paths() -> None:
-    """Ensure Windows can resolve R shared-library dependencies before importing rpy2."""
-    if os.name != "nt":
-        return
-
-    candidates: list[Path] = []
-    r_home_env = os.environ.get("R_HOME")
-    if r_home_env:
-        candidates.append(Path(r_home_env))
-
-    base_dir = Path("C:/Program Files/R")
-    if base_dir.exists():
-        version_dirs = sorted(
-            [p for p in base_dir.glob("R-*") if p.is_dir()],
-            key=lambda p: p.name,
-            reverse=True,
+def _find_r_home() -> Path | None:
+    if os.name == "nt":
+        candidates: list[Path] = []
+        r_home_env = os.environ.get("R_HOME")
+        if r_home_env:
+            candidates.append(Path(r_home_env))
+        base_dir = Path("C:/Program Files/R")
+        if base_dir.exists():
+            candidates.extend(
+                sorted([p for p in base_dir.glob("R-*") if p.is_dir()], key=lambda p: p.name, reverse=True)
+            )
+        for candidate in candidates:
+            if (candidate / "bin" / "x64").exists() or (candidate / "bin").exists():
+                return candidate
+        return None
+    else:
+        r_home_env = os.environ.get("R_HOME")
+        if r_home_env:
+            return Path(r_home_env)
+        opt_r_versions = (
+            sorted(Path("/opt/R").glob("*"), key=lambda p: p.name, reverse=True)
+            if Path("/opt/R").exists() else []
         )
-        candidates.extend(version_dirs)
+        linux_candidates = [Path("/usr/lib/R"), Path("/usr/local/lib/R"), *opt_r_versions]
+        for candidate in linux_candidates:
+            if (candidate / "bin" / "R").exists():
+                return candidate
+        return None
 
-    # Last-resort fallback for historically used path in this project.
-    candidates.append(Path("C:/Program Files/R/R-4.5.3"))
 
-    r_home = None
-    for candidate in candidates:
-        if (candidate / "bin" / "x64").exists() or (candidate / "bin").exists():
-            r_home = candidate
-            break
-
+def _configure_r_runtime_paths() -> None:
+    r_home = _find_r_home()
     if r_home is None:
         return
 
     os.environ.setdefault("R_HOME", str(r_home))
+
+    if os.name != "nt":
+        return
+
     r_bin_x64 = r_home / "bin" / "x64"
     r_bin = r_bin_x64 if r_bin_x64.exists() else (r_home / "bin")
     current_path = os.environ.get("PATH", "")
@@ -145,3 +153,52 @@ def run_r_post_analysis(
         "executive_summary": _json_from_r_var(ro, "optimystic_summary"),
         "chart_data": _json_from_r_var(ro, "optimystic_chart_data"),
     }
+
+
+def analyze_with_r(
+    mode: str,
+    run_result: Dict[str, Any] | None = None,
+    run_results: List[Dict[str, Any]] | None = None,
+    store: Dict[str, Any] | None = None,
+    confidence: float = 0.95,
+    n_boot: int = 500,
+    seed: int = 42,
+) -> Dict[str, Any]:
+    try:
+        bridge = ensure_r_bridge()
+
+        normalized_result = run_result if isinstance(run_result, dict) else {}
+        normalized_history = [row for row in (run_results or []) if isinstance(row, dict)]
+
+        if not normalized_result and not normalized_history:
+            return {
+                "ok": False,
+                "error": {
+                    "code": "invalid_analysis_input",
+                    "message": "run_result 또는 run_results 중 최소 1개는 필요합니다.",
+                },
+            }
+
+        analysis = run_r_post_analysis(
+            mode=mode,
+            run_result=normalized_result,
+            run_results=normalized_history,
+            store=store,
+            confidence=confidence,
+            n_boot=n_boot,
+            seed=seed,
+        )
+
+        return {
+            "ok": True,
+            "r_bridge": bridge,
+            "analysis": analysis,
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error": {
+                "code": "r_analysis_failed",
+                "message": str(exc),
+            },
+        }

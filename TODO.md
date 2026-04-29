@@ -31,47 +31,47 @@ Completion Criteria:
 ## 2) UI Delivery (Top Priority)
 
 ## 2.1 Upload / Dataset Creation
-- [ ] Build file upload UI (xlsx/csv)
-- [ ] Show sheet/column inference summary
+- [x] Build file upload UI (xlsx/csv)
+- [x] Show sheet/column inference summary
 - [ ] Show quality badge (`good/warning/error`)
 - [ ] Block on critical schema errors
 
 ## 2.2 Excel-like Grid Editor
-- [ ] Grid with edit/filter/sort/paste support
+- [x] Grid with edit/filter/sort/paste support (AG Grid)
 - [ ] Highlight changed cells
-- [ ] Save as dataset versions (`v1`, `v2`, ...)
-- [ ] Add rollback to previous version
+- [x] Save as dataset versions (`v1`, `v2`, ...)
+- [x] Add rollback to previous version
 
 ## 2.3 Agent Sidebar
-- [ ] Chat panel attached to current dataset version
-- [ ] Show AI-selected domain/solver with one-line reason
+- [x] Chat panel attached to current dataset version
+- [x] Show AI-selected domain/solver with one-line reason
 - [ ] Render proposed diffs
 - [ ] Approve/reject per diff batch
 
 ## 2.4 Result Dashboard
-- [ ] Status/objective/solve_time cards
-- [ ] Bottleneck TOP 3 panel
-- [ ] Delay KPI (on-time rate, avg delay)
+- [x] Status/objective/solve_time cards
+- [x] Chart builders complete for all 6 domains
+- [x] Executive summary for all 6 domains
 - [ ] Export result CSV/XLSX
 - [ ] One-line value summary (delta vs current plan)
 
 Completion Criteria:
-- [ ] Four-screen beta flow is usable end-to-end
+- [~] Four-screen beta flow is usable end-to-end
 - [ ] User can understand result without reading raw JSON
 
 ## 3) API/Product Contract
 
-- [ ] `POST /datasets/upload`
+- [x] `POST /datasets/upload`
 - [ ] `POST /datasets/{id}/normalize`
-- [ ] `GET /datasets/{id}/grid`
-- [ ] `PATCH /datasets/{id}/cells`
-- [ ] `POST /datasets/{id}/chat`
-- [ ] `POST /datasets/{id}/optimize`
-- [ ] `GET /datasets/{id}/versions`
-- [ ] `POST /datasets/{id}/versions/{version}/restore`
+- [x] `GET /datasets/{id}/grid`
+- [x] `PATCH /datasets/{id}/cells`
+- [x] `POST /datasets/{id}/chat`
+- [x] `POST /datasets/{id}/optimize`
+- [x] `GET /datasets/{id}/versions`
+- [x] `POST /datasets/{id}/versions/{version}/restore`
 
 Completion Criteria:
-- [ ] Frontend can complete full workflow using only documented endpoints
+- [~] Frontend can complete full workflow using only documented endpoints
 
 ## 4) Data Normalization + Validation Layer
 
@@ -88,7 +88,9 @@ Completion Criteria:
 
 ## 5) Optimization + Explainability
 
-- [ ] Keep current optimize path stable (`/optimize`)
+- [x] Keep current optimize path stable (`/optimize`)
+- [x] Chart + summary builders for all 6 domains
+- [x] R post-analysis bridge unified (`analyze_with_r`)
 - [ ] Add auto domain/solver recommendation module for UI flow
 - [ ] Persist recommendation reason text
 - [ ] Add KPI delta renderer for result summary

@@ -35,15 +35,17 @@ User uploads messy Excel/CSV
 
 ```
 Frontend (React + TypeScript)
-  └─ Dataset grid editor (AG Grid)
-  └─ AI chat sidebar (multi-turn, history-aware)
-  └─ Results dashboard (ECharts)
+  └─ Upload page    — file upload, domain inference summary
+  └─ Dataset page   — AG Grid editor, version history, chat sidebar
+  └─ Results page   — ECharts dashboard, KPI cards, executive summary
 
 Backend (FastAPI + Python)
-  └─ Dataset API: upload / version / patch / optimize / chat
-  └─ Chat endpoint → agent loop (MCP tools) → simple Gemini fallback
+  └─ Dataset API: upload / grid / cells / versions / optimize / chat
+  └─ Chat endpoint  → agent loop (MCP tools) → Gemini fallback → heuristic
   └─ Solver routing: Python (VRP, CP) | Julia (MIP, GA, CG, ST, NLP, MINLP)
-  └─ R post-analysis bridge (sensitivity, decision analytics, executive summary)
+  └─ Chart + summary builders for all 6 domains
+  └─ R post-analysis bridge: analyze_with_r() — sensitivity, decision analytics,
+                              executive summary (all domains)
 
 Agent Core
   └─ Multi-step tool-calling loop (up to 8 steps)
@@ -222,12 +224,24 @@ Powered by StatsForecast AutoARIMA. Falls back to a lightweight last-value basel
 ## Docker
 
 ```bash
-# Local stack (API + JupyterLab)
+# Local stack (API + JupyterLab) — builds everything from docker/Dockerfile
 docker compose -f docker/docker-compose.yml up --build api jupyterlab
+
+# With AI chat and database enabled
+GOOGLE_API_KEY="..." DATABASE_URL="postgresql://..." \
+  docker compose -f docker/docker-compose.yml up --build api
 
 # Agent smoke test
 GOOGLE_API_KEY="..." docker compose -f docker/docker-compose.yml --profile agent run --rm agent-loop
 ```
+
+**Docker files:**
+
+| File | Purpose |
+|------|---------|
+| `docker/Dockerfile` | Local dev — all-in-one (deps + code, single build) |
+| `Dockerfile.deps` | Production deps layer — pushed to GCR, reused by Cloud Run |
+| `Dockerfile` | Production runtime — code only, inherits from deps image |
 
 ---
 
