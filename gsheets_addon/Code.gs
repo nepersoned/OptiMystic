@@ -13,9 +13,11 @@ function onOpen() {
 }
 
 function openSidebar() {
-  var html = HtmlService.createHtmlOutputFromFile('Sidebar')
-    .setTitle('OptiMystic')
-    .setWidth(360);
+  var tmpl = HtmlService.createTemplateFromFile('Sidebar');
+  tmpl.token = ScriptApp.getOAuthToken();
+  tmpl.spreadsheetId = SpreadsheetApp.getActiveSpreadsheet().getId();
+  tmpl.sheetName = SpreadsheetApp.getActiveSheet().getName();
+  var html = tmpl.evaluate().setTitle('OptiMystic').setWidth(360);
   SpreadsheetApp.getUi().showSidebar(html);
 }
 
@@ -104,6 +106,17 @@ function pingBackend() {
   } catch(e) {
     return 'ERROR: ' + e.message;
   }
+}
+
+// Returns OAuth token + sheet info — backend reads data directly via Sheets API
+function getSessionInfo() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getActiveSheet();
+  return {
+    token: ScriptApp.getOAuthToken(),
+    spreadsheet_id: ss.getId(),
+    sheet_name: sheet.getName()
+  };
 }
 
 // Called from sidebar JS via google.script.run

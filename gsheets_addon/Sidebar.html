@@ -87,10 +87,11 @@
 
 <script>
   var BACKEND = 'https://optimystic-826180130763.asia-northeast3.run.app';
+  var SESSION = null;  // {token, spreadsheet_id, sheet_name}
   var chatHistory = [];
   var loading = false;
   var ready = false;
-  var cachedAnalysis = null;  // reused in every chat message
+  var cachedAnalysis = null;
 
   var messagesEl = document.getElementById('messages');
   var inputEl = document.getElementById('input');
@@ -182,10 +183,8 @@
     addMessage('user', msg);
     showTyping();
 
-    // Step 1: get sheet data (fast, no HTTP)
-    google.script.run
-      .withSuccessHandler(function(sheetData) {
-        // Step 2: call backend directly via fetch (bypasses Apps Script HTTP hang)
+    (function() {
+        var sess = SESSION || {token: null, spreadsheet_id: null, sheet_name: 'Sheet1'};
         var done = false;
         var timer = setTimeout(function() {
           if (!done) {
@@ -201,9 +200,11 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             message: msg,
-            sheet_name: sheetData.sheet_name,
-            headers: sheetData.headers,
-            rows: sheetData.rows,
+            sheet_name: sess.sheet_name,
+            token: sess.token,
+            spreadsheet_id: sess.spreadsheet_id,
+            headers: [],
+            rows: [],
             history: chatHistory,
             analysis: cachedAnalysis
           })
@@ -235,13 +236,7 @@
           addMessage('error', '연결 오류: ' + e.message);
         });
       })
-      .withFailureHandler(function(e) {
-        hideTyping();
-        loading = false;
-        sendBtn.disabled = false;
-        addMessage('error', '시트 읽기 오류: ' + e.message);
-      })
-      .getSheetData();
+    })();
   }
 
   sendBtn.addEventListener('click', send);
@@ -249,55 +244,13 @@
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
   });
 
-  // Auto-analyze on open — uses fast Python analysis, no LLM
   function initAnalysis() {
-    google.script.run
-      .withSuccessHandler(function(sheetData) {
-        if (!sheetData.headers.length) {
-          finishInit('시트가 비어있어요. 데이터를 입력하면 분석해드릴게요!', null);
-          return;
-        }
-
-        var initText = document.getElementById('init-text');
-        if (initText) initText.textContent = '데이터 분석 중...';
-
-        fetch(BACKEND + '/sheets/analyze', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sheet_name: sheetData.sheet_name,
-            headers: sheetData.headers,
-            rows: sheetData.rows
-          })
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(analysis) {
-          cachedAnalysis = analysis;
-
-          var lines = ['**' + analysis.sheet_name + '** — ' + analysis.row_count + '행 × ' + analysis.col_count + '열\n'];
-          if (analysis.missing_summary && analysis.missing_summary.length) {
-            lines.push('⚠️ 결측치: ' + analysis.missing_summary.join(' / '));
-          } else {
-            lines.push('✅ 결측치 없음');
-          }
-          if (analysis.numeric_stats) {
-            var stats = Object.keys(analysis.numeric_stats).slice(0, 3).map(function(k) {
-              var s = analysis.numeric_stats[k];
-              return k + ' (평균 ' + s.mean + ')';
-            });
-            if (stats.length) lines.push('📊 ' + stats.join(', '));
-          }
-          lines.push('\n질문하거나 최적화를 요청해보세요!');
-          finishInit(lines.join('\n'), null);
-        })
-        .catch(function() {
-          finishInit('분석 완료. 질문해주세요!', null);
-        });
-      })
-      .withFailureHandler(function() {
-        finishInit('준비 완료. 질문해주세요!', null);
-      })
-      .getSheetData();
+    SESSION = {
+      token: '<?= token ?>',
+      spreadsheet_id: '<?= spreadsheetId ?>',
+      sheet_name: '<?= sheetName ?>'
+    };
+    finishInit('안녕하세요! 시트 데이터에 대해 질문하거나 최적화를 요청하세요.\n\ne.g. "결측치 있어?" / "배송 경로 최적화해줘"', null);
   }
 
   function finishInit(summary, changes) {

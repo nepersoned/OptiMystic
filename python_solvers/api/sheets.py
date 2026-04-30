@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import urllib.parse
 from typing import Any
 
 from fastapi import APIRouter
@@ -31,12 +32,15 @@ class SheetsRequest(BaseModel):
     headers: list[str] = []
     rows: list[list[Any]] = []
     sheet_name: str = "Sheet1"
+    # new: backend reads sheet directly when token+id provided
+    token: str | None = None
+    spreadsheet_id: str | None = None
 
 
 class SheetsChatRequest(SheetsRequest):
     message: str
     history: list[dict[str, str]] = []
-    analysis: dict[str, Any] | None = None  # pre-computed analysis from /analyze
+    analysis: dict[str, Any] | None = None
 
 
 class SheetsChatResponse(BaseModel):
@@ -55,6 +59,23 @@ class SheetsAnalysisResponse(BaseModel):
 
 
 # ── Pure-Python analysis (no LLM) ─────────────────────────────────────────────
+
+def _fetch_sheet_data(token: str, spreadsheet_id: str, sheet_name: str) -> tuple[list[str], list[list[Any]]]:
+    import urllib.request
+    url = (
+        f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}"
+        f"/values/{urllib.parse.quote(sheet_name)}?majorDimension=ROWS"
+    )
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        data = json.loads(r.read())
+    values = data.get("values", [])
+    if not values:
+        return [], []
+    headers = [str(v) for v in values[0]]
+    rows = values[1:]
+    return headers, rows
+
 
 def _analyze(headers: list[str], rows: list[list[Any]], sheet_name: str) -> dict[str, Any]:
     row_count = len(rows)
@@ -143,9 +164,19 @@ def _analyze(headers: list[str], rows: list[list[Any]], sheet_name: str) -> dict
     }
 
 
+def _resolve_sheet_data(req: SheetsRequest) -> tuple[list[str], list[list[Any]]]:
+    if req.token and req.spreadsheet_id:
+        try:
+            return _fetch_sheet_data(req.token, req.spreadsheet_id, req.sheet_name)
+        except Exception as e:
+            logger.warning(f"Sheets API fetch failed, falling back to inline data: {e}")
+    return req.headers, req.rows
+
+
 @router.post("/analyze", response_model=SheetsAnalysisResponse)
 async def sheets_analyze(req: SheetsRequest) -> SheetsAnalysisResponse:
-    result = _analyze(req.headers, req.rows, req.sheet_name)
+    headers, rows = _resolve_sheet_data(req)
+    result = _analyze(headers, rows, req.sheet_name)
     return SheetsAnalysisResponse(**result)
 
 
@@ -207,11 +238,12 @@ async def sheets_chat(req: SheetsChatRequest) -> SheetsChatResponse:
     except ImportError:
         return SheetsChatResponse(reply="agent_core not available on this server.")
 
-    # use pre-computed analysis if provided, else compute on the fly
+    # use pre-computed analysis if provided, else fetch + compute
     if req.analysis and req.analysis.get("summary_text"):
         summary_text = req.analysis["summary_text"]
     else:
-        analysis = _analyze(req.headers, req.rows, req.sheet_name)
+        headers, rows = _resolve_sheet_data(req)
+        analysis = _analyze(headers, rows, req.sheet_name)
         summary_text = analysis["summary_text"]
 
     system_prompt = _build_system_prompt(summary_text)
