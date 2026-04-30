@@ -13,10 +13,10 @@ function onOpen() {
 }
 
 function openSidebar() {
+  var sheetData = getSheetData();
+  var safeJson = JSON.stringify(sheetData).replace(/<\/script>/gi, '<\\/script>');
   var tmpl = HtmlService.createTemplateFromFile('Sidebar');
-  tmpl.token = ScriptApp.getOAuthToken();
-  tmpl.spreadsheetId = SpreadsheetApp.getActiveSpreadsheet().getId();
-  tmpl.sheetName = SpreadsheetApp.getActiveSheet().getName();
+  tmpl.sheetDataJson = safeJson;
   var html = tmpl.evaluate().setTitle('OptiMystic').setWidth(360);
   SpreadsheetApp.getUi().showSidebar(html);
 }

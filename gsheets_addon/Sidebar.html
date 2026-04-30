@@ -87,11 +87,10 @@
 
 <script>
   var BACKEND = 'https://optimystic-826180130763.asia-northeast3.run.app';
-  var SESSION = null;  // {token, spreadsheet_id, sheet_name}
+  var SHEET_DATA = <?!= sheetDataJson ?>;
   var chatHistory = [];
   var loading = false;
   var ready = false;
-  var cachedAnalysis = null;
 
   var messagesEl = document.getElementById('messages');
   var inputEl = document.getElementById('input');
@@ -183,7 +182,6 @@
     addMessage('user', msg);
     showTyping();
 
-    var sess = SESSION || {token: null, spreadsheet_id: null, sheet_name: 'Sheet1'};
     var done = false;
     var timer = setTimeout(function() {
       if (!done) {
@@ -195,36 +193,17 @@
       }
     }, 55000);
 
-    // Fetch sheet data directly from Sheets API (avoids google.script.run)
-    var dataPromise = (sess.token && sess.spreadsheet_id)
-      ? fetch(
-          'https://sheets.googleapis.com/v4/spreadsheets/'
-          + encodeURIComponent(sess.spreadsheet_id)
-          + '/values/' + encodeURIComponent(sess.sheet_name)
-          + '?majorDimension=ROWS',
-          { headers: { 'Authorization': 'Bearer ' + sess.token } }
-        )
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-          var vals = d.values || [];
-          if (!vals.length) return { headers: [], rows: [] };
-          return { headers: vals[0].map(String), rows: vals.slice(1, 201) };
-        })
-        .catch(function() { return { headers: [], rows: [] }; })
-      : Promise.resolve({ headers: [], rows: [] });
-
-    dataPromise.then(function(sheetData) {
-      fetch(BACKEND + '/sheets/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: msg,
-          sheet_name: sess.sheet_name,
-          headers: sheetData.headers,
-          rows: sheetData.rows,
-          history: chatHistory
-        })
+    fetch(BACKEND + '/sheets/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: msg,
+        sheet_name: SHEET_DATA.sheet_name,
+        headers: SHEET_DATA.headers,
+        rows: SHEET_DATA.rows,
+        history: chatHistory
       })
+    })
       .then(function(r) { return r.json(); })
       .then(function(res) {
         if (done) return;
@@ -251,7 +230,6 @@
         sendBtn.disabled = false;
         addMessage('error', '연결 오류: ' + e.message);
       });
-    });
   }
 
   sendBtn.addEventListener('click', send);
@@ -260,12 +238,11 @@
   });
 
   function initAnalysis() {
-    SESSION = {
-      token: '<?= token ?>',
-      spreadsheet_id: '<?= spreadsheetId ?>',
-      sheet_name: '<?= sheetName ?>'
-    };
-    finishInit('안녕하세요! 시트 데이터에 대해 질문하거나 최적화를 요청하세요.\n\ne.g. "결측치 있어?" / "배송 경로 최적화해줘"', null);
+    var rowCount = SHEET_DATA.rows ? SHEET_DATA.rows.length : 0;
+    var greeting = rowCount > 0
+      ? '안녕하세요! ' + SHEET_DATA.sheet_name + ' (' + rowCount + '행) 로드됨.\n\ne.g. "결측치 있어?" / "배송 경로 최적화해줘"'
+      : '안녕하세요! 시트 데이터에 대해 질문하거나 최적화를 요청하세요.\n\ne.g. "결측치 있어?" / "배송 경로 최적화해줘"';
+    finishInit(greeting, null);
   }
 
   function finishInit(summary, changes) {
