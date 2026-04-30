@@ -243,6 +243,7 @@ def _convert_messages_to_google(messages: List[Dict[str, Any]]) -> Tuple[Any, Li
 
 
 def _chat_google_sync(model: str, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]) -> Dict[str, Any]:
+    import time
     client = _build_google_client()
     google_tool = _convert_tools_to_google(tools)
     system_instruction, contents = _convert_messages_to_google(messages)
@@ -254,11 +255,25 @@ def _chat_google_sync(model: str, messages: List[Dict[str, Any]], tools: List[Di
     if system_instruction:
         config_kwargs["system_instruction"] = system_instruction
     config = google_types.GenerateContentConfig(**config_kwargs)
-    response = client.models.generate_content(
-        model=model,
-        contents=contents,
-        config=config,
-    )
+
+    last_exc: Exception | None = None
+    for attempt in range(3):
+        try:
+            response = client.models.generate_content(
+                model=model,
+                contents=contents,
+                config=config,
+            )
+            break
+        except Exception as exc:
+            last_exc = exc
+            msg = str(exc)
+            if attempt < 2 and ("503" in msg or "429" in msg or "UNAVAILABLE" in msg or "RESOURCE_EXHAUSTED" in msg):
+                time.sleep(2 ** attempt * 2)  # 2s, 4s
+                continue
+            raise
+    else:
+        raise last_exc  # type: ignore[misc]
     tool_calls: List[Dict[str, Any]] = []
     if response.function_calls:
         for fc in response.function_calls:
