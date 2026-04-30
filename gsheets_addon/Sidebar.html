@@ -183,59 +183,75 @@
     addMessage('user', msg);
     showTyping();
 
-    (function() {
-        var sess = SESSION || {token: null, spreadsheet_id: null, sheet_name: 'Sheet1'};
-        var done = false;
-        var timer = setTimeout(function() {
-          if (!done) {
-            done = true;
-            hideTyping();
-            loading = false;
-            sendBtn.disabled = false;
-            addMessage('error', '응답 시간 초과. 다시 시도해주세요. (첫 번째 메시지는 서버 시작으로 30초+ 걸릴 수 있어요)');
-          }
-        }, 55000);
-        fetch(BACKEND + '/sheets/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: msg,
-            sheet_name: sess.sheet_name,
-            token: sess.token,
-            spreadsheet_id: sess.spreadsheet_id,
-            headers: [],
-            rows: [],
-            history: chatHistory,
-            analysis: cachedAnalysis
-          })
-        })
+    var sess = SESSION || {token: null, spreadsheet_id: null, sheet_name: 'Sheet1'};
+    var done = false;
+    var timer = setTimeout(function() {
+      if (!done) {
+        done = true;
+        hideTyping();
+        loading = false;
+        sendBtn.disabled = false;
+        addMessage('error', '응답 시간 초과. 다시 시도해주세요. (첫 요청은 서버 시작으로 30초+ 걸릴 수 있어요)');
+      }
+    }, 55000);
+
+    // Fetch sheet data directly from Sheets API (avoids google.script.run)
+    var dataPromise = (sess.token && sess.spreadsheet_id)
+      ? fetch(
+          'https://sheets.googleapis.com/v4/spreadsheets/'
+          + encodeURIComponent(sess.spreadsheet_id)
+          + '/values/' + encodeURIComponent(sess.sheet_name)
+          + '?majorDimension=ROWS',
+          { headers: { 'Authorization': 'Bearer ' + sess.token } }
+        )
         .then(function(r) { return r.json(); })
-        .then(function(res) {
-          if (done) return;
-          done = true;
-          clearTimeout(timer);
-          hideTyping();
-          loading = false;
-          sendBtn.disabled = false;
-          if (res && res.reply) {
-            addMessage('assistant', res.reply, res.suggested_changes);
-            chatHistory.push({ role: 'user', content: msg });
-            chatHistory.push({ role: 'assistant', content: res.reply });
-            if (chatHistory.length > 24) chatHistory = chatHistory.slice(-24);
-          } else {
-            addMessage('error', '빈 응답이 왔어요.');
-          }
+        .then(function(d) {
+          var vals = d.values || [];
+          if (!vals.length) return { headers: [], rows: [] };
+          return { headers: vals[0].map(String), rows: vals.slice(1, 201) };
         })
-        .catch(function(e) {
-          if (done) return;
-          done = true;
-          clearTimeout(timer);
-          hideTyping();
-          loading = false;
-          sendBtn.disabled = false;
-          addMessage('error', '연결 오류: ' + e.message);
-        });
-    })();
+        .catch(function() { return { headers: [], rows: [] }; })
+      : Promise.resolve({ headers: [], rows: [] });
+
+    dataPromise.then(function(sheetData) {
+      fetch(BACKEND + '/sheets/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: msg,
+          sheet_name: sess.sheet_name,
+          headers: sheetData.headers,
+          rows: sheetData.rows,
+          history: chatHistory
+        })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        hideTyping();
+        loading = false;
+        sendBtn.disabled = false;
+        if (res && res.reply) {
+          addMessage('assistant', res.reply, res.suggested_changes);
+          chatHistory.push({ role: 'user', content: msg });
+          chatHistory.push({ role: 'assistant', content: res.reply });
+          if (chatHistory.length > 24) chatHistory = chatHistory.slice(-24);
+        } else {
+          addMessage('error', '빈 응답이 왔어요.');
+        }
+      })
+      .catch(function(e) {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        hideTyping();
+        loading = false;
+        sendBtn.disabled = false;
+        addMessage('error', '연결 오류: ' + e.message);
+      });
+    });
   }
 
   sendBtn.addEventListener('click', send);
