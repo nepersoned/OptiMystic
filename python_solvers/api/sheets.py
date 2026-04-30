@@ -1,6 +1,6 @@
 """
-/sheets/chat — Google Sheets add-on chat endpoint.
-Accepts inline sheet data so no file upload is needed.
+/sheets/chat  — LLM chat with sheet context (summary only, not raw rows)
+/sheets/analyze — fast Python/pandas analysis, no LLM
 """
 from __future__ import annotations
 
@@ -16,21 +16,27 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/sheets", tags=["sheets"])
 
+
 def _get_model() -> str:
     try:
         from agent_core.config import DEFAULT_GOOGLE_MODEL
         return os.getenv("OPTIMYSTIC_CHAT_MODEL", DEFAULT_GOOGLE_MODEL)
     except Exception:
         return os.getenv("OPTIMYSTIC_CHAT_MODEL", "gemini-2.5-flash")
-_MAX_ROWS_CONTEXT = 30
 
 
-class SheetsChatRequest(BaseModel):
-    message: str
+# ── Pydantic models ────────────────────────────────────────────────────────────
+
+class SheetsRequest(BaseModel):
     headers: list[str] = []
     rows: list[list[Any]] = []
     sheet_name: str = "Sheet1"
+
+
+class SheetsChatRequest(SheetsRequest):
+    message: str
     history: list[dict[str, str]] = []
+    analysis: dict[str, Any] | None = None  # pre-computed analysis from /analyze
 
 
 class SheetsChatResponse(BaseModel):
@@ -38,45 +44,132 @@ class SheetsChatResponse(BaseModel):
     suggested_changes: list[dict[str, Any]] | None = None
 
 
-def _sheet_to_context(headers: list[str], rows: list[list[Any]], sheet_name: str) -> str:
-    if not headers and not rows:
-        return "(empty sheet)"
-    lines = [f"Sheet: {sheet_name}"]
-    if headers:
-        lines.append("Columns: " + ", ".join(str(h) for h in headers))
-    lines.append(f"Rows: {len(rows)}")
-    lines.append("")
-    sample = rows[:_MAX_ROWS_CONTEXT]
-    if headers:
+class SheetsAnalysisResponse(BaseModel):
+    sheet_name: str
+    row_count: int
+    col_count: int
+    columns: list[dict[str, Any]]   # [{name, type, missing, sample_values}]
+    missing_summary: list[str]       # human-readable bullets
+    numeric_stats: dict[str, Any]    # {col: {min, max, mean}}
+    summary_text: str                # compact text for LLM context
+
+
+# ── Pure-Python analysis (no LLM) ─────────────────────────────────────────────
+
+def _analyze(headers: list[str], rows: list[list[Any]], sheet_name: str) -> dict[str, Any]:
+    row_count = len(rows)
+    col_count = len(headers)
+
+    col_info: list[dict[str, Any]] = []
+    missing_summary: list[str] = []
+    numeric_stats: dict[str, Any] = {}
+
+    for ci, h in enumerate(headers):
+        values = [row[ci] if ci < len(row) else "" for row in rows]
+        missing_idx = [ri for ri, v in enumerate(values) if v == "" or v is None]
+
+        # detect numeric
+        nums = []
+        for v in values:
+            if v == "" or v is None:
+                continue
+            try:
+                nums.append(float(str(v).replace("kg", "").replace(",", "")))
+            except Exception:
+                pass
+
+        is_numeric = len(nums) > len(values) * 0.5
+        col_type = "numeric" if is_numeric else "text"
+
+        sample = [str(v) for v in values[:3] if v != "" and v is not None]
+
+        col_info.append({
+            "name": h,
+            "type": col_type,
+            "missing": len(missing_idx),
+            "missing_rows": missing_idx[:5],
+            "sample_values": sample,
+        })
+
+        if missing_idx:
+            row_ids = []
+            id_col = 0  # use first column as row ID
+            for ri in missing_idx[:3]:
+                rid = rows[ri][id_col] if rows[ri] else ri + 2
+                row_ids.append(str(rid))
+            missing_summary.append(
+                f"'{h}' 컬럼: {len(missing_idx)}개 결측 (예: {', '.join(row_ids)})"
+            )
+
+        if is_numeric and nums:
+            numeric_stats[h] = {
+                "min": round(min(nums), 2),
+                "max": round(max(nums), 2),
+                "mean": round(sum(nums) / len(nums), 2),
+            }
+
+    # build compact summary text for LLM
+    lines = [
+        f"Sheet '{sheet_name}': {row_count}행 × {col_count}열",
+        "Columns: " + ", ".join(
+            f"{c['name']}({'숫자' if c['type']=='numeric' else '텍스트'}"
+            + (f", 결측{c['missing']}개" if c['missing'] else "") + ")"
+            for c in col_info
+        ),
+    ]
+    if missing_summary:
+        lines.append("결측치: " + " | ".join(missing_summary))
+    if numeric_stats:
+        stats_parts = []
+        for col, s in list(numeric_stats.items())[:4]:
+            stats_parts.append(f"{col}(평균{s['mean']}, 범위{s['min']}~{s['max']})")
+        lines.append("수치 통계: " + ", ".join(stats_parts))
+    # full data for LLM (needed for optimization constraints)
+    if rows:
+        lines.append(f"\n전체 데이터 ({len(rows)}행):")
         lines.append(" | ".join(str(h) for h in headers))
         lines.append("-" * 40)
-    for row in sample:
-        lines.append(" | ".join(str(v) for v in row))
-    if len(rows) > _MAX_ROWS_CONTEXT:
-        lines.append(f"... ({len(rows) - _MAX_ROWS_CONTEXT} more rows)")
-    return "\n".join(lines)
+        for row in rows:
+            lines.append(" | ".join(str(v) for v in row))
+
+    return {
+        "sheet_name": sheet_name,
+        "row_count": row_count,
+        "col_count": col_count,
+        "columns": col_info,
+        "missing_summary": missing_summary,
+        "numeric_stats": numeric_stats,
+        "summary_text": "\n".join(lines),
+    }
 
 
-def _build_system_prompt(sheet_context: str) -> str:
+@router.post("/analyze", response_model=SheetsAnalysisResponse)
+async def sheets_analyze(req: SheetsRequest) -> SheetsAnalysisResponse:
+    result = _analyze(req.headers, req.rows, req.sheet_name)
+    return SheetsAnalysisResponse(**result)
+
+
+# ── LLM chat (uses analysis summary, not raw rows) ────────────────────────────
+
+def _build_system_prompt(summary_text: str) -> str:
     from datetime import date
     today = date.today().strftime("%Y-%m-%d")
     return (
         f"Today's date is {today}.\n"
         "You are OptiMystic, an AI operations consultant embedded in Google Sheets.\n"
-        "The user's current sheet data is shown below. Use it to answer questions, "
-        "suggest improvements, and run optimizations when asked.\n\n"
-        "## CURRENT SHEET\n"
-        f"{sheet_context}\n\n"
+        "The sheet analysis below was computed by a Python data engine (accurate).\n\n"
+        "## SHEET ANALYSIS\n"
+        f"{summary_text}\n\n"
         "## BEHAVIOR\n"
         "- Answer conversationally. Be concise.\n"
-        "- If the user asks to optimize, analyze or improve the data, "
-        "suggest specific cell changes in this exact JSON block at the end of your reply:\n"
+        "- Trust the analysis above — it was computed exactly, not inferred.\n"
+        "- If asked to suggest cell edits, output a JSON block at the end:\n"
         "```changes\n"
-        '[{"row": 1, "col": 0, "value": "new_value"}, ...]\n'
+        '[{"row": 0, "col": 0, "value": "new_value"}, ...]\n'
         "```\n"
         "  row/col are 0-indexed (row 0 = first data row, not header).\n"
         "- Match the user's language (Korean → Korean, English → English).\n"
-        "- Never fabricate data that isn't in the sheet."
+        "- Never fabricate data not in the analysis."
     )
 
 
@@ -114,8 +207,14 @@ async def sheets_chat(req: SheetsChatRequest) -> SheetsChatResponse:
     except ImportError:
         return SheetsChatResponse(reply="agent_core not available on this server.")
 
-    sheet_context = _sheet_to_context(req.headers, req.rows, req.sheet_name)
-    system_prompt = _build_system_prompt(sheet_context)
+    # use pre-computed analysis if provided, else compute on the fly
+    if req.analysis and req.analysis.get("summary_text"):
+        summary_text = req.analysis["summary_text"]
+    else:
+        analysis = _analyze(req.headers, req.rows, req.sheet_name)
+        summary_text = analysis["summary_text"]
+
+    system_prompt = _build_system_prompt(summary_text)
 
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     for h in req.history[-12:]:

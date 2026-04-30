@@ -115,6 +115,12 @@ def startup() -> None:
         logger.info("Database initialized")
     except Exception as exc:
         logger.warning(f"Database init failed (may be expected in no-DB mode): {exc}")
+    try:
+        from agent_core.providers import _build_google_client
+        _build_google_client()
+        logger.info("Google AI client pre-initialized")
+    except Exception as exc:
+        logger.warning(f"Google AI client pre-init failed: {exc}")
 
 
 @app.get("/health", response_model=HealthResponse)
