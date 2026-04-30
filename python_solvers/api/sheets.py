@@ -16,8 +16,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/sheets", tags=["sheets"])
 
-_DEFAULT_MODEL = os.getenv("OPTIMYSTIC_CHAT_MODEL", "gemini-2.5-flash")
-_MAX_ROWS_CONTEXT = 80
+def _get_model() -> str:
+    try:
+        from agent_core.config import DEFAULT_GOOGLE_MODEL
+        return os.getenv("OPTIMYSTIC_CHAT_MODEL", DEFAULT_GOOGLE_MODEL)
+    except Exception:
+        return os.getenv("OPTIMYSTIC_CHAT_MODEL", "gemini-2.5-flash")
+_MAX_ROWS_CONTEXT = 30
 
 
 class SheetsChatRequest(BaseModel):
@@ -53,7 +58,10 @@ def _sheet_to_context(headers: list[str], rows: list[list[Any]], sheet_name: str
 
 
 def _build_system_prompt(sheet_context: str) -> str:
+    from datetime import date
+    today = date.today().strftime("%Y-%m-%d")
     return (
+        f"Today's date is {today}.\n"
         "You are OptiMystic, an AI operations consultant embedded in Google Sheets.\n"
         "The user's current sheet data is shown below. Use it to answer questions, "
         "suggest improvements, and run optimizations when asked.\n\n"
@@ -118,7 +126,7 @@ async def sheets_chat(req: SheetsChatRequest) -> SheetsChatResponse:
     messages.append({"role": "user", "content": req.message})
 
     try:
-        res = await chat_google(model=_DEFAULT_MODEL, messages=messages, tools=[])
+        res = await chat_google(model=_get_model(), messages=messages, tools=[])
         raw_reply = (res.get("message") or {}).get("content") or ""
     except Exception as exc:
         logger.exception("Gemini call failed in sheets_chat")

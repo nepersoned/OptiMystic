@@ -31,6 +31,11 @@ Key: BACKEND_URL
 Value: https://your-backend.run.app
 ```
 
+Current default in `Code.gs`:
+```
+https://optimystic-826180130763.asia-northeast3.run.app
+```
+
 ### 4. Run
 Reload the sheet → **OptiMystic → Open Chat** appears in the menu.
 
@@ -38,12 +43,16 @@ Reload the sheet → **OptiMystic → Open Chat** appears in the menu.
 
 ```
 Sheets sidebar
-  → google.script.run.sendChat(message, history)
-  → Apps Script reads active sheet data
-  → UrlFetchApp.fetch(backend/sheets/chat)
+  → google.script.run.getSheetData()
+  → Sidebar `fetch(backend/sheets/chat)` with message + sheet snapshot
   → Gemini 2.5 Flash replies
   → Sidebar shows response + optional "Apply changes" button
 ```
+
+Notes:
+- Sheet rows sent from add-on are capped to 200 rows (`values.slice(1, 201)`).
+- Backend context currently uses up to 30 rows for prompt construction.
+- Add-on network calls use a 30-second Apps Script deadline when server-side fetch is used.
 
 ## Suggested changes
 
@@ -56,5 +65,12 @@ Click **✓ 적용** to write changes directly to the sheet.
 npm install -g @google/clasp
 clasp login
 clasp create --type sheets --title "OptiMystic"
+clasp push
+```
+
+If this repo already has `gsheets_addon/.clasp.json`, you can skip `clasp create` and run:
+
+```bash
+cd gsheets_addon
 clasp push
 ```

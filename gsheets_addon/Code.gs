@@ -1,7 +1,7 @@
 // OptiMystic Google Sheets Add-on
 // Server-side Apps Script
 
-var DEFAULT_BACKEND = 'https://your-backend.run.app';
+var DEFAULT_BACKEND = 'https://optimystic-826180130763.asia-northeast3.run.app';
 
 function onOpen() {
   SpreadsheetApp.getUi()
@@ -42,6 +42,28 @@ function getBackendUrl() {
     || DEFAULT_BACKEND;
 }
 
+function testSendChat() {
+  var result = sendChat('hello', []);
+  Logger.log(JSON.stringify(result));
+}
+
+// Debug: test backend connectivity
+function pingBackend() {
+  var backendUrl = getBackendUrl();
+  try {
+    var response = UrlFetchApp.fetch(backendUrl + '/sheets/chat', {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify({message: 'ping', headers: [], rows: [], sheet_name: 'Test', history: []}),
+      muteHttpExceptions: true,
+      deadline: 30
+    });
+    return 'OK ' + response.getResponseCode() + ': ' + response.getContentText().substring(0, 100);
+  } catch(e) {
+    return 'ERROR: ' + e.message;
+  }
+}
+
 // Called from sidebar JS via google.script.run
 function getSheetData() {
   var sheet = SpreadsheetApp.getActiveSheet();
@@ -53,7 +75,7 @@ function getSheetData() {
   return {
     sheet_name: sheet.getName(),
     headers: values[0].map(String),
-    rows: values.slice(1)
+    rows: values.slice(1, 201)
   };
 }
 
@@ -73,7 +95,8 @@ function sendChat(message, history) {
     method: 'post',
     contentType: 'application/json',
     payload: payload,
-    muteHttpExceptions: true
+    muteHttpExceptions: true,
+    deadline: 30
   };
 
   try {

@@ -105,7 +105,12 @@ async def chat_openai(model: str, messages: List[Dict[str, Any]], tools: List[Di
     )
 
 
+_google_client_cache: Any = None
+
 def _build_google_client() -> Any:
+    global _google_client_cache
+    if _google_client_cache is not None:
+        return _google_client_cache
     if google_genai is None:
         raise RuntimeError("google-genai package is not installed. Run: pip install google-genai")
 
@@ -130,7 +135,8 @@ def _build_google_client() -> Any:
             "If Gemini Developer API auth fails, use an AI Studio key or switch to Vertex AI auth.",
             flush=True,
         )
-    return google_genai.Client(api_key=api_key)
+    _google_client_cache = google_genai.Client(api_key=api_key)
+    return _google_client_cache
 
 
 _GOOGLE_SCHEMA_ALLOWED = {

@@ -133,6 +133,15 @@ The agent will:
 - Backend stack (FastAPI + Python/Julia/R + MCP tools) remains the core execution engine.
 - This repository is now managed as Sheets-first, backend-strong architecture.
 
+## Recent Updates (2026-04-30)
+
+- Google Sheets sidebar chat now calls `/sheets/chat` directly from `Sidebar.html` via `fetch`, after loading active sheet data with `google.script.run.getSheetData()`.
+- Apps Script server helper was hardened with request timeout settings (`deadline: 30`) and a quick connectivity helper (`pingBackend`).
+- Sheets payload size was reduced (`rows.slice(1, 201)` in add-on, `_MAX_ROWS_CONTEXT = 30` in API) to keep chat latency predictable.
+- Sheets API model selection now follows `OPTIMYSTIC_CHAT_MODEL`, defaulting to `agent_core.config.DEFAULT_GOOGLE_MODEL` when available.
+- Google provider client construction is now cached in-process to avoid repeated client instantiation overhead.
+- Added `gsheets_addon/.clasp.json` to bind local add-on files to the Apps Script project for `clasp push` workflow.
+
 ---
 
 ## API Reference

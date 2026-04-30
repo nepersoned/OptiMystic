@@ -81,16 +81,15 @@
 </div>
 
 <script>
-  var history = [];
+  var BACKEND = 'https://optimystic-826180130763.asia-northeast3.run.app';
+  var chatHistory = [];
   var loading = false;
 
   var messagesEl = document.getElementById('messages');
   var inputEl = document.getElementById('input');
   var sendBtn = document.getElementById('send');
 
-  function scrollBottom() {
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-  }
+  function scrollBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
 
   function addMessage(role, content, changes) {
     var empty = document.getElementById('empty');
@@ -116,7 +115,6 @@
 
       var btns = document.createElement('div');
       btns.className = 'btns';
-
       var applyBtn = document.createElement('button');
       applyBtn.className = 'btn-apply';
       applyBtn.textContent = '✓ 적용';
@@ -169,31 +167,52 @@
     loading = true;
     inputEl.value = '';
     sendBtn.disabled = true;
-
     addMessage('user', msg);
     showTyping();
 
+    // Step 1: get sheet data (fast, no HTTP)
     google.script.run
-      .withSuccessHandler(function(res) {
-        hideTyping();
-        loading = false;
-        sendBtn.disabled = false;
-        if (res && res.reply) {
-          addMessage('assistant', res.reply, res.suggested_changes);
-          history.push({ role: 'user', content: msg });
-          history.push({ role: 'assistant', content: res.reply });
-          if (history.length > 24) history = history.slice(-24);
-        } else {
-          addMessage('error', '빈 응답이 왔어요.');
-        }
+      .withSuccessHandler(function(sheetData) {
+        // Step 2: call backend directly via fetch (bypasses Apps Script HTTP hang)
+        fetch(BACKEND + '/sheets/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: msg,
+            sheet_name: sheetData.sheet_name,
+            headers: sheetData.headers,
+            rows: sheetData.rows,
+            history: chatHistory
+          })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+          hideTyping();
+          loading = false;
+          sendBtn.disabled = false;
+          if (res && res.reply) {
+            addMessage('assistant', res.reply, res.suggested_changes);
+            chatHistory.push({ role: 'user', content: msg });
+            chatHistory.push({ role: 'assistant', content: res.reply });
+            if (chatHistory.length > 24) chatHistory = chatHistory.slice(-24);
+          } else {
+            addMessage('error', '빈 응답이 왔어요.');
+          }
+        })
+        .catch(function(e) {
+          hideTyping();
+          loading = false;
+          sendBtn.disabled = false;
+          addMessage('error', '연결 오류: ' + e.message);
+        });
       })
       .withFailureHandler(function(e) {
         hideTyping();
         loading = false;
         sendBtn.disabled = false;
-        addMessage('error', '오류: ' + e.message);
+        addMessage('error', '시트 읽기 오류: ' + e.message);
       })
-      .sendChat(msg, history);
+      .getSheetData();
   }
 
   sendBtn.addEventListener('click', send);
