@@ -207,14 +207,35 @@ def _build_system_prompt(summary_text: str) -> str:
     )
 
 
+def _find_changes_block(text: str) -> tuple[int, int, int] | None:
+    """Return (block_start, content_start, content_end) for the first changes/json block containing a list."""
+    for marker in ("```changes", "```json"):
+        pos = 0
+        while True:
+            start = text.find(marker, pos)
+            if start == -1:
+                break
+            content_start = start + len(marker)
+            end = text.find("```", content_start)
+            if end == -1:
+                break
+            raw = text[content_start:end].strip()
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, list) and parsed and isinstance(parsed[0], dict):
+                    return (start, content_start, end)
+            except Exception:
+                pass
+            pos = end + 3
+    return None
+
+
 def _parse_changes(text: str) -> list[dict[str, Any]] | None:
-    start = text.find("```changes")
-    if start == -1:
+    found = _find_changes_block(text)
+    if not found:
         return None
-    end = text.find("```", start + 10)
-    if end == -1:
-        return None
-    raw = text[start + 10:end].strip()
+    _, content_start, end = found
+    raw = text[content_start:end].strip()
     try:
         changes = json.loads(raw)
         if isinstance(changes, list):
@@ -225,13 +246,11 @@ def _parse_changes(text: str) -> list[dict[str, Any]] | None:
 
 
 def _strip_changes_block(text: str) -> str:
-    start = text.find("```changes")
-    if start == -1:
+    found = _find_changes_block(text)
+    if not found:
         return text
-    end = text.find("```", start + 10)
-    if end == -1:
-        return text
-    return (text[:start] + text[end + 3:]).strip()
+    block_start, _, end = found
+    return (text[:block_start] + text[end + 3:]).strip()
 
 
 @router.post("/chat", response_model=SheetsChatResponse)
