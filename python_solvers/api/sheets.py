@@ -345,31 +345,27 @@ async def sheets_optimize_routes(req: SheetsRequest) -> SheetsOptimizeResponse:
 
 # ── LLM chat (uses analysis summary, not raw rows) ────────────────────────────
 
+def _load_backend_readme() -> str:
+    import pathlib
+    path = pathlib.Path(__file__).parent.parent / "README.md"
+    try:
+        return path.read_text(encoding="utf-8")
+    except Exception:
+        return ""
+
+
 def _build_system_prompt(summary_text: str) -> str:
     from datetime import date
     today = date.today().strftime("%Y-%m-%d")
+    backend_readme = _load_backend_readme()
     return (
         f"Today's date is {today}.\n"
         "You are OptiMystic, an AI operations consultant embedded in Google Sheets.\n"
         "The sheet analysis below was computed by a Python data engine (accurate).\n\n"
         "## SHEET ANALYSIS\n"
         f"{summary_text}\n\n"
-        "## CAPABILITIES\n"
-        "사용자가 뭘 할 수 있는지 물으면 이 목록을 기반으로 정확히 안내하라.\n\n"
-        "### 1. 데이터 정제 (즉시 실행)\n"
-        "- 결측치 탐지 및 자동 채우기\n"
-        "- 이상값 감지, 형식 오류 수정\n"
-        "- 셀 직접 수정 (✓ 적용 버튼으로 시트에 반영)\n\n"
-        "### 2. 최적화 솔버 (사용자가 요청하면 자동 실행)\n"
-        "- **배송 경로 최적화 (VRP)**: 배송지 좌표·시간창·중량 제약 반영, 최적 경로 산출\n"
-        "- **스케줄링**: 작업·시프트 일정 최적화 (직원 근무표, 생산 스케줄 등)\n"
-        "- **자원 배분 (Resourcing)**: 인력·장비·예산 최적 배분\n"
-        "- **적재 최적화 (Packing)**: 트럭·컨테이너 적재 순서 및 공간 최적화\n"
-        "- **절단 최적화 (Cutting)**: 원자재 손실 최소화 절단 계획\n"
-        "- **범용 MIP/CP**: 위에 해당 안 되는 커스텀 최적화 문제\n\n"
-        "### 3. 분석\n"
-        "- 통계 요약, 패턴 분석, 상관관계\n"
-        "- 결과 시트 자동 생성\n\n"
+        "## BACKEND CAPABILITIES (source of truth — use this when asked what you can do)\n"
+        f"{backend_readme}\n\n"
         "## BEHAVIOR\n"
         "- Answer conversationally. Be concise.\n"
         "- Trust the analysis above — it was computed exactly, not inferred.\n"
