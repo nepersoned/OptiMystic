@@ -194,11 +194,14 @@ def _build_system_prompt(summary_text: str) -> str:
         "## BEHAVIOR\n"
         "- Answer conversationally. Be concise.\n"
         "- Trust the analysis above — it was computed exactly, not inferred.\n"
-        "- If asked to suggest cell edits, output a JSON block at the end:\n"
+        "- IMPORTANT: Whenever the user asks you to fill, fix, update, or change cell values, "
+        "you MUST output the actual changes as a JSON block so the user can apply them with one click. "
+        "Do NOT just describe what to do — output the block.\n"
+        "- Changes block format (append at the end of your reply):\n"
         "```changes\n"
         '[{"row": 0, "col": 0, "value": "new_value"}, ...]\n'
         "```\n"
-        "  row/col are 0-indexed (row 0 = first data row, not header).\n"
+        "  row/col are 0-indexed (row 0 = first data row below header, col 0 = first column).\n"
         "- Match the user's language (Korean → Korean, English → English).\n"
         "- Never fabricate data not in the analysis."
     )
