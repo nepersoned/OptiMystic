@@ -173,6 +173,10 @@
     if (t) t.remove();
   }
 
+  function isOptimizeRequest(msg) {
+    return /최적화\s*(돌|실행|해|시작)|경로\s*최적화|배송\s*최적화|vrp/i.test(msg);
+  }
+
   function send() {
     var msg = inputEl.value.trim();
     if (!msg || loading || !ready) return;
@@ -183,26 +187,26 @@
     showTyping();
 
     var done = false;
+    var timeoutMs = isOptimizeRequest(msg) ? 90000 : 55000;
     var timer = setTimeout(function() {
       if (!done) {
         done = true;
         hideTyping();
         loading = false;
         sendBtn.disabled = false;
-        addMessage('error', '응답 시간 초과. 다시 시도해주세요. (첫 요청은 서버 시작으로 30초+ 걸릴 수 있어요)');
+        addMessage('error', '응답 시간 초과. 다시 시도해주세요.');
       }
-    }, 55000);
+    }, timeoutMs);
 
-    fetch(BACKEND + '/sheets/chat', {
+    var endpoint = isOptimizeRequest(msg) ? '/sheets/optimize-routes' : '/sheets/chat';
+    var body = isOptimizeRequest(msg)
+      ? JSON.stringify({ sheet_name: SHEET_DATA.sheet_name, headers: SHEET_DATA.headers, rows: SHEET_DATA.rows })
+      : JSON.stringify({ message: msg, sheet_name: SHEET_DATA.sheet_name, headers: SHEET_DATA.headers, rows: SHEET_DATA.rows, history: chatHistory });
+
+    fetch(BACKEND + endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: msg,
-        sheet_name: SHEET_DATA.sheet_name,
-        headers: SHEET_DATA.headers,
-        rows: SHEET_DATA.rows,
-        history: chatHistory
-      })
+      body: body
     })
       .then(function(r) { return r.json(); })
       .then(function(res) {
@@ -212,6 +216,23 @@
         hideTyping();
         loading = false;
         sendBtn.disabled = false;
+
+        // Route optimization result
+        if (res && res.report !== undefined) {
+          var txt = res.report;
+          if (res.num_vehicles_used) txt += '\n\n차량 ' + res.num_vehicles_used + '대 사용';
+          if (res.total_distance_km) txt += ', 총 거리 ' + Math.round(res.total_distance_km) + ' km';
+          if (res.unserved && res.unserved.length) txt += '\n미배송: ' + res.unserved.join(', ');
+          addMessage('assistant', txt);
+          if (res.result_headers && res.result_headers.length && res.result_rows && res.result_rows.length) {
+            google.script.run.writeResultSheet('최적화결과', res.result_headers, res.result_rows);
+          }
+          chatHistory.push({ role: 'user', content: msg });
+          chatHistory.push({ role: 'assistant', content: txt });
+          return;
+        }
+
+        // Normal chat result
         if (res && res.reply) {
           addMessage('assistant', res.reply, res.suggested_changes);
           chatHistory.push({ role: 'user', content: msg });
